@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Блокнот Агитатора | Панель</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Иконки Font Awesome для современного дизайна -->
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script> 
+    <style>
+        /* --- Основные стили и переменные Telegram --- */
+        body {
+            background-color: var(--tg-theme-bg-color, #f4f4f5);
+            color: var(--tg-theme-text-color, #1a1a1a);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+            margin: 0;
+            padding: 0;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .container {
+            padding: 15px;
+            max-width: 650px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: var(--tg-theme-text-color, #1a1a1a);
+            margin: 10px 0 20px;
+            font-size: 1.4em;
+            text-align: center;
+        }
+
+        /* --- Вкладки (Tabs) --- */
+        .tabs {
+            display: flex;
+            width: 100%;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .tab-button {
+            flex: 1;
+            padding: 12px 10px;
+            text-align: center;
+            background-color: var(--tg-theme-secondary-bg-color, #fff);
+            color: var(--tg-theme-hint-color, #888);
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s, color 0.2s;
+            font-size: 0.9em;
+        }
+        .tab-button.active {
+            background-color: var(--tg-theme-button-color, #2481cc);
+            color: var(--tg-theme-button-text-color, #fff);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        /* --- Элементы формы --- */
+        .form-group {
+            background-color: var(--tg-theme-secondary-bg-color, #ffffff);
+            padding: 15px;
+            margin-bottom: 12px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s ease;
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: var(--tg-theme-hint-color, #777);
+            font-size: 0.85em;
+        }
+        input[type="text"], textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--tg-theme-secondary-bg-color);
+            border-radius: 8px;
+            box-sizing: border-box;
+            background-color: var(--tg-theme-bg-color); 
+            color: var(--tg-theme-text-color);
+            transition: border-color 0.3s;
+            appearance: none;
+            font-size: 1em;
+        }
+        input[type="text"]:focus, textarea:focus, select:focus {
+            border-color: var(--tg-theme-link-color, #007aff);
+            background-color: var(--tg-theme-secondary-bg-color);
+            outline: none;
+        }
+        
+        /* --- Группы выбора (радио-кнопки) --- */
+        .radio-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .radio-option {
+            flex-grow: 1;
+            flex-basis: calc(50% - 4px); 
+            text-align: center;
+            padding: 10px 5px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 1px solid var(--tg-theme-hint-color, #ccc);
+            background-color: var(--tg-theme-bg-color);
+            color: var(--tg-theme-text-color);
+            font-size: 0.9em;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .radio-option-selected {
+            background-color: var(--tg-theme-link-color, #007aff);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border-color: var(--tg-theme-link-color);
+            font-weight: 600;
+        }
+
+        /* --- Геолокация/Чекбокс --- */
+        #get-location-btn {
+            background-color: var(--tg-theme-button-color, #2481cc);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            width: 100%;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        #location-status {
+            margin-top: 5px;
+            font-size: 0.8em;
+            color: var(--tg-theme-hint-color);
+            text-align: center;
+            transition: color 0.3s;
+        }
+        .status-success { color: var(--tg-theme-button-color) !important; }
+        .status-error { color: var(--tg-theme-destructive-text-color, #ff3b30) !important; }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+        #photo_requested {
+            transform: scale(1.2);
+            margin-right: 10px;
+        }
+
+        /* --- Административная панель --- */
+        .admin-button-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            padding: 15px;
+            background-color: var(--tg-theme-secondary-bg-color);
+            border-radius: 12px;
+        }
+        .admin-command-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 10px;
+            background-color: var(--tg-theme-button-color);
+            color: var(--tg-theme-button-text-color);
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9em;
+            transition: opacity 0.2s, transform 0.1s;
+            text-align: center;
+        }
+        .admin-command-btn:active {
+            transform: scale(0.98);
+        }
+        .admin-command-btn i {
+            font-size: 1.5em;
+            margin-bottom: 8px;
+        }
+        .admin-section-title {
+            color: var(--tg-theme-link-color);
+            font-weight: 700;
+            font-size: 1.1em;
+            margin-top: 0;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Панель {role_label}</h1>
+
+        <!-- БЛОК Вкладок -->
+        <div class="tabs" id="main-tabs">
+            <button class="tab-button active" data-tab="tab-agitation">
+                <i class="fas fa-edit"></i> АГИТАТОР
+            </button>
+            <!-- Эта кнопка будет добавлена JS, если пользователь - админ -->
+            <button class="tab-button" data-tab="tab-admin" id="admin-tab-btn" style="display:none;">
+                <i class="fas fa-tools"></i> АДМИНИСТРАТОР
+            </button>
+        </div>
+
+        <!-- 1. АГИТАТОР (Форма) -->
+        <div class="tab-content active" id="tab-agitation">
+            <form id="survey-form">
+
+                <!-- 1. АДРЕС: Населенный пункт -->
+                <div class="form-group">
+                    <label for="settlement">Населенный пункт <span style="color:red;">*</span></label>
+                    <select id="settlement" required></select>
+                </div>
+
+                <!-- 2. АДРЕС: Улица / Дом / Квартира -->
+                <div class="form-group">
+                    <label for="street">Улица <span style="color:red;">*</span></label>
+                    <input type="text" id="street" required placeholder="Например: Центральная">
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <div style="flex: 1;">
+                            <label for="house" style="font-size: 0.85em;">Дом <span style="color:red;">*</span></label>
+                            <input type="text" id="house" required placeholder="Например: 15/А">
+                        </div>
+                        <div style="flex: 1;">
+                            <label for="apartment" style="font-size: 0.85em;">Квартира</label>
+                            <input type="text" id="apartment" value="" placeholder="Если нет - оставьте пустым">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. РЕЗУЛЬТАТ ДЕЙСТВИЯ -->
+                <div class="form-group">
+                    <label>Результат контакта <span style="color:red;">*</span></label>
+                    <div class="radio-group" id="action-result-group">
+                        <div class="radio-option" data-value="positive">✅ Поддержал</div>
+                        <div class="radio-option" data-value="negative">❌ Не поддержал</div>
+                    </div>
+                    <input type="hidden" id="action_result" required>
+                </div>
+
+                <!-- 4. ЛОЯЛЬНОСТЬ / ПРИЧИНА -->
+                <div class="form-group">
+                    <label>Лояльность / Причина</label>
+                    <div class="radio-group" id="loyalty-group">
+                        <div class="radio-option" data-value="loyal">👍 Лоялен</div>
+                        <div class="radio-option" data-value="doubtful">🤔 Сомневается</div>
+                        <div class="radio-option" data-value="not_loyal">👎 Не лоялен</div>
+                        <div class="radio-option" data-value="not_opened">🚪 Не открыли</div>
+                    </div>
+                    <input type="hidden" id="loyalty" required>
+                </div>
+                
+                <!-- 5. ГЕОЛОКАЦИЯ -->
+                <div class="form-group">
+                    <label>Геопозиция (Для карты)</label>
+                    <button type="button" id="get-location-btn">
+                        <span id="loc-icon">📍</span> Получить / Обновить местоположение
+                    </button>
+                    <div id="location-status">Координаты: 0.0, 0.0 (Попытка получения...)</div>
+                    <input type="hidden" id="latitude" value="0.0" required>
+                    <input type="hidden" id="longitude" value="0.0" required>
+                </div>
+
+                <!-- 6. ФОТОГРАФИЯ -->
+                <div class="form-group">
+                    <label>Фотография (Инструкция)</label>
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="photo_requested"> 
+                        <label for="photo_requested" style="display: inline; font-weight: normal; color: var(--tg-theme-text-color);">
+                            Хочу прикрепить фото: Бот попросит его после сохранения записи.
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 7. КОММЕНТАРИЙ -->
+                <div class="form-group">
+                    <label for="comment">Комментарий (важная информация)</label>
+                    <textarea id="comment" rows="3" placeholder="Дополнительные детали, причины недовольства/поддержки"></textarea>
+                </div>
+
+            </form>
+        </div>
+        
+        <!-- 2. АДМИНИСТРАТОР (Панель) -->
+        <div class="tab-content" id="tab-admin">
+            <div class="form-group">
+                <p class="admin-section-title">📊 АНАЛИЗ И СТАТИСТИКА</p>
+                <div class="admin-button-grid">
+                    <!-- Все эти команды отправляют JSON { "command": "/..." } обратно в бот -->
+                    <button class="admin-command-btn" data-command="/stats">
+                        <i class="fas fa-chart-bar"></i> Сводная статистика
+                    </button>
+                    <button class="admin-command-btn" data-command="/map">
+                        <i class="fas fa-map-marker-alt"></i> Карта точек
+                    </button>
+                    <button class="admin-command-btn" data-command="/export_all">
+                        <i class="fas fa-file-excel"></i> Экспорт в XLSX
+                    </button>
+                    <button class="admin-command-btn" data-command="/export_ppt">
+                        <i class="fas fa-file-powerpoint"></i> Экспорт в PPT
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <p class="admin-section-title">💾 УПРАВЛЕНИЕ ДАННЫМИ</p>
+                <div class="admin-button-grid">
+                    <button class="admin-command-btn" data-command="/backup">
+                        <i class="fas fa-database"></i> Резервная копия БД
+                    </button>
+                    <button class="admin-command-btn" data-command="/delete_all" style="background-color: var(--tg-theme-destructive-text-color, #ff3b30);">
+                        <i class="fas fa-trash-alt"></i> УДАЛИТЬ ВСЕ ДАННЫЕ
+                    </button>
+                </div>
+            </div>
+            <p style="text-align: center; font-size: 0.8em; color: var(--tg-theme-hint-color); margin-top: 20px;">
+                * Все команды будут отправлены обратно в чат с ботом для обработки.
+            </p>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Настройки и инициализация Telegram WebApp ---
+        const settlements = [
+            "г.п. Барсово", "с.п. Солнечный", "с.п. Тундрино", "с.п. Лямина", 
+            "г.п. Лянтор", "г.п. Федоровский", "г.п. Белый Яр", "с.п. Ульт-Ягун", 
+            "с.п. Сытомино", "с.п. Русскинская", "с.п. Нижнесортымский", "с.п. Угут", 
+            "с.п. Локосово"
+        ];
+        
+        const WebApp = window.Telegram.WebApp;
+        WebApp.ready();
+        WebApp.setHeaderColor('secondary_bg_color'); 
+        WebApp.setBackgroundColor('bg_color'); 
+
+        // Флаг администратора: query_id доступен только если WebApp запущен через кнопку/меню
+        // Это надежный способ определить, что пользователь открыл Mini App.
+        const is_admin = !!WebApp.initDataUnsafe.query_id; 
+        let currentTab = 'tab-agitation';
+        
+        document.querySelector('h1').textContent = is_admin ? "Панель Администратора" : "Панель Агитатора";
+
+        // --- ИНИЦИАЛИЗАЦИЯ ВКЛАДОК ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            
+            document.getElementById(tabId).classList.add('active');
+            document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+            
+            currentTab = tabId;
+
+            // Обновляем главную кнопку в зависимости от вкладки
+            if (tabId === 'tab-agitation') {
+                WebApp.MainButton.setText('СОХРАНИТЬ ДАННЫЕ (ОТПРАВИТЬ)');
+                WebApp.MainButton.show();
+            } else {
+                WebApp.MainButton.hide();
+            }
+        }
+
+        // Если админ, показываем вкладку Админа и ставим слушатель
+        if (is_admin) {
+            const adminBtn = document.getElementById('admin-tab-btn');
+            adminBtn.style.display = 'block';
+            adminBtn.addEventListener('click', () => switchTab('tab-admin'));
+        }
+        
+        document.querySelector('[data-tab="tab-agitation"]').addEventListener('click', () => switchTab('tab-agitation'));
+        switchTab('tab-agitation'); // Устанавливаем вкладку по умолчанию
+
+
+        // --- ФУНКЦИИ ГЕОЛОКАЦИИ ---
+        const locationStatus = document.getElementById('location-status');
+        const latitudeInput = document.getElementById('latitude');
+        const longitudeInput = document.getElementById('longitude');
+        const locationBtn = document.getElementById('get-location-btn');
+        const locIcon = document.getElementById('loc-icon');
+
+        function updateLocationStatus(message, isError = false) {
+            locationStatus.textContent = message;
+            locationStatus.className = 'status-' + (isError ? 'error' : 'success');
+            locIcon.textContent = isError ? '❌' : (message.includes('Координаты получены') ? '✅' : '⏳');
+        }
+
+        function getLocation(isInitial = false) {
+            if (!("geolocation" in navigator)) {
+                updateLocationStatus('❌ Геолокация не поддерживается вашим устройством.', true);
+                return;
+            }
+            
+            if (!isInitial) WebApp.showProgress();
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    if (!isInitial) WebApp.hideProgress();
+                    latitudeInput.value = position.coords.latitude.toFixed(6);
+                    longitudeInput.value = position.coords.longitude.toFixed(6);
+                    updateLocationStatus(`✅ Координаты получены: ${latitudeInput.value}, ${longitudeInput.value}`);
+                    WebApp.HapticFeedback.notificationOccurred('success');
+                },
+                (error) => {
+                    if (!isInitial) WebApp.hideProgress();
+                    
+                    let errorMessage = '❌ Ошибка получения геопозиции.';
+                    if (error.code === error.PERMISSION_DENIED) {
+                        errorMessage += ' Разрешите доступ в настройках Mini App.';
+                    } else if (error.code === error.TIMEOUT) {
+                        errorMessage += ' Превышено время ожидания. Повторите попытку.';
+                    } else {
+                        errorMessage += ' Неизвестная ошибка.';
+                    }
+                    
+                    updateLocationStatus(errorMessage, true);
+                    WebApp.HapticFeedback.notificationOccurred('error');
+                    
+                    latitudeInput.value = '0.0';
+                    longitudeInput.value = '0.0';
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 0
+                }
+            );
+        }
+
+        // Автоматический запрос при загрузке
+        getLocation(true);
+        locationBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            getLocation(false);
+        });
+
+        // --- ИНИЦИАЛИЗАЦИЯ ФОРМЫ АГИТАТОРА (Селекты и Радио-группы) ---
+        const settlementSelect = document.getElementById('settlement');
+        settlements.forEach(s => {
+            const option = document.createElement('option');
+            option.value = s;
+            option.textContent = s;
+            settlementSelect.appendChild(option);
+        });
+
+        function setupRadioGroup(groupId, inputId) {
+            document.getElementById(groupId).addEventListener('click', (e) => {
+                const target = e.target.closest('.radio-option');
+                if (target) {
+                    document.querySelectorAll(`#${groupId} .radio-option`).forEach(opt => {
+                        opt.classList.remove('radio-option-selected');
+                    });
+                    target.classList.add('radio-option-selected');
+                    document.getElementById(inputId).value = target.getAttribute('data-value');
+                }
+            });
+        }
+        setupRadioGroup('action-result-group', 'action_result');
+        setupRadioGroup('loyalty-group', 'loyalty');
+
+
+        // --- ОБРАБОТКА АДМИНИСТРАТИВНЫХ КОМАНД ---
+        document.getElementById('tab-admin').addEventListener('click', (e) => {
+            const target = e.target.closest('.admin-command-btn');
+            if (target) {
+                const command = target.getAttribute('data-command');
+                
+                if (command === '/delete_all') {
+                    WebApp.showConfirm('ВНИМАНИЕ! Вы уверены, что хотите БЕЗВОЗВРАТНО удалить ВСЕ данные?', (ok) => {
+                        if (ok) {
+                            sendAdminCommand(command);
+                        }
+                    });
+                } else {
+                    sendAdminCommand(command);
+                }
+            }
+        });
+        
+        function sendAdminCommand(command) {
+            const data = { command: command };
+            WebApp.sendData(JSON.stringify(data));
+            WebApp.showAlert(`Команда ${command} отправлена. Ответ будет в чате с ботом.`);
+        }
+
+
+        // --- ФУНКЦИЯ ОТПРАВКИ ДАННЫХ АГИТАТОРА (MainButton) ---
+        WebApp.onEvent('mainButtonClicked', function(){
+            if (currentTab !== 'tab-agitation') return; // Только для вкладки Агитатора
+
+            const form = document.getElementById('survey-form');
+            // Проверяем заполнение обязательных полей формы
+            if (!document.getElementById('settlement').value || 
+                !document.getElementById('street').value || 
+                !document.getElementById('house').value ||
+                !document.getElementById('action_result').value) 
+            {
+                WebApp.showAlert('Пожалуйста, заполните все обязательные поля (отмечены *).');
+                WebApp.HapticFeedback.notificationOccurred('warning');
+                return;
+            }
+            
+            // Проверка лояльности (должна быть выбрана)
+            if (!document.getElementById('loyalty').value) {
+                WebApp.showAlert('Пожалуйста, выберите Лояльность / Причину.');
+                WebApp.HapticFeedback.notificationOccurred('warning');
+                return;
+            }
+
+            const data = {
+                settlement: document.getElementById('settlement').value,
+                street: document.getElementById('street').value,
+                house: document.getElementById('house').value,
+                apartment: document.getElementById('apartment').value || '0',
+                action_result: document.getElementById('action_result').value,
+                loyalty: document.getElementById('loyalty').value,
+                comment: document.getElementById('comment').value,
+                latitude: parseFloat(latitudeInput.value),
+                longitude: parseFloat(longitudeInput.value),
+                photo_requested: document.getElementById('photo_requested').checked ? '1' : '0'
+            };
+            
+            // Проверка на 0.0 (геопозиция не получена)
+            if (data.latitude === 0.0 && data.longitude === 0.0) {
+                 WebApp.showConfirm('Геопозиция не была получена. Отправить запись без точных координат?', (ok) => {
+                    if (ok) {
+                        WebApp.sendData(JSON.stringify(data));
+                        WebApp.close();
+                    }
+                 });
+                 return;
+            }
+
+            // Отправка данных
+            WebApp.sendData(JSON.stringify(data));
+            WebApp.close();
+        });
+        
+    </script>
+</body>
+</html>
