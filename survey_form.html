@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Ввод Данных</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--tg-theme-bg-color);
+            color: var(--tg-theme-text-color);
+            padding: 20px;
+            margin: 0;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        h2 {
+            color: var(--tg-theme-link-color);
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--tg-theme-hint-color);
+            border-radius: 8px;
+            box-sizing: border-box;
+            background-color: var(--tg-theme-secondary-bg-color);
+            color: var(--tg-theme-text-color);
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--tg-theme-button-color);
+            color: var(--tg-theme-button-text-color);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        #error {
+            color: red;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        /* Стили для кнопки геолокации */
+        #get-location-btn {
+            background-color: #2196F3;
+            margin-top: 5px;
+        }
+    </style>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+
+    <h2>Ввод данных (Mini App)</h2>
+
+    <form id="surveyForm">
+
+        <div class="form-group">
+            <label for="settlement">Населенный пункт</label>
+            <select id="settlement" required>
+                </select>
+        </div>
+
+        <div class="form-group">
+            <label for="address">Улица и дом</label>
+            <input type="text" id="street" placeholder="Улица" required>
+            <input type="text" id="house" placeholder="Дом" required style="margin-top: 5px;">
+        </div>
+
+        <div class="form-group">
+            <label for="action_result">Результат действия</label>
+            <select id="action_result" required>
+                </select>
+        </div>
+
+        <div class="form-group">
+            <label for="loyalty">Лояльность</label>
+            <select id="loyalty" required>
+                </select>
+        </div>
+
+        <div class="form-group">
+            <label for="comment">Комментарий (необязательно)</label>
+            <textarea id="comment" rows="3"></textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Геопозиция</label>
+            <input type="text" id="location_display" placeholder="Нажмите кнопку для определения" readonly required>
+            <button type="button" id="get-location-btn">Определить GPS</button>
+            <input type="hidden" id="latitude">
+            <input type="hidden" id="longitude">
+        </div>
+
+        <button type="submit">СОХРАНИТЬ ДАННЫЕ</button>
+        <div id="error"></div>
+    </form>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+
+        // Справочники данных, соответствующие constants.py
+        const SETTLEMENTS = ["Город А", "Село Б", "Деревня В"];
+        const ACTION_RESULTS = {"positive": "Поддержал", "negative": "Не поддержал"};
+        const LOYALTY_OPTIONS = {
+            "loyal": "Лоялен",
+            "not_loyal": "Не лоялен",
+            "doubtful": "Сомневается",
+            "not_opened": "Не открыли"
+        };
+
+        // Функция для заполнения <select>
+        function populateSelect(id, options, isDict = false) {
+            const select = document.getElementById(id);
+            select.innerHTML = '<option value="" disabled selected>Выберите...</option>';
+            if (isDict) {
+                for (const [key, value] of Object.entries(options)) {
+                    select.innerHTML += `<option value="${key}">${value}</option>`;
+                }
+            } else {
+                options.forEach(value => {
+                    select.innerHTML += `<option value="${value}">${value}</option>`;
+                });
+            }
+        }
+
+        // Заполнение всех полей при загрузке
+        populateSelect('settlement', SETTLEMENTS);
+        populateSelect('action_result', ACTION_RESULTS, true);
+        populateSelect('loyalty', LOYALTY_OPTIONS, true);
+
+        // --- Геолокация ---
+        document.getElementById('get-location-btn').addEventListener('click', () => {
+            if (navigator.geolocation) {
+                tg.showMainButton();
+                tg.mainButton.setText("ОПРЕДЕЛЕНИЕ GPS...");
+                tg.mainButton.show();
+                tg.mainButton.disable();
+
+                navigator.geolocation.getCurrentPosition(position => {
+                    document.getElementById('latitude').value = position.coords.latitude;
+                    document.getElementById('longitude').value = position.coords.longitude;
+                    document.getElementById('location_display').value = `GPS определен: ${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`;
+
+                    tg.mainButton.hide();
+                }, error => {
+                    alert('Не удалось получить геопозицию. Включите GPS.');
+                    document.getElementById('location_display').value = 'GPS не определен';
+                    tg.mainButton.hide();
+                });
+            } else {
+                alert('Ваш браузер не поддерживает геолокацию.');
+            }
+        });
+
+        // --- Отправка данных ---
+        document.getElementById('surveyForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const data = {
+                settlement: document.getElementById('settlement').value,
+                street: document.getElementById('street').value,
+                house: document.getElementById('house').value,
+                action_result: document.getElementById('action_result').value,
+                loyalty: document.getElementById('loyalty').value,
+                comment: document.getElementById('comment').value || 'нет',
+                latitude: document.getElementById('latitude').value,
+                longitude: document.getElementById('longitude').value,
+
+                // Добавим заглушки для обязательных полей, которых нет в форме, но нужны в БД
+                apartment: '0'
+            };
+
+            // Простая валидация
+            if (!data.settlement || !data.street || !data.house || !data.action_result || !data.loyalty || !data.latitude || !data.longitude) {
+                document.getElementById('error').innerText = "Пожалуйста, заполните все обязательные поля и определите GPS.";
+                return;
+            }
+
+            // Отправляем данные обратно в Telegram в виде JSON строки
+            tg.sendData(JSON.stringify(data));
+
+            // Закрываем Mini App
+            tg.close();
+        });
+
+    </script>
+</body>
+</html>
