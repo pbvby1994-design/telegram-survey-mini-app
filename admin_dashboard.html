@@ -241,8 +241,8 @@
                 ? `Администратор (ID: ${currentUserId.substring(0, 8)}...)` 
                 : `Агитатор (ID: ${currentUserId.substring(0, 8)}...)`;
 
-            navigate('form'); // Переход на стартовую страницу после авторизации
             initialAuthChecked = true;
+            navigate('form'); // Переход на стартовую страницу после авторизации
         }
     });
 
@@ -393,13 +393,15 @@
     let currentGeo = { lat: 0.0, lng: 0.0 };
 
     async function loadLastSurvey() {
-        // Добавлена проверка на наличие db и currentUserId для предотвращения ошибок разрешений
-        if (!currentUserId || !db) {
-            console.error("loadLastSurvey: Auth not ready or DB not initialized.");
+        // ИСПРАВЛЕНИЕ: Добавлена проверка initialAuthChecked для предотвращения ошибки прав доступа
+        if (!initialAuthChecked || !currentUserId || !db) {
+            console.warn("loadLastSurvey: Auth not ready or DB not initialized. Skipping load.");
+            document.getElementById('duplicate-button').classList.add('hidden');
             return;
         }
 
         // Запрос последней записи этого пользователя
+        // Использование where("userId", "==", currentUserId) для получения только собственных данных
         const q = query(collection(db, SURVEYS_COLLECTION), where("userId", "==", currentUserId));
         
         try {
@@ -651,6 +653,8 @@
             const snapshot = await getDocs(q);
             let surveys = snapshot.docs.map(doc => doc.data());
 
+            console.log(`[REPORTS] Всего документов получено из Firestore (до фильтрации): ${surveys.length}`); // <-- НОВОЕ ЛОГИРОВАНИЕ
+
             // 1. Фильтрация в памяти (из-за ограничений Firestore на сложные запросы без индексов)
             surveys = surveys.filter(s => {
                 const docDate = new Date(s.date).getTime();
@@ -667,6 +671,8 @@
                 return startMatch && endMatch;
             });
             
+            console.log(`[REPORTS] Документов после фильтрации по дате: ${surveys.length}`); // <-- НОВОЕ ЛОГИРОВАНИЕ
+
             const totalSurveys = surveys.length;
             
             if (totalSurveys === 0) {
@@ -937,9 +943,11 @@
         Telegram.WebApp.setBackgroundColor('#FFFFFF'); // Белый для контента
     }
     
-    // Добавление Lucide иконок (Исправлено: добавлена проверка наличия lucide)
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
+    // ИСПРАВЛЕНИЕ: Переносим вызов createIcons в window.onload
+    window.onload = function() {
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
     }
 </script>
 
