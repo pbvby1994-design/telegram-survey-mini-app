@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Блокнот Агитатора | v2.6 (ФИНАЛЬНЫЙ ФИКС ID)</title>
+    <title>Блокнот Агитатора | v2.7 (ФИНАЛЬНЫЙ ФИКС СИНХРОНИЗАЦИИ ID)</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
     <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
-
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet-heat/dist/leaflet-heat.js"></script>
+    <script src="https://unpkg.com/leaflet-heat/dist/leaflet-heat.js"></script> 
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
     <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
 
@@ -351,7 +351,8 @@
                     syncedCount += currentBatch.length;
                     
                     // Создаем новый batch для следующей итерации
-                    batch = firebaseDependencies.writeBatch(db);
+                    const { writeBatch } = window.firebaseDependencies;
+                    batch = writeBatch(db);
                 }
 
                 // Очистка кэша только после успешной синхронизации всех данных
@@ -406,9 +407,11 @@
                 const selectElement = document.getElementById('settlement');
                 selectElement.innerHTML = '<option value="">Выберите населенный пункт *</option>'; // Очищаем и добавляем дефолт
                 
-                const settlementsRef = firebaseDependencies.collection(db, SETTLEMENTS_COLLECTION);
-                const q = firebaseDependencies.query(settlementsRef, firebaseDependencies.orderBy('name'));
-                const snapshot = await firebaseDependencies.getDocs(q);
+                const { collection, query, orderBy, getDocs } = window.firebaseDependencies;
+
+                const settlementsRef = collection(db, SETTLEMENTS_COLLECTION);
+                const q = query(settlementsRef, orderBy('name'));
+                const snapshot = await getDocs(q);
 
                 snapshot.forEach(doc => {
                     const settlement = doc.data();
@@ -463,8 +466,9 @@
 
             try {
                 // Пытаемся сохранить онлайн
-                const docRef = firebaseDependencies.doc(db, DB_COLLECTION, data.id);
-                await firebaseDependencies.setDoc(docRef, data);
+                const { doc, setDoc } = window.firebaseDependencies;
+                const docRef = doc(db, DB_COLLECTION, data.id);
+                await setDoc(docRef, data);
                 showAlert('Успешно', 'Данные сохранены в Firestore!');
                 
                 // Если есть офлайн-данные, синхронизируем их
@@ -481,7 +485,7 @@
                 // Если произошла ошибка сети, сохраняем в локальный кэш
                 if (e.code === 'unavailable' || e.code === 'internal' || e.code === 'network-error' || e.message.includes('A network error')) {
                      // Убираем id-префикс 'offline' для синхронизации, но используем в кэше
-                    data.id = 'offline-' + Date.now(); 
+                    data.id = Date.now().toString(); // Уникальный ID для кэша
                     saveToCache(data);
                     showAlert('Внимание', 'Нет подключения к сети. Данные сохранены в офлайн-кэш.');
                 } else {
@@ -500,21 +504,22 @@
             latestDataContainer.innerHTML = '<p class="text-center text-gray-500">Загрузка последних записей...</p>';
 
             try {
-                const recordsRef = firebaseDependencies.collection(db, DB_COLLECTION);
-                let q = firebaseDependencies.query(recordsRef, firebaseDependencies.orderBy('timestamp', 'desc'), firebaseDependencies.limit(5));
+                const { collection, query, orderBy, limit, where, getDocs } = window.firebaseDependencies;
+
+                const recordsRef = collection(db, DB_COLLECTION);
+                let q = query(recordsRef, orderBy('timestamp', 'desc'), limit(5));
                 
                 // Если не админ, показываем только свои записи
                 if (!isAdmin) {
-                    q = firebaseDependencies.query(
+                    q = query(
                         recordsRef, 
-                        firebaseDependencies.where('user_id', '==', userTelegramId),
-                        firebaseDependencies.orderBy('timestamp', 'desc'), 
-                        firebaseDependencies.limit(5)
+                        where('user_id', '==', userTelegramId),
+                        orderBy('timestamp', 'desc'), 
+                        limit(5)
                     );
                 }
 
-
-                const snapshot = await firebaseDependencies.getDocs(q);
+                const snapshot = await getDocs(q);
                 let html = '';
 
                 if (snapshot.empty) {
@@ -572,17 +577,28 @@
             currentPage = 1;
             
             try {
+                const { collection, getDocs, query, orderBy, limit } = window.firebaseDependencies;
+
                 // Общий подсчет записей
-                const countSnapshot = await firebaseDependencies.getDocs(firebaseDependencies.collection(db, DB_COLLECTION));
+                const countSnapshot = await getDocs(collection(db, DB_COLLECTION));
                 document.getElementById('totalRecords').textContent = countSnapshot.size;
 
-                // Загрузка первой страницы
-                await loadMoreData(false);
+                // Загрузка всех данных для карты/чартов и первой страницы
+                const allDataQuery = query(collection(db, DB_COLLECTION), orderBy('timestamp', 'desc'));
+                const allDataSnapshot = await getDocs(allDataQuery);
 
+                dataCache = allDataSnapshot.docs.map(doc => doc.data());
+                
                 // Рендеринг всех отчетов
                 renderCharts();
                 renderMap(dataCache); 
+                
+                // Рендеринг таблицы на первой странице
                 renderTable(dataCache.slice(0, itemsPerPage));
+                
+                document.getElementById('prevPageBtn').disabled = true;
+                document.getElementById('nextPageBtn').disabled = dataCache.length <= itemsPerPage;
+
 
             } catch (e) {
                 console.error("Error fetching reports:", e);
@@ -593,39 +609,11 @@
             }
         }
 
-        async function loadMoreData(isPrev) {
-            if (!db) return;
-            const recordsRef = firebaseDependencies.collection(db, DB_COLLECTION);
-            
-            let q;
-            const limitVal = itemsPerPage;
+        function loadMoreData(isPrev) {
             
             if (isPrev) {
-                 // Здесь нужна сложная логика для пейджинга назад, которую мы упростим:
-                 // Для простоты будем хранить все загруженные данные в dataCache и листать их.
                  currentPage = Math.max(1, currentPage - 1);
             } else {
-                // Загружаем следующую порцию, только если мы не на последней странице кэша
-                if (currentPage * itemsPerPage >= dataCache.length && lastDoc) {
-                    q = firebaseDependencies.query(
-                        recordsRef,
-                        firebaseDependencies.orderBy('timestamp', 'desc'),
-                        firebaseDependencies.startAfter(lastDoc),
-                        firebaseDependencies.limit(limitVal)
-                    );
-                    
-                    const snapshot = await firebaseDependencies.getDocs(q);
-
-                    if (!snapshot.empty) {
-                        snapshot.forEach(doc => {
-                            dataCache.push(doc.data());
-                        });
-                        lastDoc = snapshot.docs[snapshot.docs.length - 1];
-                    } else {
-                        // Нет больше данных
-                        document.getElementById('nextPageBtn').disabled = true;
-                    }
-                }
                 currentPage++;
             }
 
@@ -638,25 +626,7 @@
             
             // Обновление кнопок
             document.getElementById('prevPageBtn').disabled = currentPage === 1;
-            document.getElementById('nextPageBtn').disabled = dataCache.length < currentPage * itemsPerPage; 
-
-            // Если это первая загрузка, загружаем все данные для карты/чартов
-            if (dataCache.length === 0) {
-                 await fetchAllDataForChartsAndMap();
-            }
-        }
-
-        async function fetchAllDataForChartsAndMap() {
-             if (!db) return;
-             const recordsRef = firebaseDependencies.collection(db, DB_COLLECTION);
-             const q = firebaseDependencies.query(recordsRef, firebaseDependencies.orderBy('timestamp', 'desc'));
-             const snapshot = await firebaseDependencies.getDocs(q);
-
-             dataCache = snapshot.docs.map(doc => doc.data());
-             
-             // Инициализация пагинации на первой странице
-             renderTable(dataCache.slice(0, itemsPerPage));
-             document.getElementById('nextPageBtn').disabled = dataCache.length <= itemsPerPage;
+            document.getElementById('nextPageBtn').disabled = end >= dataCache.length; 
         }
 
         function renderTable(data) {
@@ -716,7 +686,7 @@
             window.reportMap = L.map(mapContainer, {
                 center: [55.7558, 37.6173], // Москва по умолчанию
                 zoom: 10,
-                scrollWheelZoom: false // Отключаем зум колесиком
+                scrollWheelZoom: false 
             });
             
             // Добавляем тайлы OpenStreetMap
@@ -727,7 +697,12 @@
             const markers = L.markerClusterGroup();
             let hasValidLocation = false;
 
+            // В вашем текущем коде нет логики для получения широты/долготы,
+            // поэтому точки не будут отображаться на карте, пока эта логика не будет добавлена
+            // в функцию saveData. Мы пока отображаем моковые данные, если они есть.
+
             data.forEach(doc => {
+                // Предполагаем, что данные о местоположении могут быть
                 if (doc.location && doc.location.latitude && doc.location.longitude) {
                     hasValidLocation = true;
                     const lat = doc.location.latitude;
@@ -838,7 +813,7 @@
                 'Время': new Date(doc.timestamp).toLocaleString(), 'ID Пользователя': doc.user_id, 'Агитатор (ФИО)': doc.full_name || doc.username,
                 'Населенный пункт': doc.settlement, 'Улица': doc.street, 'Дом': doc.house, 'Квартира': doc.apartment, 'Действие': doc.action,
                 'Лояльность': doc.loyalty, 'Требуется Повтор': doc.requires_followup ? 'ДА' : 'НЕТ', 'Комментарий': doc.comment,
-                // 'Широта': doc.location ? doc.location.latitude : 'N/A', 'Долгота': doc.location ? doc.location.longitude : 'N/A',
+                'Широта': doc.location ? doc.location.latitude : 'N/A', 'Долгота': doc.location ? doc.location.longitude : 'N/A',
             }));
             const worksheet = XLSX.utils.json_to_sheet(exportData);
             const workbook = XLSX.utils.book_new();
@@ -877,17 +852,19 @@
             if (isTMA) Telegram.WebApp.MainButton.showLoader();
 
             try {
+                const { writeBatch, collection, query, limit, getDocs } = window.firebaseDependencies;
+
                 const batchSize = 500;
-                const collectionRef = firebaseDependencies.collection(db, collectionPath);
+                const collectionRef = collection(db, collectionPath);
                 let deletedCount = 0;
 
                 while (true) {
-                    const q = firebaseDependencies.query(collectionRef, firebaseDependencies.limit(batchSize));
-                    const snapshot = await firebaseDependencies.getDocs(q);
+                    const q = query(collectionRef, limit(batchSize));
+                    const snapshot = await getDocs(q);
                     
                     if (snapshot.size === 0) break;
 
-                    const batch = firebaseDependencies.writeBatch(db);
+                    const batch = writeBatch(db);
                     snapshot.docs.forEach(doc => {
                         batch.delete(doc.ref);
                     });
@@ -927,7 +904,7 @@
         // 🔑 Инициализация при загрузке (Ожидаем authenticateUser) - ФИНАЛЬНЫЙ ФИКС!
         window.onload = async () => { // <--- ДОБАВЛЕНО 'async'
             // 1. Сначала аутентификация, чтобы установить userTelegramId и isAdmin
-            await authenticateUser(); // <--- ДОБАВЛЕНО 'await' (Ждем ID)
+            await authenticateUser(); // <--- КРИТИЧЕСКИ ВАЖНЫЙ 'await'
 
             // 2. Затем заполнение интерфейса
             populateSettlements();
