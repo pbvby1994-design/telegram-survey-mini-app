@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Блокнот Агитатора | v2.2 (Модульный, Админ Фикс)</title>
+    <title>Блокнот Агитатора | v2.3 (Фикс Админа/Онлайн)</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -435,7 +435,6 @@
     <script src="https://cdn.jsdelivr.net/npm/sheetjs@0.19.0/dist/xlsx.full.min.js"></script>
 
     <script type="module">
-        // Используем версию 10.9.0 для максимальной совместимости с предложенными импортами
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js';
         import { getFirestore, collection, addDoc, query, where, orderBy, getDocs, updateDoc, writeBatch, limit } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js';
         import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js';
@@ -491,24 +490,22 @@
         async function authenticateUser() {
             try {
                 if (!userTelegramId) {
-                     console.error("User Telegram ID is missing!");
+                     console.error("User Telegram ID is missing! Using fallback.");
                      userTelegramId = 'web-test-user-0'; // Fallback
                 }
                 
-                if (auth.currentUser) {
-                    await auth.signOut(); 
-                }
-                
-                // 1. Анонимная аутентификация для доступа к Firestore
-                let userCredential = await signInAnonymously(auth);
+                // 1. Анонимная аутентификация
+                // Примечание: В модульной версии signInAnonymously возвращает UserCredential, а не просто Promise.
+                await signInAnonymously(auth);
 
                 // 2. Проверка прав администратора (УСИЛЕНО: оба ID приводятся к строке)
+                // Если userTelegramId совпадает с ADMIN_TELEGRAM_ID, устанавливаем isAdmin в true.
                 isAdmin = (String(userTelegramId) === String(ADMIN_TELEGRAM_ID));
 
                 // 3. Отражаем статус в отладке
                 document.getElementById('debugUserId').textContent = userTelegramId || 'Нет ID';
                 document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'НЕТ';
-                console.log("Аутентификация успешна. UID:", userCredential.user.uid, "Is Admin:", isAdmin);
+                console.log("Аутентификация успешна. Is Admin:", isAdmin);
 
                 // 4. Визуальное отображение навигации админа
                 if (isAdmin) {
@@ -579,7 +576,7 @@
             if (isTMA) Telegram.WebApp.HapticFeedback.impactOccurred('medium');
         };
         
-        // 🗺️ Получение GPS с геокодированием (Улучшение #5)
+        // 🗺️ Получение GPS с геокодированием
         window.getLocation = () => {
             if (isLocationPending) {
                 window.showAlert('Подождите', 'Предыдущий запрос еще обрабатывается.');
@@ -662,6 +659,7 @@
         // 🏠 Обновление статуса в Маршрутном Листе
         async function updateWalklistStatus(settlement, street, house, apartment) {
             try {
+                // Ищем запись в walklists, которая соответствует введенному адресу И назначена текущему пользователю И имеет статус 'pending'
                 const q = query(
                     collection(db, "walklists"),
                     where('user_id', '==', userTelegramId.toString()), 
@@ -682,8 +680,9 @@
                         finished_at: new Date().toISOString()
                     });
                     console.log(`Walklist item updated to 'done': ${docRef.id}`);
+                    
+                    // Оптимизация: обновление кэша и рендеринг, если мы находимся на вкладке "Маршрут"
                     if (document.querySelector('.nav-item.active span').textContent === 'Маршрут') {
-                        // Оптимизация: вместо полной перезагрузки - обновление кэша и рендеринг
                         const index = walklistCache.findIndex(item => 
                             item.settlement === settlement && 
                             item.street === street && 
@@ -695,6 +694,7 @@
                             walklistCache[index].status = 'done';
                             walklistCache[index].finished_at = new Date().toISOString();
                         }
+                        // Обновляем фильтр, чтобы пройденный адрес исчез, если активен фильтр 'pending'
                         filterWalkList(document.getElementById('walklistSearch').value ? 'all' : 'pending');
                     }
                 }
@@ -703,7 +703,7 @@
             }
         }
         
-        // 🏠 Рендеринг Маршрутного Листа (Улучшение #3)
+        // 🏠 Рендеринг Маршрутного Листа
         window.renderWalkList = async () => {
             const list = document.getElementById('assignedAddresses');
             if (!list) return; 
@@ -716,7 +716,7 @@
                 const q = query(
                     collection(db, "walklists"),
                     where('user_id', '==', userTelegramId.toString()),
-                    orderBy('status', 'asc')
+                    orderBy('status', 'asc') // Сначала "pending", потом "done"
                 );
                 const querySnapshot = await getDocs(q); 
 
@@ -725,7 +725,7 @@
                     walklistCache.push(doc.data());
                 });
 
-                filterWalkList('all'); // Показываем все после загрузки
+                filterWalkList('pending'); // Показываем назначенные по умолчанию
 
             } catch (e) {
                 list.innerHTML = '<li><span class="text-red-500">Ошибка загрузки маршрутного листа.</span></li>';
@@ -733,7 +733,7 @@
             }
         };
 
-        // 🔍 Фильтрация Маршрутного Листа (Улучшение #3)
+        // 🔍 Фильтрация Маршрутного Листа
         window.filterWalkList = (statusFilter = 'all') => {
             const list = document.getElementById('assignedAddresses');
             const searchText = document.getElementById('walklistSearch').value.toLowerCase().trim();
@@ -818,7 +818,8 @@
 
         // 🛑 showSection с проверкой Админа
         window.showSection = (sectionId) => {
-            if ((sectionId === 'reports' || sectionId === 'admin') && !isAdmin) {
+            // ВАЖНО: Проверка isTMA позволяет работать в браузере без инициализации
+            if (isAdmin === false && (sectionId === 'reports' || sectionId === 'admin')) {
                 window.showAlert('Доступ запрещен', 'У вас нет прав администратора для доступа к этому разделу.');
                 return; 
             }
@@ -993,7 +994,7 @@
             }
         };
 
-        // 💾 Сохранение Данных (Офлайн + Онлайн) (Улучшение #6 - Обработка ошибок)
+        // 💾 Сохранение Данных (Офлайн + Онлайн)
         window.saveSurveyData = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('submitFormBtn');
@@ -1172,7 +1173,7 @@
             renderSummary(filteredData);
             renderLeaderboard(filteredData);
             renderCharts(filteredData);
-            renderDailyActivityChart(filteredData); // 🚀 НОВЫЙ ГРАФИК
+            renderDailyActivityChart(filteredData); 
             renderLatestData(filteredData); 
             generateMap(filteredData); 
             
@@ -1185,7 +1186,7 @@
             }
         }
         
-        // 🚀 НОВАЯ ФУНКЦИЯ: График Активности по Дням (Улучшение #4)
+        // 🚀 НОВАЯ ФУНКЦИЯ: График Активности по Дням
         let dailyActivityChartInstance = null;
         function renderDailyActivityChart(data) {
             const ctx = document.getElementById('dailyActivityChart').getContext('2d');
@@ -1595,15 +1596,18 @@
             Telegram.WebApp.expand();
         }
 
-        // Инициализация при загрузке (Ожидаем authenticateUser)
+        // 🔑 Инициализация при загрузке (Ожидаем authenticateUser) - ИСПРАВЛЕНО
         window.onload = async () => {
-            await authenticateUser(); // 🔑 Сначала аутентификация для установки isAdmin
+            // 1. Сначала аутентификация для установки isAdmin и userTelegramId
+            await authenticateUser(); 
+            
+            // 2. Затем заполнение интерфейса
             populateSettlements(); 
             updateOfflineStatus(); 
             window.showSection('form'); 
             lucide.createIcons();
             
-            // ОТЛАДКА: Заполнение полей (повторное, чтобы показать после аутентификации)
+            // ОТЛАДКА: Повторное обновление полей, чтобы гарантировать актуальность
             document.getElementById('debugUserId').textContent = userTelegramId || 'Нет ID';
             document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'НЕТ';
 
