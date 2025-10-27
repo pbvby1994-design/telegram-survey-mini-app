@@ -124,10 +124,14 @@
             <h1 class="text-2xl font-bold mb-4">Ввод Данных</h1>
             <div class="card p-4">
                 <form id="surveyForm" onsubmit="saveSurveyData(event)">
+                    
                     <div class="mb-4">
                         <label for="settlement" class="block text-sm font-medium mb-1">Населенный пункт</label>
-                        <input type="text" id="settlement" required class="w-full">
+                        <select id="settlement" required class="w-full">
+                            <option value="">Выберите...</option>
+                            </select>
                     </div>
+                    
                     <div class="mb-4">
                         <label for="street" class="block text-sm font-medium mb-1">Улица</label>
                         <input type="text" id="street" required class="w-full">
@@ -177,6 +181,18 @@
             <h1 class="text-2xl font-bold mb-4">Отчеты</h1>
             
             <div id="admin-reports-content">
+                
+                <div class="card p-4 mb-4">
+                    <h2 class="text-md font-semibold mb-3">Фильтр данных по периоду</h2>
+                    <select id="dateRangeFilter" onchange="fetchAndRenderReports()" class="w-full mb-3 text-sm p-2 border border-gray-300 rounded-md">
+                        <option value="30d" selected>Последние 30 дней</option>
+                        <option value="7d">Последние 7 дней</option>
+                        <option value="today">Сегодня</option>
+                        <option value="all">За все время</option>
+                    </select>
+                    <div class="text-xs text-gray-500" id="filterStatus">Отображаются данные за последние 30 дней.</div>
+                </div>
+
                 <div class="flex space-x-2 mb-4">
                     <button onclick="exportToXLSX()" class="btn-primary flex-1 flex items-center justify-center text-sm">
                         <i data-lucide="file-spreadsheet" class="w-4 h-4 mr-1"></i>
@@ -207,6 +223,25 @@
                 <div class="card p-4">
                     <h2 class="text-lg font-semibold mb-2">Карта Геолокаций</h2>
                     <div id="map-container"></div>
+                </div>
+                
+                <div class="card p-4">
+                    <h2 class="text-lg font-semibold mb-2">Последние записи</h2>
+                    <div class="overflow-x-auto">
+                        <table id="latestDataTbl" class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead>
+                                <tr class="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <th class="px-2 py-2">Время</th>
+                                    <th class="px-2 py-2">Адрес</th>
+                                    <th class="px-2 py-2">Лояльность</th>
+                                    <th class="px-2 py-2">Комментарий</th>
+                                </tr>
+                            </thead>
+                            <tbody id="latestDataBody" class="divide-y divide-gray-200">
+                                </tbody>
+                        </table>
+                        <p id="noDataMessage" class="text-center py-4 text-gray-500 hidden">Нет записей за выбранный период.</p>
+                    </div>
                 </div>
 
             </div>
@@ -254,9 +289,27 @@
             // messagingSenderId: "...",
             // appId: "..."
         };
+        
+        // 🆕 Список населенных пунктов
+        const SETTLEMENTS = [
+            'г.п. Барсово',
+            'с.п. Солнечный',
+            'с.п. Тундрино',
+            'с.п. Лямина',
+            'г.п. Лянтор',
+            'г.п. Федоровский',
+            'г.п. Белый Яр',
+            'с.п. Ульт-Ягун',
+            'с.п. Сытомино',
+            'с.п. Русскинская',
+            'с.п. Нижнесортымский',
+            'с.п. Угут',
+            'с.п. Локосово'
+        ];
 
-        // ⚠️ ВАЖНО: Хранение ID на клиенте не безопасно. Используйте Security Rules!
-        // Этот ID используется только для отображения интерфейса.
+        // ⚠️ ВАЖНО: Хранение ID на клиенте не безопасно для реальной защиты. 
+        // Этот ID используется ТОЛЬКО для отображения UI. 
+        // АБСОЛЮТНО необходимо настроить Firebase Security Rules!
         const ADMIN_TELEGRAM_ID = 541459471; // Ваш Telegram user_id
 
         const isTMA = window.Telegram && window.Telegram.WebApp;
@@ -264,11 +317,14 @@
         let isAdmin = userTelegramId === ADMIN_TELEGRAM_ID;
         let userLocation = null;
 
+        let db = null;
+        let surveysCollection = null;
+
         // --- ИНИЦИАЛИЗАЦИЯ FIREBASE ---
         if (firebaseConfig.projectId) {
             firebase.initializeApp(firebaseConfig);
-            const db = firebase.firestore();
-            const surveysCollection = db.collection('surveys');
+            db = firebase.firestore();
+            surveysCollection = db.collection('surveys');
         } else {
             console.error("Firebase config is missing. Data saving will not work.");
         }
@@ -311,11 +367,22 @@
 
         // --- ФУНКЦИИ ФОРМЫ И СОХРАНЕНИЯ ---
         
-        // 🆕 Улучшенная обработка геолокации
+        // 🆕 Функция для заполнения списка населенных пунктов
+        function populateSettlements() {
+            const selectElement = document.getElementById('settlement');
+            SETTLEMENTS.forEach(settlement => {
+                const option = document.createElement('option');
+                option.value = settlement;
+                option.textContent = settlement;
+                selectElement.appendChild(option);
+            });
+        }
+        
+        // Улучшенная обработка геолокации
         window.getLocation = () => {
             const statusElement = document.getElementById('locationStatus');
             statusElement.textContent = 'Запрос геолокации...';
-            userLocation = null; // Сброс старого значения
+            userLocation = null; 
 
             if (!navigator.geolocation) {
                 statusElement.textContent = 'Ошибка: Геолокация не поддерживается вашим браузером.';
@@ -353,7 +420,7 @@
         
         window.saveSurveyData = async (e) => {
             e.preventDefault();
-            if (!firebaseConfig.projectId) {
+            if (!firebaseConfig.projectId || !surveysCollection) {
                 showAlert('Ошибка', 'Конфигурация Firebase отсутствует.');
                 return;
             }
@@ -370,7 +437,8 @@
                     loyalty: document.getElementById('loyalty').value,
                     comment: document.getElementById('comment').value || '',
                     timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                    user_id: userTelegramId,
+                    // ВАЖНО: user_id и username должны быть получены из Firebase Auth, если вы его используете.
+                    user_id: userTelegramId, 
                     username: isTMA ? (Telegram.WebApp.initDataUnsafe.user.username || 'n/a') : 'web-test',
                     location: userLocation, // Сохраняем GeoPoint или null
                 };
@@ -381,13 +449,14 @@
                 document.getElementById('surveyForm').reset();
                 document.getElementById('locationStatus').textContent = 'Ожидание...';
                 userLocation = null;
+                populateSettlements(); // Перезаполнение списка после сброса формы
                 
                 showAlert('Успешно!', 'Данные сохранены.');
                 if (isTMA) Telegram.WebApp.HapticFeedback.notificationOccurred('success');
 
             } catch (error) {
                 console.error("Error adding document: ", error);
-                showAlert('Ошибка', 'Произошла ошибка при сохранении данных.');
+                showAlert('Ошибка', 'Произошла ошибка при сохранении данных: ' + error.message);
                 if (isTMA) Telegram.WebApp.HapticFeedback.notificationOccurred('error');
             } finally {
                 if (isTMA) Telegram.WebApp.MainButton.hideProgress();
@@ -396,13 +465,11 @@
 
 
         // --- ФУНКЦИИ ОТЧЕТОВ ---
-        let mapInstance = null; // Для хранения экземпляра Leaflet карты
-        let dataCache = []; // Кэш данных для экспорта и отчетов
+        let mapInstance = null; 
+        let dataCache = []; 
 
-        // 🆕 Функция генерации карты (Перенос map_command)
         function generateMap(data) {
             const container = document.getElementById('map-container');
-            // Очистка контейнера перед рендерингом
             if (mapInstance) {
                 mapInstance.remove();
                 mapInstance = null;
@@ -422,25 +489,23 @@
                 return;
             }
 
-            // Центр карты - среднее из всех точек
             const avgLat = locations.reduce((sum, p) => sum + p.lat, 0) / locations.length;
             const avgLon = locations.reduce((sum, p) => sum + p.lon, 0) / locations.length;
 
-            mapInstance = L.map(container).setView([avgLat, avgLon], 10); // 10 - уровень зума
+            mapInstance = L.map(container).setView([avgLat, avgLon], 10); 
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
             }).addTo(mapInstance);
 
             locations.forEach(point => {
-                let color = '#34D399'; // loyal (green-400)
+                let color = '#34D399'; 
                 if (point.loyalty === 'not_loyal') {
-                    color = '#F87171'; // not_loyal (red-400)
+                    color = '#F87171'; 
                 } else if (point.loyalty === 'doubtful') {
-                    color = '#FBBF24'; // doubtful (yellow-500)
+                    color = '#FBBF24'; 
                 }
 
-                // Кастомный маркер
                 const iconHtml = `<div style="background-color: ${color}; width: 10px; height: 10px; border-radius: 50%; border: 2px solid white;"></div>`;
                 const customIcon = L.divIcon({
                     className: 'custom-div-icon',
@@ -454,18 +519,15 @@
                     .bindPopup(`Лояльность: ${point.loyalty}`);
             });
             
-            // Адаптация карты под размер контейнера после рендеринга
             mapInstance.invalidateSize();
         }
 
-        // 🆕 Функция экспорта в XLSX (Перенос export_all_command)
         function exportToXLSX() {
             if (dataCache.length === 0) {
                 showAlert('Ошибка', 'Нет данных для экспорта. Пожалуйста, обновите отчеты.');
                 return;
             }
 
-            // Преобразование данных для Excel
             const exportData = dataCache.map(doc => ({
                 'ID Пользователя': doc.user_id,
                 'Username': doc.username,
@@ -481,7 +543,6 @@
                 'Долгота': doc.location ? doc.location.longitude : 'N/A',
             }));
 
-            // Создание и скачивание файла
             const worksheet = XLSX.utils.json_to_sheet(exportData);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Данные");
@@ -494,25 +555,104 @@
         let loyaltyChart = null;
         let actionChart = null;
 
+        // 🆕 Функция рендеринга таблицы последних записей
+        function renderLatestData(data) {
+            const tbody = document.getElementById('latestDataBody');
+            const noDataMessage = document.getElementById('noDataMessage');
+            tbody.innerHTML = ''; 
+
+            if (data.length === 0) {
+                noDataMessage.classList.remove('hidden');
+                return;
+            }
+            
+            noDataMessage.classList.add('hidden');
+
+            data.forEach(doc => {
+                const row = tbody.insertRow();
+                row.className = "bg-white dark:bg-gray-800 hover:bg-gray-50";
+
+                const timeStr = doc.timestamp ? new Date(doc.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+                const address = `${doc.settlement || ''}, ${doc.street || ''}, ${doc.house || ''}`;
+
+                let loyaltyText = doc.loyalty || 'N/A';
+                let loyaltyColor = 'text-gray-500';
+                if (doc.loyalty === 'loyal') loyaltyColor = 'text-green-600 font-medium';
+                else if (doc.loyalty === 'not_loyal') loyaltyColor = 'text-red-600 font-medium';
+                else if (doc.loyalty === 'doubtful') loyaltyColor = 'text-yellow-600';
+
+
+                // Ячейка "Время"
+                let cell = row.insertCell();
+                cell.className = "px-2 py-2 whitespace-nowrap text-xs";
+                cell.textContent = timeStr;
+
+                // Ячейка "Адрес"
+                cell = row.insertCell();
+                cell.className = "px-2 py-2 whitespace-nowrap text-xs truncate max-w-xs";
+                cell.textContent = address;
+
+                // Ячейка "Лояльность"
+                cell = row.insertCell();
+                cell.className = `px-2 py-2 whitespace-nowrap text-xs ${loyaltyColor}`;
+                cell.textContent = loyaltyText;
+                
+                // Ячейка "Комментарий"
+                cell = row.insertCell();
+                cell.className = "px-2 py-2 text-xs text-gray-500 truncate max-w-sm";
+                cell.textContent = doc.comment.length > 50 ? doc.comment.substring(0, 50) + '...' : doc.comment;
+            });
+        }
+
+
+        // 🆕 Обновлено: Добавлена логика фильтрации по дате
         window.fetchAndRenderReports = async () => {
             if (!isAdmin) {
                 showAlert('Ошибка', 'Нет прав администратора.');
                 return;
             }
-            if (!firebaseConfig.projectId) return showAlert('Ошибка', 'Конфигурация Firebase отсутствует.');
+            if (!firebaseConfig.projectId || !surveysCollection) return showAlert('Ошибка', 'Конфигурация Firebase отсутствует.');
             
             if (isTMA) Telegram.WebApp.MainButton.showLoader();
 
             try {
-                const snapshot = await surveysCollection.orderBy('timestamp', 'desc').get();
+                const filterValue = document.getElementById('dateRangeFilter').value;
+                const filterStatus = document.getElementById('filterStatus');
+                
+                // Базовый запрос: сортируем по времени (последние сначала)
+                let query = surveysCollection.orderBy('timestamp', 'desc');
+
+                let startDate = null;
+                const now = new Date();
+
+                // 1. Определение даты начала фильтрации
+                if (filterValue === '30d') {
+                    startDate = new Date(now.setDate(now.getDate() - 30));
+                    filterStatus.textContent = 'Отображаются данные за последние 30 дней.';
+                } else if (filterValue === '7d') {
+                    startDate = new Date(now.setDate(now.getDate() - 7));
+                    filterStatus.textContent = 'Отображаются данные за последние 7 дней.';
+                } else if (filterValue === 'today') {
+                    startDate = new Date(now.setHours(0, 0, 0, 0)); // Начало текущего дня
+                    filterStatus.textContent = 'Отображаются данные за сегодня.';
+                } else {
+                    filterStatus.textContent = 'Отображаются все доступные данные.';
+                }
+
+                // 2. Применение фильтра к запросу Firestore
+                if (startDate) {
+                    // Используем where для фильтрации по дате (требует индекса в Firestore)
+                    query = query.where('timestamp', '>=', startDate);
+                }
+
+                const snapshot = await query.get();
                 const rawData = snapshot.docs.map(doc => {
                     const data = doc.data();
-                    // Преобразование Firestore Timestamp в Unix Timestamp (мс) для удобства
                     const timestampMs = data.timestamp ? data.timestamp.toDate().getTime() : 0;
                     return { ...data, timestamp: timestampMs };
                 });
                 
-                dataCache = rawData; // Обновляем кэш данных
+                dataCache = rawData; 
                 
                 // 1. Агрегация данных
                 const totalCount = rawData.length;
@@ -520,9 +660,7 @@
                 const actionCounts = {};
 
                 rawData.forEach(doc => {
-                    // Лояльность
                     loyaltyCounts[doc.loyalty] = (loyaltyCounts[doc.loyalty] || 0) + 1;
-                    // Действия
                     actionCounts[doc.action] = (actionCounts[doc.action] || 0) + 1;
                 });
                 
@@ -552,12 +690,20 @@
                 ];
                 renderChart('actionChart', 'bar', actionLabels, actionData, ['#007aff', '#ff3b30'], actionChart);
                 
-                // 4. Рендеринг карты (🆕)
+                // 4. Рендеринг карты
                 generateMap(rawData);
+                
+                // 5. Рендеринг таблицы последних записей
+                renderLatestData(rawData.slice(0, 20)); // Показываем только последние 20
 
             } catch (e) {
                 console.error("Error fetching reports:", e);
-                showAlert('Ошибка', 'Произошла ошибка при загрузке отчетов: ' + e.message);
+                // ВАЖНО: Если у вас ошибка из-за Security Rules, она будет здесь!
+                if (e.code === 'permission-denied') {
+                    showAlert('Ошибка доступа', 'Вам отказано в доступе. Проверьте Firebase Security Rules.');
+                } else {
+                    showAlert('Ошибка', 'Произошла ошибка при загрузке отчетов: ' + e.message);
+                }
             } finally {
                 if (isTMA) Telegram.WebApp.MainButton.hideLoader();
             }
@@ -595,7 +741,7 @@
                             color: getComputedStyle(document.body).getPropertyValue('--tg-theme-hint-color') || '#8e8e93',
                         },
                         grid: {
-                            color: 'rgba(0,0,0,0)', // Скрываем вертикальные линии
+                            color: 'rgba(0,0,0,0)', 
                         }
                     }
                 } : {}
@@ -627,9 +773,9 @@
                 showAlert('Ошибка', 'Нет прав администратора.');
                 return;
             }
-            if (!firebaseConfig.projectId) return showAlert('Ошибка', 'Конфигурация Firebase отсутствует.');
+            if (!firebaseConfig.projectId || !surveysCollection) return showAlert('Ошибка', 'Конфигурация Firebase отсутствует.');
 
-            if (confirm("Вы уверены? Это действие безвозвратно удалит ВСЕ данные (записи) из Firestore!")) {
+            if (confirm("Вы уверены? Это действие безвозвратно удалит ВСЕ данные (записи) из базы Firestore!")) {
                 deleteCollection();
             }
         };
@@ -639,8 +785,7 @@
             if (isTMA) Telegram.WebApp.MainButton.showLoader();
 
             try {
-                // ВАЖНО: В реальном проекте используйте Cloud Functions для рекурсивного удаления
-                // Здесь - упрощенная версия для Mini App, которая может быть медленной на больших объемах
+                // ПРЕДУПРЕЖДЕНИЕ: В боевом приложении используйте Cloud Functions для надежного удаления больших объемов
                 const batchSize = 50;
                 let deletedCount = 0;
                 let query = surveysCollection.limit(batchSize);
@@ -657,13 +802,11 @@
                     await batch.commit();
                     deletedCount += snapshot.size;
 
-                    // Если размер меньше batchSize, значит удалили все
                     if (snapshot.size < batchSize) break;
                 }
 
                 showAlert('Успешно!', `Удалено ${deletedCount} записей. Данные Firestore очищены.`);
                 
-                // Перезагрузить отчеты после удаления
                 if (isAdmin) fetchAndRenderReports(); 
                 
                 return true;
@@ -677,10 +820,9 @@
             }
         }
 
-        // ❌ УДАЛЕНО: window.requestAdminLogin (Логика входа полностью перенесена на клиента)
-        // Теперь, если userTelegramId === ADMIN_TELEGRAM_ID, то isAdmin = true, и отчеты/админ-панель доступны.
         window.requestAdminLogin = () => {
-             showAlert('Информация', 'Авторизация администратора теперь происходит автоматически по Вашему Telegram ID при запуске.');
+             // 🆕 Теперь аутентификация должна происходить через Firebase Auth
+             showAlert('Информация', 'Авторизация администратора теперь происходит автоматически по Вашему Telegram ID (и Firebase Auth) при запуске. Убедитесь, что ваш Telegram ID совпадает с ADMIN_TELEGRAM_ID в коде и что вы настроили Firebase Security Rules.');
              if (isTMA) Telegram.WebApp.HapticFeedback.notificationOccurred('success');
         }
         
@@ -692,16 +834,15 @@
 
         // Инициализация при загрузке
         window.onload = () => {
+            populateSettlements(); // Заполняем список поселений
             showSection('form');
             lucide.createIcons();
             
             if (isAdmin) {
-                // Если админ, можно сразу загрузить отчеты на фоне, но не переключать секцию
                 console.log("Admin detected. Initializing reports...");
-                fetchAndRenderReports(); 
+                // fetchAndRenderReports(); // Удалено: будет вызвано при первом переходе на раздел 'reports'
             }
             
-            // Если нет Firebase config, показываем ошибку
             if (!firebaseConfig.projectId) {
                 showAlert('ВНИМАНИЕ', 'Необходимо вставить ключи конфигурации Firebase в код.');
             }
