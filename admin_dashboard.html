@@ -247,8 +247,7 @@
             </div>
             
             <div id="admin-reports-login" class="card p-4 text-center hidden">
-                <p class="mb-4">Для просмотра отчетов требуется авторизация администратора.</p>
-                <button onclick="requestAdminLogin()" class="btn-primary">Войти как Администратор</button>
+                <p class="mb-4">Для просмотра отчетов требуется авторизация администратора (Telegram ID не совпадает).</p>
             </div>
         </section>
 
@@ -267,8 +266,7 @@
             </div>
 
             <div id="admin-panel-login" class="card p-4 text-center hidden">
-                <p class="mb-4">Для доступа к админ-панели требуется авторизация администратора.</p>
-                <button onclick="requestAdminLogin()" class="btn-primary">Войти как Администратор</button>
+                <p class="mb-4">Для доступа к админ-панели требуется авторизация администратора (Telegram ID не совпадает).</p>
             </div>
         </section>
 
@@ -276,6 +274,7 @@
 
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sheetjs@0.19.0/dist/xlsx.full.min.js"></script>
 
     <script>
@@ -290,7 +289,10 @@
             // appId: "..."
         };
         
-        // 🆕 Список населенных пунктов
+        // 🔑 ВАЖНО: Идентификация администратора по Telegram ID для этапа разработки
+        const ADMIN_TELEGRAM_ID = 541459471; // Ваш Telegram user_id
+
+        // Список населенных пунктов
         const SETTLEMENTS = [
             'г.п. Барсово',
             'с.п. Солнечный',
@@ -307,11 +309,6 @@
             'с.п. Локосово'
         ];
 
-        // ⚠️ ВАЖНО: Хранение ID на клиенте не безопасно для реальной защиты. 
-        // Этот ID используется ТОЛЬКО для отображения UI. 
-        // АБСОЛЮТНО необходимо настроить Firebase Security Rules!
-        const ADMIN_TELEGRAM_ID = 541459471; // Ваш Telegram user_id
-
         const isTMA = window.Telegram && window.Telegram.WebApp;
         let userTelegramId = isTMA ? Telegram.WebApp.initDataUnsafe.user.id : null;
         let isAdmin = userTelegramId === ADMIN_TELEGRAM_ID;
@@ -325,6 +322,15 @@
             firebase.initializeApp(firebaseConfig);
             db = firebase.firestore();
             surveysCollection = db.collection('surveys');
+            
+            // Анонимный вход для удовлетворения Firebase Security Rules (allow read, write: if request.auth != null)
+            firebase.auth().signInAnonymously()
+                .then(() => {
+                    console.log("Firebase Authenticated (Anonymous).");
+                })
+                .catch(error => {
+                    console.error("Auth error:", error);
+                });
         } else {
             console.error("Firebase config is missing. Data saving will not work.");
         }
@@ -360,16 +366,17 @@
                 }
             }
             
-            // Перерисовка иконок Lucide
             lucide.createIcons();
             if (isTMA) Telegram.WebApp.HapticFeedback.impactOccurred('light');
         }
 
         // --- ФУНКЦИИ ФОРМЫ И СОХРАНЕНИЯ ---
         
-        // 🆕 Функция для заполнения списка населенных пунктов
+        // Функция для заполнения списка населенных пунктов
         function populateSettlements() {
             const selectElement = document.getElementById('settlement');
+            // Очистка перед заполнением (если вдруг вызывается повторно)
+            selectElement.innerHTML = '<option value="">Выберите...</option>'; 
             SETTLEMENTS.forEach(settlement => {
                 const option = document.createElement('option');
                 option.value = settlement;
@@ -402,7 +409,7 @@
                     console.error("Geolocation Error:", error);
                     let errorMessage = 'Ошибка при получении GPS.';
                     if (error.code === error.PERMISSION_DENIED) {
-                        errorMessage = 'Отказано в доступе к геолокации.';
+                        errorMessage = 'Отказано в доступе к геолокации. Проверьте настройки браузера/Telegram.';
                     } else if (error.code === error.POSITION_UNAVAILABLE) {
                         errorMessage = 'Геолокация недоступна.';
                     }
@@ -437,10 +444,9 @@
                     loyalty: document.getElementById('loyalty').value,
                     comment: document.getElementById('comment').value || '',
                     timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                    // ВАЖНО: user_id и username должны быть получены из Firebase Auth, если вы его используете.
                     user_id: userTelegramId, 
                     username: isTMA ? (Telegram.WebApp.initDataUnsafe.user.username || 'n/a') : 'web-test',
-                    location: userLocation, // Сохраняем GeoPoint или null
+                    location: userLocation, 
                 };
 
                 await surveysCollection.add(data);
@@ -449,7 +455,7 @@
                 document.getElementById('surveyForm').reset();
                 document.getElementById('locationStatus').textContent = 'Ожидание...';
                 userLocation = null;
-                populateSettlements(); // Перезаполнение списка после сброса формы
+                populateSettlements(); 
                 
                 showAlert('Успешно!', 'Данные сохранены.');
                 if (isTMA) Telegram.WebApp.HapticFeedback.notificationOccurred('success');
@@ -469,6 +475,7 @@
         let dataCache = []; 
 
         function generateMap(data) {
+            // ... (Код функции generateMap остается прежним)
             const container = document.getElementById('map-container');
             if (mapInstance) {
                 mapInstance.remove();
@@ -555,7 +562,7 @@
         let loyaltyChart = null;
         let actionChart = null;
 
-        // 🆕 Функция рендеринга таблицы последних записей
+        // Функция рендеринга таблицы последних записей
         function renderLatestData(data) {
             const tbody = document.getElementById('latestDataBody');
             const noDataMessage = document.getElementById('noDataMessage');
@@ -605,7 +612,7 @@
         }
 
 
-        // 🆕 Обновлено: Добавлена логика фильтрации по дате
+        // ❌ ИЗМЕНЕНО: Логика фильтрации перенесена на клиент, чтобы избежать необходимости в индексе.
         window.fetchAndRenderReports = async () => {
             if (!isAdmin) {
                 showAlert('Ошибка', 'Нет прав администратора.');
@@ -619,42 +626,44 @@
                 const filterValue = document.getElementById('dateRangeFilter').value;
                 const filterStatus = document.getElementById('filterStatus');
                 
-                // Базовый запрос: сортируем по времени (последние сначала)
-                let query = surveysCollection.orderBy('timestamp', 'desc');
-
                 let startDate = null;
                 const now = new Date();
+                let nowTime = now.getTime();
 
                 // 1. Определение даты начала фильтрации
                 if (filterValue === '30d') {
-                    startDate = new Date(now.setDate(now.getDate() - 30));
+                    startDate = new Date(now.setDate(now.getDate() - 30)).getTime();
                     filterStatus.textContent = 'Отображаются данные за последние 30 дней.';
                 } else if (filterValue === '7d') {
-                    startDate = new Date(now.setDate(now.getDate() - 7));
+                    startDate = new Date(now.setDate(now.getDate() - 7)).getTime();
                     filterStatus.textContent = 'Отображаются данные за последние 7 дней.';
                 } else if (filterValue === 'today') {
-                    startDate = new Date(now.setHours(0, 0, 0, 0)); // Начало текущего дня
+                    startDate = new Date(now.setHours(0, 0, 0, 0)).getTime(); // Начало текущего дня
                     filterStatus.textContent = 'Отображаются данные за сегодня.';
                 } else {
                     filterStatus.textContent = 'Отображаются все доступные данные.';
                 }
 
-                // 2. Применение фильтра к запросу Firestore
-                if (startDate) {
-                    // Используем where для фильтрации по дате (требует индекса в Firestore)
-                    query = query.where('timestamp', '>=', startDate);
-                }
-
-                const snapshot = await query.get();
-                const rawData = snapshot.docs.map(doc => {
+                // 2. Запрос Firestore: Загружаем все данные, отсортированные по времени. 
+                // !!! Избегаем where('timestamp', '>=', startDate) для обхода требования индекса.
+                const snapshot = await surveysCollection.orderBy('timestamp', 'desc').get();
+                
+                const rawDataUnfiltered = snapshot.docs.map(doc => {
                     const data = doc.data();
+                    // Конвертируем Firebase Timestamp в JS Timestamp (миллисекунды)
                     const timestampMs = data.timestamp ? data.timestamp.toDate().getTime() : 0;
                     return { ...data, timestamp: timestampMs };
                 });
                 
+                // 3. Фильтрация данных на клиенте (JS)
+                const rawData = rawDataUnfiltered.filter(doc => {
+                    if (filterValue === 'all') return true;
+                    return doc.timestamp >= startDate;
+                });
+                
                 dataCache = rawData; 
                 
-                // 1. Агрегация данных
+                // 4. Агрегация и Рендеринг (остается прежним)
                 const totalCount = rawData.length;
                 const loyaltyCounts = {};
                 const actionCounts = {};
@@ -664,7 +673,6 @@
                     actionCounts[doc.action] = (actionCounts[doc.action] || 0) + 1;
                 });
                 
-                // 2. Рендеринг сводки
                 const summaryHtml = `
                     <div class="p-2 bg-gray-100 rounded-lg text-center">Всего: <span class="font-bold">${totalCount}</span></div>
                     <div class="p-2 bg-green-100 rounded-lg text-center">Лояльных: <span class="font-bold">${loyaltyCounts['loyal'] || 0}</span></div>
@@ -673,7 +681,6 @@
                 `;
                 document.getElementById('summary-metrics').innerHTML = summaryHtml;
 
-                // 3. Рендеринг графиков
                 const loyaltyLabels = ['Лояльный', 'Не лояльный', 'Сомневающийся', 'Не открыли'];
                 const loyaltyData = [
                     loyaltyCounts['loyal'] || 0,
@@ -690,26 +697,20 @@
                 ];
                 renderChart('actionChart', 'bar', actionLabels, actionData, ['#007aff', '#ff3b30'], actionChart);
                 
-                // 4. Рендеринг карты
                 generateMap(rawData);
                 
-                // 5. Рендеринг таблицы последних записей
-                renderLatestData(rawData.slice(0, 20)); // Показываем только последние 20
+                renderLatestData(rawData.slice(0, 20)); 
 
             } catch (e) {
                 console.error("Error fetching reports:", e);
-                // ВАЖНО: Если у вас ошибка из-за Security Rules, она будет здесь!
-                if (e.code === 'permission-denied') {
-                    showAlert('Ошибка доступа', 'Вам отказано в доступе. Проверьте Firebase Security Rules.');
-                } else {
-                    showAlert('Ошибка', 'Произошла ошибка при загрузке отчетов: ' + e.message);
-                }
+                showAlert('Ошибка', 'Произошла ошибка при загрузке отчетов: ' + e.message);
             } finally {
                 if (isTMA) Telegram.WebApp.MainButton.hideLoader();
             }
         };
 
         function renderChart(canvasId, type, labels, data, colors, chartInstance) {
+            // ... (Код функции renderChart остается прежним)
             const ctx = document.getElementById(canvasId).getContext('2d');
             
             if (chartInstance) {
@@ -775,7 +776,7 @@
             }
             if (!firebaseConfig.projectId || !surveysCollection) return showAlert('Ошибка', 'Конфигурация Firebase отсутствует.');
 
-            if (confirm("Вы уверены? Это действие безвозвратно удалит ВСЕ данные (записи) из базы Firestore!")) {
+            if (confirm("Вы уверены? Это действие безвозвратно удалит ВСЕ данные (записи) из базы Firestore.")) {
                 deleteCollection();
             }
         };
@@ -785,7 +786,6 @@
             if (isTMA) Telegram.WebApp.MainButton.showLoader();
 
             try {
-                // ПРЕДУПРЕЖДЕНИЕ: В боевом приложении используйте Cloud Functions для надежного удаления больших объемов
                 const batchSize = 50;
                 let deletedCount = 0;
                 let query = surveysCollection.limit(batchSize);
@@ -821,9 +821,7 @@
         }
 
         window.requestAdminLogin = () => {
-             // 🆕 Теперь аутентификация должна происходить через Firebase Auth
-             showAlert('Информация', 'Авторизация администратора теперь происходит автоматически по Вашему Telegram ID (и Firebase Auth) при запуске. Убедитесь, что ваш Telegram ID совпадает с ADMIN_TELEGRAM_ID в коде и что вы настроили Firebase Security Rules.');
-             if (isTMA) Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+             showAlert('Информация', 'На данном этапе разработки права администратора определяются Вашим Telegram ID. Обновите страницу, если недавно вошли как администратор.');
         }
         
         // --- ИНИЦИАЛИЗАЦИЯ WEBAPP ---
@@ -837,11 +835,6 @@
             populateSettlements(); // Заполняем список поселений
             showSection('form');
             lucide.createIcons();
-            
-            if (isAdmin) {
-                console.log("Admin detected. Initializing reports...");
-                // fetchAndRenderReports(); // Удалено: будет вызвано при первом переходе на раздел 'reports'
-            }
             
             if (!firebaseConfig.projectId) {
                 showAlert('ВНИМАНИЕ', 'Необходимо вставить ключи конфигурации Firebase в код.');
