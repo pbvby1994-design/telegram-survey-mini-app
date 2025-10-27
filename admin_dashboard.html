@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Блокнот Агитатора | v2.0</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
@@ -18,6 +19,9 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
     <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
     <style>
         /* 🎨 Улучшенная Типографика (Jost) */
@@ -77,7 +81,7 @@
         .loyalty-btn.active-not_loyal { border-color: #EF4444; background-color: #FEE2E2; }
         .loyalty-btn.active-doubtful { border-color: #F59E0B; background-color: #FEF3C7; }
         .loyalty-btn.active-not_opened { border-color: #6B7280; background-color: #E5E7EB; }
-        
+
         .action-btn.active-action { border-color: var(--tg-theme-link-color, #007aff); background-color: #E0F2FF; }
 
         /* Map container style */
@@ -87,6 +91,24 @@
             border-radius: 12px;
             margin-top: 20px;
         }
+        /* 🎨 Стиль для основных кнопок */
+        .btn-primary {
+            background-color: var(--tg-theme-button-color, #007aff);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: background-color 0.15s ease-in-out;
+        }
+        .btn-secondary {
+            background-color: var(--tg-theme-secondary-bg-color, #e5e5ea);
+            color: var(--tg-theme-text-color, #1c1c1e);
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-weight: 500;
+            border: 1px solid var(--tg-theme-hint-color, #d1d1d6);
+            transition: background-color 0.15s ease-in-out;
+        }
     </style>
 </head>
 <body class="p-4">
@@ -95,7 +117,7 @@
         <i data-lucide="cloud-off" class="w-4 h-4 mr-1 inline-block align-middle"></i>
         Офлайн: <span id="debugOfflineCount">0</span> записей в кэше. Нажмите "Синхронизировать".
     </div>
-    
+
     <div class="nav-bar">
         <div class="flex justify-around items-center h-16 max-w-lg mx-auto">
             <a href="#" onclick="showSection('form'); return false;" class="nav-item active flex flex-col items-center text-xs">
@@ -183,7 +205,7 @@
                         </div>
                         <input type="hidden" id="action" required value="">
                     </div>
-                    
+
                     <div id="conversationScript" class="card p-3 mb-4 bg-blue-50 border-l-4 border-blue-500 hidden">
                         <p class="text-sm text-blue-800 font-semibold">Сценарий / Подсказка:</p>
                         <p id="scriptText" class="text-xs text-blue-700 mt-1 italic"></p>
@@ -230,9 +252,9 @@
                 <ul id="assignedAddresses" class="list-disc list-inside space-y-2 text-sm">
                     </ul>
             </div>
-            
+
             <div class="card p-4 mt-4">
-                <h2 class="text-lg font-semibold mb-2 text-red-600">Трекинг и Офлайн (#2, #9)</h2>
+                <h2 class="text-lg font-semibold mb-2 text-red-600">Трекинг и Офлайн</h2>
                 <p class="text-sm mb-4">
                     **#9 Трекинг (Имитация):** В реальном приложении при активации трекинга ваши GPS-данные будут периодически отправляться.
                 </p>
@@ -240,13 +262,13 @@
                     <i data-lucide="map-pin" class="w-4 h-4 mr-1 inline-block align-middle"></i>
                     Начать/Обновить Трекинг (Имитация)
                 </button>
-                
+
                 <p class="text-sm mt-4 mb-2 text-gray-500">
                     **#2 Синхронизация:** У вас в кэше <span id="syncOfflineCount">0</span> неотосланных записей.
                 </p>
                  <button id="syncButton" onclick="mockSyncData()" class="btn-primary w-full bg-green-500 border-green-700 disabled:opacity-50" disabled>
                     <i data-lucide="cloud-upload" class="w-4 h-4 mr-1 inline-block align-middle"></i>
-                    Синхронизировать Данные (Имитация)
+                    Синхронизировать Данные
                 </button>
             </div>
         </section>
@@ -258,7 +280,7 @@
             <div id="admin-reports-content">
 
                 <div class="card p-4 mb-4">
-                    <h2 class="text-md font-semibold mb-3">Фильтр данных (Имитация)</h2>
+                    <h2 class="text-md font-semibold mb-3">Фильтр данных</h2>
                     <div class="flex space-x-2 mb-3">
                         <select id="dateRangeFilter" onchange="fetchAndRenderReports()" class="w-1/2 text-sm p-2 border border-gray-300 rounded-md">
                             <option value="30d" selected>Последние 30 дней</option>
@@ -270,17 +292,17 @@
                             <option value="all" selected>Все Агитаторы</option>
                         </select>
                     </div>
-                    <div class="text-xs text-gray-500" id="filterStatus">Отображаются **фиктивные** данные.</div>
+                    <div class="text-xs text-gray-500" id="filterStatus">Данные загружаются из **Firebase Firestore**.</div>
                 </div>
 
                 <div class="flex space-x-2 mb-4">
                     <button onclick="exportToXLSX()" class="btn-primary flex-1 flex items-center justify-center text-sm">
                         <i data-lucide="file-spreadsheet" class="w-4 h-4 mr-1"></i>
-                        <span>Экспорт XLSX (Имитация)</span>
+                        <span>Экспорт XLSX</span>
                     </button>
                     <button onclick="fetchAndRenderReports()" class="btn-secondary flex-1 flex items-center justify-center text-sm">
                         <i data-lucide="refresh-cw" class="w-4 h-4 mr-1"></i>
-                        <span>Обновить (Имитация)</span>
+                        <span>Обновить</span>
                     </button>
                 </div>
 
@@ -382,10 +404,10 @@
                 </div>
                 <div class="card p-4">
                     <h2 class="text-lg font-semibold mb-2 text-red-600">Опасная Зона</h2>
-                    <p class="text-sm mb-4">Нажмите, чтобы безвозвратно удалить ВСЕ данные (имитация).</p>
+                    <p class="text-sm mb-4">Нажмите, чтобы безвозвратно удалить ВСЕ данные.</p>
                     <button onclick="deleteCollection()" class="btn-secondary w-full bg-red-100 text-red-600 border border-red-400">
                         <i data-lucide="trash-2" class="w-4 h-4 mr-1 inline-block align-middle"></i>
-                        Удалить Все Данные (Имитация)
+                        Удалить Все Данные
                     </button>
                 </div>
             </div>
@@ -396,11 +418,25 @@
     <script src="https://cdn.jsdelivr.net/npm/sheetjs@0.19.0/dist/xlsx.full.min.js"></script>
 
     <script>
+        // --- КОНФИГУРАЦИЯ FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDVeRXO16KtIwoJQb4uHQuCsEv3xTLBGhI",
+            authDomain: "agitator-notebook.firebaseapp.com",
+            projectId: "agitator-notebook",
+            storageBucket: "agitator-notebook.firebasestorage.app",
+            messagingSenderId: "518555352011",
+            appId: "1:518555352011:web:2b18d460a6fa4acb66944e"
+        };
+
+        // Инициализация Firebase и Firestore
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore(); 
+
         // --- ЗАГЛУШКИ (MOCK DATA) ---
         const SETTLEMENTS = [
             'г.п. Барсово', 'с.п. Солнечный', 'г.п. Лянтор', 'г.п. Федоровский', 'с.п. Локосово'
         ];
-        
+
         // 💬 Интерактивные скрипты (#5)
         const INTERACTIVE_SCRIPTS = {
             'loyal': "Поблагодарите. Узнайте, готов ли помочь (листовки, наблюдатель).",
@@ -421,37 +457,12 @@
         ];
 
 
-        const MOCK_REPORTS_DATA = [
-            // Исходные данные
-            { timestamp: Date.now() - 3600000, user_id: 101, username: 'ivanov', full_name: 'Иванов И.', settlement: 'г.п. Лянтор', street: 'Ленина', house: '15', apartment: '3', action: 'canvassing', loyalty: 'loyal', comment: 'Очень позитивно настроены, обещали прийти.', location: { latitude: 61.6111, longitude: 73.1001 }, requires_followup: false },
-            { timestamp: Date.now() - 7200000, user_id: 102, username: 'petrov', full_name: 'Петров П.', settlement: 'г.п. Лянтор', street: 'Спортивная', house: '5', apartment: '12', action: 'call', loyalty: 'not_loyal', comment: 'Высказали недовольство.', location: { latitude: 61.6150, longitude: 73.0905 }, requires_followup: true },
-            { timestamp: Date.now() - 10800000, user_id: 101, username: 'ivanov', full_name: 'Иванов И.', settlement: 'г.п. Барсово', street: 'Центральная', house: '3', apartment: '7', action: 'leafleting', loyalty: 'doubtful', comment: 'Пока сомневаются, дали материалы.', location: { latitude: 61.6050, longitude: 73.1110 }, requires_followup: true },
-            { timestamp: Date.now() - 86400000, user_id: 103, username: 'sidorov', full_name: 'Сидоров С.', settlement: 'г.п. Барсово', street: 'Школьная', house: '8', apartment: '', action: 'not_opened', loyalty: 'not_opened', comment: 'Дверь не открыли.', location: { latitude: 61.6080, longitude: 73.1080 }, requires_followup: false },
-            // Добавим больше данных для хорошего графика и тепловой карты
-            ...Array(15).fill(null).map((_, i) => ({
-                timestamp: Date.now() - (i + 1) * 86400000,
-                user_id: 101 + (i % 3),
-                username: ['ivanov', 'petrov', 'sidorov'][i % 3],
-                full_name: ['Иванов И.', 'Петров П.', 'Сидоров С.'][i % 3],
-                settlement: SETTLEMENTS[i % SETTLEMENTS.length],
-                street: `Улица ${i % 3 === 0 ? 'Ленина' : 'Новая'}`, // Повторяющиеся улицы для истории/тепловой карты
-                house: String(i % 5 + 1),
-                apartment: i % 2 === 0 ? String(i * 2) : '',
-                action: ['canvassing', 'call', 'leafleting', 'positive'][i % 4],
-                loyalty: ['loyal', 'not_loyal', 'doubtful', 'not_opened'][i % 4],
-                comment: `Тестовый комментарий ${i + 1}.`,
-                location: { latitude: 61.61 + (i * 0.003 * (i % 2 === 0 ? 1 : -1)), longitude: 73.10 + (i * 0.002) },
-                requires_followup: i % 5 === 0,
-            }))
-        ];
-
-
         const isTMA = window.Telegram && window.Telegram.WebApp;
         let userTelegramId = isTMA && Telegram.WebApp.initDataUnsafe.user ? Telegram.WebApp.initDataUnsafe.user.id : (Math.floor(Math.random() * 1000000) + 1); // Фейковый ID
         let isAdmin = true;
         let userLocation = null;
         let isLocationPending = false;
-        let dataCache = MOCK_REPORTS_DATA.sort((a, b) => b.timestamp - a.timestamp); // Основной кеш данных
+        let dataCache = []; // ✅ Теперь пустой, данные загружаются из Firebase
         let offlineCache = JSON.parse(localStorage.getItem('offlineCache') || '[]'); // 💾 Офлайн-кэш (#2)
 
 
@@ -461,6 +472,25 @@
                 Telegram.WebApp.showAlert(`${title}: ${message}`);
             } else {
                 alert(`${title}: ${message}`);
+            }
+        }
+
+        function updateOfflineStatus() {
+            const count = offlineCache.length;
+            const statusElement = document.getElementById('offlineStatus');
+            const debugElement = document.getElementById('debugOfflineCount');
+            const syncButton = document.getElementById('syncButton');
+
+            if (count > 0) {
+                statusElement.classList.remove('hidden');
+                debugElement.textContent = count;
+                document.getElementById('syncOfflineCount').textContent = count;
+                syncButton.disabled = false;
+            } else {
+                statusElement.classList.add('hidden');
+                debugElement.textContent = 0;
+                document.getElementById('syncOfflineCount').textContent = 0;
+                syncButton.disabled = true;
             }
         }
 
@@ -475,6 +505,7 @@
                 fetchAndRenderReports();
             } else if (sectionId === 'walklist') {
                 renderWalkList();
+                updateOfflineStatus(); // Убедимся, что статус синхронизации обновлен
             }
 
             lucide.createIcons();
@@ -512,6 +543,7 @@
             });
             updateConversationScript(); // 💬 Обновление скрипта (#5)
         };
+
         // 🚀 Установка Действия (#1)
         window.setAction = (value) => {
             const container = document.getElementById('actionButtons');
@@ -532,14 +564,12 @@
             const action = document.getElementById('action').value;
             const scriptDiv = document.getElementById('conversationScript');
             const scriptText = document.getElementById('scriptText');
-            
             let text = '';
             if (loyalty && loyalty !== 'not_opened') {
                 text = INTERACTIVE_SCRIPTS[loyalty] || '';
             } else if (action) {
                 text = INTERACTIVE_SCRIPTS[action] || '';
             }
-
             if (text) {
                 scriptText.textContent = text;
                 scriptDiv.classList.remove('hidden');
@@ -548,31 +578,40 @@
             }
         }
 
-        // ⏳ Проверка истории по адресу (#6)
-        window.checkAddressHistory = () => {
-            const street = document.getElementById('street').value.trim().toLowerCase();
-            const house = document.getElementById('house').value.trim().toLowerCase();
+        // ⏳ Проверка истории по адресу (#6) - Теперь ищет в Firebase
+        window.checkAddressHistory = async () => {
+            const street = document.getElementById('street').value.trim(); // 🔥 Не lowerCase, т.к. Firebase чувствителен
+            const house = document.getElementById('house').value.trim();
             const historyDiv = document.getElementById('historyCheck');
             const historyText = document.getElementById('historyText');
             
             historyDiv.classList.add('hidden');
 
             if (street && house) {
-                const recentVisit = dataCache.find(doc => 
-                    (doc.street || '').toLowerCase() === street && 
-                    (doc.house || '').toLowerCase() === house
-                );
+                try {
+                    // 🚀 Прямой запрос к Firestore
+                    const querySnapshot = await db.collection("surveys")
+                        .where('street', '==', street) 
+                        .where('house', '==', house)
+                        .orderBy('timestamp', 'desc') // Ищем последнюю запись
+                        .limit(1)
+                        .get();
 
-                if (recentVisit) {
-                    const timeAgo = Math.floor((Date.now() - new Date(recentVisit.timestamp).getTime()) / (1000 * 60 * 60 * 24));
-                    const loyaltyMap = { loyal: '🟢 Лояльный', not_loyal: '🔴 Не лояльный', doubtful: '🟡 Сомневающийся', not_opened: '⚫ Не открыли' };
-                    
-                    historyText.innerHTML = `
-                        Последний визит: **${timeAgo}** дн. назад. <br>
-                        Лояльность: **${loyaltyMap[recentVisit.loyalty] || 'N/A'}**. <br>
-                        Комментарий: ${recentVisit.comment || 'Нет.'}
-                    `;
-                    historyDiv.classList.remove('hidden');
+                    if (!querySnapshot.empty) {
+                        const recentVisit = querySnapshot.docs[0].data();
+                        const timeAgo = Math.floor((Date.now() - new Date(recentVisit.timestamp).getTime()) / (1000 * 60 * 60 * 24));
+                        const loyaltyMap = { loyal: '🟢 Лояльный', not_loyal: '🔴 Не лояльный', doubtful: '🟡 Сомневающийся', not_opened: '⚫ Не открыли' };
+                        
+                        historyText.innerHTML = `
+                            Последний визит: **${timeAgo}** дн. назад. <br>
+                            Лояльность: **${loyaltyMap[recentVisit.loyalty] || 'N/A'}**. <br>
+                            Комментарий: ${recentVisit.comment.length > 80 ? recentVisit.comment.substring(0, 80) + '...' : recentVisit.comment || 'Нет.'}
+                        `;
+                        historyDiv.classList.remove('hidden');
+                    }
+                } catch (e) {
+                    console.error("Ошибка при проверке истории:", e);
+                    // При ошибке просто не показываем блок истории
                 }
             }
         };
@@ -580,11 +619,9 @@
         // 🗺️ Получение GPS с имитацией обратного геокодирования (#3)
         window.getLocation = () => {
             if (isLocationPending) return;
-
             const statusElement = document.getElementById('locationStatus');
             const btn = document.getElementById('getLocationBtn');
             const copyBtn = document.getElementById('copyLocationBtn');
-
             statusElement.textContent = 'Запрос геолокации...';
             btn.disabled = true;
             isLocationPending = true;
@@ -600,14 +637,12 @@
 
             navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    userLocation = {
-                        latitude: position.coords.latitude,
-                        longitude: position.coords.longitude
-                    };
+                    userLocation = { latitude: position.coords.latitude, longitude: position.coords.longitude };
 
                     // ⚠️ Имитация обратного геокодирования (#3)
                     const mockStreet = `Тестовая ул. ${Math.floor(Math.random() * 10)}`;
                     const mockHouse = String(Math.floor(Math.random() * 50) + 1);
+
                     document.getElementById('street').value = mockStreet;
                     document.getElementById('house').value = mockHouse;
 
@@ -619,8 +654,7 @@
                     if (isTMA) Telegram.WebApp.HapticFeedback.notificationOccurred('success');
                 },
                 (error) => {
-                    let errorMessage = (error.code === error.PERMISSION_DENIED) ?
-                        'Отказано в доступе к геолокации.' : 'Ошибка при получении GPS.';
+                    let errorMessage = (error.code === error.PERMISSION_DENIED) ? 'Отказано в доступе к геолокации.' : 'Ошибка при получении GPS.';
                     statusElement.textContent = `Ошибка: ${errorMessage}`;
                     showAlert('Ошибка GPS', errorMessage);
                     btn.disabled = false;
@@ -640,343 +674,364 @@
             }
         };
 
-        // 💾 Сохранение данных (в офлайн-кэш) (#2)
+
+        // 💾 Сохранение данных (в офлайн-кэш и Firebase) (#2)
         window.saveSurveyData = async (e) => {
             if (e) e.preventDefault();
 
             if (isTMA) Telegram.WebApp.MainButton.showProgress();
 
+            const data = {
+                settlement: document.getElementById('settlement').value,
+                street: document.getElementById('street').value,
+                house: document.getElementById('house').value,
+                apartment: document.getElementById('apartment').value || '',
+                action: document.getElementById('action').value,
+                loyalty: document.getElementById('loyalty').value,
+                comment: document.getElementById('comment').value || '',
+                requires_followup: document.getElementById('requires_followup').checked,
+                timestamp: new Date().toISOString(),
+                user_id: userTelegramId,
+                username: isTMA && Telegram.WebApp.initDataUnsafe.user ? (Telegram.WebApp.initDataUnsafe.user.username || 'n/a') : 'web-test',
+                full_name: isTMA && Telegram.WebApp.initDataUnsafe.user ? (Telegram.WebApp.initDataUnsafe.user.first_name + (Telegram.WebApp.initDataUnsafe.user.last_name ? ' ' + Telegram.WebApp.initDataUnsafe.user.last_name : '')) : 'Test User',
+                location: userLocation,
+            };
+
+            let statusMessage = '';
+
             try {
-                const data = {
-                    settlement: document.getElementById('settlement').value,
-                    street: document.getElementById('street').value,
-                    house: document.getElementById('house').value,
-                    apartment: document.getElementById('apartment').value || '',
-                    action: document.getElementById('action').value,
-                    loyalty: document.getElementById('loyalty').value,
-                    comment: document.getElementById('comment').value || '',
-                    requires_followup: document.getElementById('requires_followup').checked, // 🔴 Флаг (#10)
-                    timestamp: new Date().toISOString(),
-                    user_id: userTelegramId,
-                    username: isTMA && Telegram.WebApp.initDataUnsafe.user ? (Telegram.WebApp.initDataUnsafe.user.username || 'n/a') : 'web-test',
-                    full_name: isTMA && Telegram.WebApp.initDataUnsafe.user ? (Telegram.WebApp.initDataUnsafe.user.first_name + (Telegram.WebApp.initDataUnsafe.user.last_name ? ' ' + Telegram.WebApp.initDataUnsafe.user.last_name : '')) : 'Test User',
-                    location: userLocation,
-                };
-                
-                // 💾 Сохранение в Local Storage (имитация офлайн-кэша)
-                offlineCache.unshift(data); // Добавляем в начало
-                localStorage.setItem('offlineCache', JSON.stringify(offlineCache));
-
-                // Сохранение последних данных для автозаполнения
-                localStorage.setItem('lastSettlement', data.settlement);
-                localStorage.setItem('lastStreet', data.street);
-
-                // Очистка формы
-                document.getElementById('surveyForm').reset();
-                document.getElementById('locationStatus').textContent = 'Ожидание...';
-                document.getElementById('copyLocationBtn').classList.add('hidden');
-                document.getElementById('loyalty').value = '';
-                document.getElementById('action').value = '';
-                document.getElementById('historyCheck').classList.add('hidden');
-                document.getElementById('conversationScript').classList.add('hidden');
-                userLocation = null;
-                // Сброс кнопок
-                document.querySelectorAll('.loyalty-btn').forEach(btn => btn.classList.remove('active-loyal', 'active-not_loyal', 'active-doubtful', 'active-not_opened'));
-                document.querySelectorAll('.action-btn').forEach(btn => btn.classList.remove('active-action'));
-                
-                populateSettlements();
-                document.getElementById('street').value = localStorage.getItem('lastStreet') || '';
-
-                updateOfflineStatus(); // Обновляем статус кэша
-                showAlert('Успешно!', `Запись сохранена в офлайн-кэш. ${offlineCache.length} ожидает синхронизации.`);
+                // 1. Пытаемся сохранить в Firebase (онлайн-режим)
+                const docRef = await db.collection("surveys").add(data);
+                statusMessage = `Запись сохранена в базу данных (ID: ${docRef.id}).`;
                 if (isTMA) Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-
             } catch (error) {
-                console.error("Error saving document: ", error);
-                showAlert('Ошибка', 'Произошла ошибка при сохранении данных: ' + error.message);
-                if (isTMA) Telegram.WebApp.HapticFeedback.notificationOccurred('error');
-            } finally {
-                if (isTMA) Telegram.WebApp.MainButton.hideProgress();
+                console.warn("Ошибка Firebase (нет сети?): ", error.message);
+
+                // 2. Если ошибка (нет сети), сохраняем в Local Storage (офлайн-кэш)
+                // Добавляем флаг, чтобы знать, что это офлайн-запись
+                const offlineRecord = { ...data, offline: true, temp_id: Date.now() }; 
+                
+                offlineCache.unshift(offlineRecord);
+                localStorage.setItem('offlineCache', JSON.stringify(offlineCache));
+                
+                statusMessage = `Запись сохранена в офлайн-кэш. ${offlineCache.length} ожидает синхронизации.`;
+                if (isTMA) Telegram.WebApp.HapticFeedback.notificationOccurred('warning');
             }
+
+
+            // Сохранение последних данных для автозаполнения
+            localStorage.setItem('lastSettlement', data.settlement);
+            localStorage.setItem('lastStreet', data.street);
+
+            // Очистка формы
+            document.getElementById('surveyForm').reset();
+            document.getElementById('locationStatus').textContent = 'Ожидание...';
+            document.getElementById('copyLocationBtn').classList.add('hidden');
+            document.getElementById('loyalty').value = '';
+            document.getElementById('action').value = '';
+            document.getElementById('historyCheck').classList.add('hidden');
+            document.getElementById('conversationScript').classList.add('hidden');
+            userLocation = null;
+            // Сброс кнопок
+            document.querySelectorAll('.loyalty-btn').forEach(btn => btn.classList.remove('active-loyal', 'active-not_loyal', 'active-doubtful', 'active-not_opened'));
+            document.querySelectorAll('.action-btn').forEach(btn => btn.classList.remove('active-action'));
+
+            populateSettlements();
+            document.getElementById('street').value = localStorage.getItem('lastStreet') || '';
+
+            updateOfflineStatus(); // Обновляем статус кэша
+            showAlert('Статус Сохранения', statusMessage);
+
+            if (isTMA) Telegram.WebApp.MainButton.hideProgress();
         };
-        
-        // 💾 Имитация синхронизации данных (#2)
-        window.mockSyncData = () => {
+
+
+        // 💾 Смарт-Синхронизация данных (#2)
+        window.mockSyncData = async () => {
             if (offlineCache.length === 0) return;
-            
+
             if (isTMA) Telegram.WebApp.MainButton.showProgress();
-            
-            setTimeout(() => {
-                // В реальном приложении: Отправка данных на сервер (Firebase/другой бэкенд)
-                console.log(`🚀 ИМИТАЦИЯ: Отправлено ${offlineCache.length} записей на сервер.`);
-                
-                // Внимание: В мок-режиме просто добавляем в основной кеш
-                dataCache = offlineCache.concat(dataCache);
-                dataCache.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                
-                offlineCache = [];
-                localStorage.setItem('offlineCache', '[]');
-                
-                updateOfflineStatus();
-                showAlert('Синхронизация', 'Успешно отправлено! Кэш очищен.');
-                if (isTMA) Telegram.WebApp.MainButton.hideProgress();
-                if (document.querySelector('.nav-item.active span').textContent === 'Отчеты') {
-                     fetchAndRenderReports();
+
+            const initialCount = offlineCache.length;
+            let successfulSyncs = 0;
+            const recordsToKeep = [];
+
+            // Итерируемся по копии кэша, чтобы избежать проблем с асинхронностью
+            for (const record of offlineCache) {
+                // Удаляем временный ID и офлайн-флаг перед отправкой
+                const dataToSend = { ...record };
+                delete dataToSend.offline;
+                delete dataToSend.temp_id;
+
+                try {
+                    await db.collection("surveys").add(dataToSend);
+                    successfulSyncs++;
+                } catch (error) {
+                    // Если ошибка (например, сеть пропала снова), оставляем запись в кэше
+                    recordsToKeep.push(record);
+                    console.error("Синхронизация: не удалось отправить запись. Оставляем в кэше:", error);
                 }
-            }, 1500); // Задержка для имитации сетевой задержки
-        };
-        
-        function updateOfflineStatus() {
-            const count = offlineCache.length;
-            document.getElementById('debugOfflineCount').textContent = count;
-            document.getElementById('syncOfflineCount').textContent = count;
-            document.getElementById('syncButton').disabled = (count === 0);
-            
-            if (count > 0) {
-                document.getElementById('offlineStatus').classList.remove('hidden');
-                document.getElementById('offlineStatus').classList.remove('bg-green-500');
-                document.getElementById('offlineStatus').classList.add('bg-red-500');
-            } else {
-                 document.getElementById('offlineStatus').classList.add('hidden');
             }
-        }
 
+            // Обновляем офлайн-кэш только оставшимися записями
+            offlineCache = recordsToKeep;
+            localStorage.setItem('offlineCache', JSON.stringify(offlineCache));
 
-        // 📝 Функции для Маршрутного Листа (#4)
+            updateOfflineStatus();
+
+            let syncMessage = `Успешно синхронизировано ${successfulSyncs} из ${initialCount} записей.`;
+            if (recordsToKeep.length > 0) {
+                syncMessage += ` ${recordsToKeep.length} записей остались в кэше из-за ошибки сети.`;
+            } else if (successfulSyncs === 0 && initialCount > 0) {
+                syncMessage = `Синхронизация не удалась. Проверьте подключение к Интернету.`;
+            }
+
+            showAlert('Синхронизация', syncMessage);
+
+            if (isTMA) Telegram.WebApp.MainButton.hideProgress();
+            
+            // Если мы на вкладке отчетов, обновляем их
+            if (document.querySelector('.nav-item.active span').textContent === 'Отчеты') {
+                fetchAndRenderReports(); 
+            }
+        };
+
+        // --- ФУНКЦИИ МАРШРУТНОГО ЛИСТА ---
         function renderWalkList() {
-            const ul = document.getElementById('assignedAddresses');
-            ul.innerHTML = '';
-
-            if (MOCK_WALK_LIST.length === 0) {
-                ul.innerHTML = '<li class="text-gray-500">У вас нет назначенных адресов.</li>';
-                return;
-            }
-
-            MOCK_WALK_LIST.forEach(item => {
-                const li = document.createElement('li');
-                const statusClass = item.status === 'done' ? 'text-green-600 line-through' : 'text-blue-700 cursor-pointer hover:underline';
-                const statusIcon = item.status === 'done' ? '✅' : '👉';
-                const apartmentStr = item.apartment ? `, кв. ${item.apartment}` : '';
-                li.className = statusClass;
-                li.innerHTML = `${statusIcon} **${item.settlement}**, ул. ${item.street}, д. ${item.house}${apartmentStr}`;
-                
-                if (item.status !== 'done') {
-                    li.onclick = () => {
-                        document.getElementById('settlement').value = item.settlement;
-                        document.getElementById('street').value = item.street;
-                        document.getElementById('house').value = item.house;
-                        document.getElementById('apartment').value = item.apartment;
-                        checkAddressHistory();
-                        showSection('form');
-                    };
-                }
-
-                ul.appendChild(li);
+            const list = document.getElementById('assignedAddresses');
+            list.innerHTML = ''; // Очистка
+            
+            MOCK_WALK_LIST.forEach(address => {
+                const item = document.createElement('li');
+                item.className = `cursor-pointer hover:bg-gray-100 p-1 rounded transition ${address.status === 'done' ? 'text-green-600 line-through' : 'text-gray-900'}`;
+                item.innerHTML = `
+                    **${address.settlement}**, ул. ${address.street}, д. ${address.house}${address.apartment ? `, кв. ${address.apartment}` : ''} 
+                    <span class="text-xs ml-2 text-gray-500">(${address.status})</span>
+                `;
+                item.onclick = () => {
+                    document.getElementById('settlement').value = address.settlement;
+                    document.getElementById('street').value = address.street;
+                    document.getElementById('house').value = address.house;
+                    document.getElementById('apartment').value = address.apartment;
+                    showSection('form');
+                    checkAddressHistory();
+                    if (isTMA) Telegram.WebApp.HapticFeedback.impactOccurred('light');
+                };
+                list.appendChild(item);
             });
-            lucide.createIcons();
         }
-        
-        // ❌ Имитация: ФУНКЦИЯ УДАЛЕНИЯ
-        window.deleteCollection = () => {
-            if (!isAdmin) return showAlert('Ошибка', 'Нет прав администратора.');
-            showAlert('Успешно (Имитация)', `Все данные (фиктивные) очищены из кеша.`);
-            dataCache = []; // Очистка кеша
-            fetchAndRenderReports();
-        };
+
 
         // --- ФУНКЦИИ ОТЧЕТОВ ---
-        let mapInstance = null;
-        let markerClusterGroup = null;
-        let loyaltyChart = null;
-        let actionChart = null;
+        
+        function populateUserFilter(users) {
+            const select = document.getElementById('userFilter');
+            const currentValue = select.value;
+            select.innerHTML = '<option value="all">Все Агитаторы</option>';
 
-        // 🗺️ Генерация Карты (Точки, Кластеры или Тепловая карта) (#8)
-        function generateMap(data) {
-            const container = document.getElementById('map-container');
-            const mapType = document.querySelector('input[name="mapType"]:checked').value;
-            
-            if (mapInstance) {
-                mapInstance.remove();
-                mapInstance = null;
-            }
-            container.innerHTML = ''; // Очищаем контейнер
-
-            const locations = data
-                .filter(doc => doc.location && doc.location.latitude && doc.location.longitude)
-                .map(doc => ({
-                    lat: doc.location.latitude,
-                    lon: doc.location.longitude,
-                    loyalty: doc.loyalty,
-                    address: `${doc.settlement}, ул. ${doc.street}, д. ${doc.house}`
-                }));
-
-            if (locations.length === 0) {
-                container.innerHTML = '<div class="text-center py-10 text-gray-500">Нет данных о геолокации.</div>';
-                return;
-            }
-
-            const avgLat = locations.reduce((sum, p) => sum + p.lat, 0) / locations.length;
-            const avgLon = locations.reduce((sum, p) => sum + p.lon, 0) / locations.length;
-
-            mapInstance = L.map(container).setView([avgLat, avgLon], 10);
-
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
-            }).addTo(mapInstance);
-
-            if (mapType === 'points') {
-                markerClusterGroup = L.markerClusterGroup();
-                locations.forEach(point => {
-                    let color = (point.loyalty === 'loyal') ? '#10B981' : (point.loyalty === 'not_loyal') ? '#EF4444' : '#F59E0B';
-                    const iconHtml = `<div style="background-color: ${color}; width: 14px; height: 14px; border-radius: 50%; border: 3px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.4);"></div>`;
-                    const customIcon = L.divIcon({ className: 'custom-div-icon', html: iconHtml, iconSize: [20, 20], iconAnchor: [10, 10] });
-                    const marker = L.marker([point.lat, point.lon], { icon: customIcon }).bindPopup(`<b>${point.address}</b><br>Лояльность: ${point.loyalty}`);
-                    markerClusterGroup.addLayer(marker);
-                });
-                mapInstance.addLayer(markerClusterGroup);
-                if (markerClusterGroup.getLayers().length > 0) {
-                    mapInstance.fitBounds(markerClusterGroup.getBounds());
+            users.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.id;
+                option.textContent = user.name;
+                if (String(user.id) === currentValue) {
+                    option.selected = true;
                 }
-            } else if (mapType === 'heat') {
-                // 🌡️ Тепловая Карта (#8)
-                const heatPoints = locations.map(p => {
-                    let intensity = 0.5;
-                    // Увеличиваем вес лояльных точек
-                    if (p.loyalty === 'loyal') intensity = 1.0; 
-                    else if (p.loyalty === 'not_loyal') intensity = 0.2; // Меньший вес для "не лояльных", чтобы показать больше "активных" точек
-                    return [p.lat, p.lon, intensity];
-                });
-                L.heatLayer(heatPoints, { radius: 25, maxZoom: 14, gradient: { 0.2: 'blue', 0.5: 'lime', 1: 'red' } }).addTo(mapInstance);
-            }
-
-            mapInstance.invalidateSize();
-        }
-
-        // 🏆 Рендеринг Leaderboard (#7)
-        function renderLeaderboard(userActivity) {
-            const tbody = document.getElementById('leaderboardBody');
-            tbody.innerHTML = '';
-            
-            const leaderboardData = Object.keys(userActivity).map(name => ({
-                name: name,
-                ...userActivity[name]
-            })).sort((a, b) => b.count - a.count); // Сортируем по общему количеству
-
-            leaderboardData.forEach((user, index) => {
-                const totalReviewed = user.count - user.not_opened;
-                const loyalRate = totalReviewed > 0 ? ((user.loyal / totalReviewed) * 100).toFixed(1) : 0;
-                
-                const row = tbody.insertRow();
-                row.className = "bg-white dark:bg-gray-800 hover:bg-gray-50";
-
-                let cell = row.insertCell();
-                cell.className = "px-2 py-2 whitespace-nowrap text-sm font-medium text-gray-900";
-                cell.textContent = `${index + 1}. ${user.name}`;
-
-                cell = row.insertCell();
-                cell.className = "px-2 py-2 whitespace-nowrap text-center";
-                cell.textContent = user.count;
-
-                cell = row.insertCell();
-                cell.className = "px-2 py-2 whitespace-nowrap text-center text-green-600 font-medium";
-                cell.textContent = user.loyal;
-
-                cell = row.insertCell();
-                cell.className = "px-2 py-2 whitespace-nowrap text-center font-bold";
-                cell.textContent = `${loyalRate}%`;
+                select.appendChild(option);
             });
         }
+        
+        let loyaltyChartInstance = null;
+        let actionChartInstance = null;
+        let mapInstance = null;
+        let markerClusterLayer = null;
+        let heatLayer = null;
 
-        // 🔴 Рендеринг таблицы данных с фильтром (#10)
+
+        function calculateLoyaltyData(data) {
+            const counts = { loyal: 0, not_loyal: 0, doubtful: 0, not_opened: 0, total: 0 };
+
+            data.forEach(item => {
+                if (counts.hasOwnProperty(item.loyalty)) {
+                    counts[item.loyalty]++;
+                }
+                counts.total++;
+            });
+
+            const loyaltyRate = counts.total > 0 ? (counts.loyal / counts.total * 100).toFixed(1) : 0;
+            const notLoyalRate = counts.total > 0 ? (counts.not_loyal / counts.total * 100).toFixed(1) : 0;
+
+            return { counts, loyaltyRate, notLoyalRate };
+        }
+
+        function calculateActionData(data) {
+            const counts = {};
+            data.forEach(item => {
+                counts[item.action] = (counts[item.action] || 0) + 1;
+            });
+            return counts;
+        }
+
+        function generateLeaderboard(data) {
+            const leaderboard = {};
+            data.forEach(item => {
+                const id = item.user_id;
+                if (!leaderboard[id]) {
+                    leaderboard[id] = { 
+                        name: item.full_name || item.username || `ID: ${id}`, 
+                        total: 0, 
+                        loyal: 0 
+                    };
+                }
+                leaderboard[id].total++;
+                if (item.loyalty === 'loyal') {
+                    leaderboard[id].loyal++;
+                }
+            });
+
+            const sortedList = Object.values(leaderboard).sort((a, b) => {
+                const aRate = a.total > 0 ? a.loyal / a.total : 0;
+                const bRate = b.total > 0 ? b.loyal / b.total : 0;
+                if (bRate !== aRate) return bRate - aRate;
+                return b.total - a.total;
+            });
+            
+            return sortedList;
+        }
+
+        function renderSummary(summary) {
+            const container = document.getElementById('summary-metrics');
+            container.innerHTML = `
+                <div class="p-3 bg-green-50 rounded-lg">
+                    <p class="text-sm font-medium text-gray-500">Всего записей</p>
+                    <p class="text-2xl font-bold text-green-700">${summary.counts.total}</p>
+                </div>
+                <div class="p-3 bg-blue-50 rounded-lg">
+                    <p class="text-sm font-medium text-gray-500">Лояльность Rate</p>
+                    <p class="text-2xl font-bold text-blue-700">${summary.loyaltyRate}%</p>
+                </div>
+                <div class="p-3 bg-yellow-50 rounded-lg">
+                    <p class="text-sm font-medium text-gray-500">Не лояльны/Сомн.</p>
+                    <p class="text-2xl font-bold text-yellow-700">${summary.counts.not_loyal + summary.counts.doubtful}</p>
+                </div>
+                <div class="p-3 bg-red-50 rounded-lg">
+                    <p class="text-sm font-medium text-gray-500">Требуется повтор</p>
+                    <p class="text-2xl font-bold text-red-700">${dataCache.filter(d => d.requires_followup).length}</p>
+                </div>
+            `;
+        }
+
+        function renderLeaderboard(list) {
+            const body = document.getElementById('leaderboardBody');
+            body.innerHTML = '';
+            list.forEach((item, index) => {
+                const rate = item.total > 0 ? (item.loyal / item.total * 100).toFixed(1) : 0;
+                const row = body.insertRow();
+                row.className = index === 0 ? 'bg-yellow-50 font-semibold' : '';
+                row.innerHTML = `
+                    <td class="px-2 py-2 whitespace-nowrap">${item.name}</td>
+                    <td class="px-2 py-2 whitespace-nowrap text-center">${item.total}</td>
+                    <td class="px-2 py-2 whitespace-nowrap text-center text-green-600">${item.loyal}</td>
+                    <td class="px-2 py-2 whitespace-nowrap text-center">${rate}%</td>
+                `;
+            });
+        }
+        
         function renderLatestData(data) {
-            const tbody = document.getElementById('latestDataBody');
-            tbody.innerHTML = '';
-            
-            const showFollowUpOnly = document.getElementById('followUpFilter').checked;
-            
-            let filteredData = data;
-            if (showFollowUpOnly) {
-                filteredData = data.filter(doc => doc.requires_followup);
-            }
+            const body = document.getElementById('latestDataBody');
+            body.innerHTML = '';
+            const followUpFilter = document.getElementById('followUpFilter').checked;
 
-            const latestData = filteredData.slice(0, 30);
+            const filteredData = data.filter(d => !followUpFilter || d.requires_followup);
 
-            latestData.forEach(doc => {
-                const row = tbody.insertRow();
-                row.className = "bg-white dark:bg-gray-800 hover:bg-gray-50";
+            filteredData.slice(0, 10).forEach(doc => {
+                const row = body.insertRow();
+                row.className = doc.requires_followup ? 'bg-red-50' : '';
+                const loyaltyMap = { loyal: '🟢', not_loyal: '🔴', doubtful: '🟡', not_opened: '⚫' };
 
-                const timeStr = new Date(doc.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-                const address = `${doc.settlement || ''}, ${doc.street || ''}, ${doc.house || ''}`;
-                const userName = doc.full_name || doc.username || 'n/a';
-
-                let loyaltyColor = (doc.loyalty === 'loyal') ? 'text-green-600 font-medium' :
-                                 (doc.loyalty === 'not_loyal') ? 'text-red-600 font-medium' :
-                                 (doc.loyalty === 'doubtful') ? 'text-yellow-600' :
-                                 'text-gray-500';
-
-                // Время
-                let cell = row.insertCell();
-                cell.className = "px-2 py-2 whitespace-nowrap text-xs";
-                cell.textContent = timeStr;
-
-                // Адрес
-                cell = row.insertCell();
-                cell.className = "px-2 py-2 whitespace-nowrap text-xs truncate max-w-xs";
-                cell.textContent = address;
-
-                // Лояльность
-                cell = row.insertCell();
-                cell.className = `px-2 py-2 whitespace-nowrap text-xs ${loyaltyColor}`;
-                cell.textContent = doc.loyalty || 'N/A';
-
-                // Агитатор
-                cell = row.insertCell();
-                cell.className = "px-2 py-2 whitespace-nowrap text-xs text-blue-500";
-                cell.textContent = userName;
-                
-                // 🔴 Повторный контакт (#10)
-                cell = row.insertCell();
-                cell.className = "px-2 py-2 whitespace-nowrap text-center text-red-600 font-bold";
-                cell.textContent = doc.requires_followup ? 'ДА' : '—';
-
-                // Комментарий
-                cell = row.insertCell();
-                cell.className = "px-2 py-2 text-xs text-gray-500 truncate max-w-sm";
-                cell.textContent = doc.comment.length > 50 ? doc.comment.substring(0, 50) + '...' : doc.comment;
+                row.innerHTML = `
+                    <td class="px-2 py-2 whitespace-nowrap text-xs">${new Date(doc.timestamp).toLocaleString().replace(/, .*/, '')}</td>
+                    <td class="px-2 py-2 text-xs">${doc.street}, д.${doc.house}${doc.apartment ? `, кв.${doc.apartment}` : ''}</td>
+                    <td class="px-2 py-2 whitespace-nowrap text-center">${loyaltyMap[doc.loyalty] || 'N/A'}</td>
+                    <td class="px-2 py-2 whitespace-nowrap text-xs">${doc.username || doc.user_id}</td>
+                    <td class="px-2 py-2 whitespace-nowrap text-center">${doc.requires_followup ? '🚨' : '—'}</td>
+                    <td class="px-2 py-2 text-xs text-gray-500">${doc.comment.substring(0, 30)}...</td>
+                `;
             });
         }
-        
-        // ... (остальные функции - populateUserFilter, renderChart, exportToXLSX и fetchAndRenderReports) ...
-        
-        function populateUserFilter(users) { /* ... */ } // (Стилистически убраны для краткости)
-        function renderChart(canvasId, type, labels, data, colors, chartInstance, yLabel = 'Количество', xLabel = '') { /* ... */ } // (Стилистически убраны для краткости)
-        function exportToXLSX() { /* ... */ } // (Стилистически убраны для краткости)
 
+        function sortTable(n) {
+            // Имитация сортировки для таблицы "Последние записи"
+            showAlert('Функция', 'Функция сортировки пока не реализована.');
+        }
+
+        function generateMap(data) {
+            const mapContainerId = 'map-container';
+            const mapTypePoints = document.getElementById('mapTypePoints').checked;
+
+            // Фильтруем данные: только те, у которых есть геолокация
+            const geoData = data.filter(d => d.location && d.location.latitude && d.location.longitude);
+            if (geoData.length === 0) {
+                 if (mapInstance) mapInstance.remove();
+                 document.getElementById(mapContainerId).innerHTML = '<div class="p-4 text-center text-sm text-gray-500">Нет геолокационных данных для отображения.</div>';
+                 return;
+            }
+
+            // Инициализация карты (только если она еще не создана)
+            if (!mapInstance || mapInstance.remove) {
+                if (mapInstance) mapInstance.remove();
+                mapInstance = L.map(mapContainerId).setView([geoData[0].location.latitude, geoData[0].location.longitude], 12);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 18,
+                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                }).addTo(mapInstance);
+                markerClusterLayer = L.markerClusterGroup();
+                heatLayer = L.heatLayer([], { radius: 25 });
+            }
+
+            // Очистка слоев
+            mapInstance.removeLayer(markerClusterLayer);
+            mapInstance.removeLayer(heatLayer);
+
+            if (mapTypePoints) {
+                // Режим Точек/Кластеров
+                markerClusterLayer.clearLayers();
+                geoData.forEach(d => {
+                    const marker = L.marker([d.location.latitude, d.location.longitude]);
+                    const loyaltyMap = { loyal: '🟢 Лояльный', not_loyal: '🔴 Не лояльный', doubtful: '🟡 Сомневающийся', not_opened: '⚫ Не открыли' };
+
+                    marker.bindPopup(`
+                        <b>${d.street}, д.${d.house}</b><br>
+                        Лояльность: ${loyaltyMap[d.loyalty] || 'N/A'}<br>
+                        Действие: ${d.action}<br>
+                        Агитатор: ${d.username || d.full_name}<br>
+                        <i style="font-size: 10px;">${new Date(d.timestamp).toLocaleString()}</i>
+                    `);
+                    markerClusterLayer.addLayer(marker);
+                });
+                mapInstance.addLayer(markerClusterLayer);
+                mapInstance.fitBounds(markerClusterLayer.getBounds());
+            } else {
+                // Режим Тепловой карты
+                const heatPoints = geoData.map(d => [d.location.latitude, d.location.longitude, 0.5 + (d.loyalty === 'loyal' ? 0.5 : 0)]); // Вес: лояльные ярче
+                heatLayer.setLatLngs(heatPoints);
+                mapInstance.addLayer(heatLayer);
+                mapInstance.fitBounds(heatLayer.getBounds());
+            }
+        }
+
+        // 🏆 Основная функция загрузки и рендеринга отчетов (Теперь из Firebase)
         window.fetchAndRenderReports = async () => {
-             // ... (логика фильтрации по дате и пользователю) ...
              
             if (isTMA) Telegram.WebApp.MainButton.showProgress();
 
             const contentDiv = document.getElementById('admin-reports-content');
             const noDataElement = document.getElementById('no-reports-data');
             contentDiv.style.display = 'none';
+            noDataElement.classList.add('hidden');
 
             try {
                 const filterValue = document.getElementById('dateRangeFilter').value;
                 const userFilterId = document.getElementById('userFilter').value;
-
-                const rawDataUnfiltered = dataCache;
-                
-                const uniqueUsers = {};
-                rawDataUnfiltered.forEach(doc => {
-                    if (doc.user_id) {
-                        uniqueUsers[doc.user_id] = doc.full_name || doc.username || `ID: ${doc.user_id}`;
-                    }
-                });
-                
-                const userOptions = Object.keys(uniqueUsers).map(id => ({ id: id, name: uniqueUsers[id] }));
-                populateUserFilter(userOptions);
-
 
                 let startDate = 0;
                 const now = new Date();
@@ -984,103 +1039,178 @@
                 if (filterValue === '30d') startDate = new Date(now.setDate(now.getDate() - 30)).getTime();
                 else if (filterValue === '7d') startDate = new Date(now.setDate(now.getDate() - 7)).getTime();
                 else if (filterValue === 'today') startDate = new Date(now.setHours(0, 0, 0, 0)).getTime();
+                
+                // 🚀 ЗАГРУЗКА РЕАЛЬНЫХ ДАННЫХ ИЗ FIREBASE
+                let query = db.collection("surveys");
 
-                const rawData = rawDataUnfiltered.filter(doc => {
-                    const docTime = new Date(doc.timestamp).getTime();
-                    const dateMatch = filterValue === 'all' || docTime >= startDate;
-                    const userMatch = userFilterId === 'all' || doc.user_id == userFilterId;
-                    return dateMatch && userMatch;
+                if (filterValue !== 'all') {
+                    // Firebase требует, чтобы мы фильтровали по полю
+                    const startDateISO = new Date(startDate).toISOString();
+                    query = query.where('timestamp', '>=', startDateISO);
+                }
+                if (userFilterId !== 'all') {
+                    // userTelegramId у нас number, но в Firebase оно может быть string. Используем string для безопасности
+                    query = query.where('user_id', '==', parseInt(userFilterId)); 
+                }
+                
+                // Запрашиваем данные
+                const querySnapshot = await query.orderBy('timestamp', 'desc').get();
+                
+                // Преобразуем загруженные данные в массив
+                const rawData = [];
+                const uniqueUsers = {}; // 🏆 Для Leaderboard
+                
+                querySnapshot.forEach(doc => {
+                    const data = doc.data();
+                    data.doc_id = doc.id; // Добавляем ID документа
+                    rawData.push(data);
+                    
+                    if (data.user_id) {
+                        uniqueUsers[data.user_id] = data.full_name || data.username || `ID: ${data.user_id}`;
+                    }
                 });
-
-                dataCache = rawData;
-                const totalCount = rawData.length;
-
-                if (totalCount === 0) {
-                    contentDiv.style.display = 'none';
-                    noDataElement.classList.remove('hidden');
-                    if (isTMA) Telegram.WebApp.MainButton.hideProgress();
-                    return;
-                } else {
-                    noDataElement.classList.add('hidden');
-                    contentDiv.style.display = 'block';
+                
+                // ⚠️ Обновляем глобальный dataCache реальными данными
+                dataCache = rawData; 
+                
+                const userOptions = Object.keys(uniqueUsers).map(id => ({ id: id, name: uniqueUsers[id] }));
+                populateUserFilter(userOptions);
+                
+                if (dataCache.length === 0) {
+                     noDataElement.classList.remove('hidden');
+                     if (isTMA) Telegram.WebApp.MainButton.hideProgress();
+                     return;
                 }
 
-                const loyaltyCounts = {};
-                const actionCounts = {};
-                const userActivity = {}; // 🏆 Для Leaderboard (#7)
+                // Агрегация данных
+                const loyaltySummary = calculateLoyaltyData(dataCache);
+                const actionCounts = calculateActionData(dataCache);
+                const leaderboardList = generateLeaderboard(dataCache);
 
-                rawData.forEach(doc => {
-                    loyaltyCounts[doc.loyalty] = (loyaltyCounts[doc.loyalty] || 0) + 1;
-                    actionCounts[doc.action] = (actionCounts[doc.action] || 0) + 1;
-                    
-                    const userName = doc.full_name || doc.username || `ID: ${doc.user_id}`;
-                    if (!userActivity[userName]) {
-                        userActivity[userName] = { count: 0, loyal: 0, not_loyal: 0, not_opened: 0 };
-                    }
-                    userActivity[userName].count += 1;
-                    if (doc.loyalty === 'loyal') userActivity[userName].loyal += 1;
-                    if (doc.loyalty === 'not_loyal') userActivity[userName].not_loyal += 1;
-                    if (doc.loyalty === 'not_opened') userActivity[userName].not_opened += 1;
-                });
-
-                // 🏆 Рендеринг Leaderboard (#7)
-                renderLeaderboard(userActivity);
+                // Рендеринг
+                renderSummary(loyaltySummary);
+                renderLeaderboard(leaderboardList);
+                renderLatestData(dataCache);
+                generateLoyaltyChart(loyaltySummary.counts);
+                generateActionChart(actionCounts);
+                generateMap(dataCache); 
                 
-                // 🚀 Рендеринг сводки
-                const loyalCount = loyaltyCounts['loyal'] || 0;
-                const notLoyalCount = loyaltyCounts['not_loyal'] || 0;
-                const totalReviewed = totalCount - (loyaltyCounts['not_opened'] || 0);
-                const loyalRate = totalReviewed > 0 ? ((loyalCount / totalReviewed) * 100).toFixed(1) : 0;
+                contentDiv.style.display = 'block';
 
-                const summaryHtml = `
-                    <div class="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg text-center border-l-4 border-gray-400">
-                        <i data-lucide="hash" class="w-5 h-5 mx-auto mb-1 text-gray-500"></i>
-                        <div class="text-sm text-gray-600">Всего записей</div>
-                        <span class="text-xl font-extrabold text-gray-900">${totalCount}</span>
-                    </div>
-                    <div class="p-3 bg-blue-100 dark:bg-blue-700 rounded-lg text-center border-l-4 border-blue-500">
-                        <i data-lucide="percent" class="w-5 h-5 mx-auto mb-1 text-blue-700"></i>
-                        <div class="text-sm text-blue-800">Процент Лояльности</div>
-                        <span class="text-xl font-extrabold text-blue-900">${loyalRate}%</span>
-                    </div>
-                    <div class="p-3 bg-green-100 dark:bg-green-700 rounded-lg text-center border-l-4 border-green-500">
-                        <i data-lucide="check-circle" class="w-5 h-5 mx-auto mb-1 text-green-700"></i>
-                        <div class="text-sm text-green-800">Лояльных</div>
-                        <span class="text-xl font-extrabold text-green-900">${loyalCount}</span>
-                    </div>
-                    <div class="p-3 bg-red-100 dark:bg-red-700 rounded-lg text-center border-l-4 border-red-500">
-                        <i data-lucide="x-circle" class="w-5 h-5 mx-auto mb-1 text-red-700"></i>
-                        <div class="text-sm text-red-800">Не лояльных</div>
-                        <span class="text-xl font-extrabold text-red-900">${notLoyalCount}</span>
-                    </div>
-                `;
-                document.getElementById('summary-metrics').innerHTML = summaryHtml;
-                lucide.createIcons();
-                
-                // Рендеринг графиков (оставлены только нужные)
-                const loyaltyLabels = ['Лояльный', 'Не лояльный', 'Сомневающийся', 'Не открыли'];
-                const loyaltyData = [loyalCount, notLoyalCount, loyaltyCounts['doubtful'] || 0, loyaltyCounts['not_opened'] || 0];
-                loyaltyChart = renderChart('loyaltyChart', 'doughnut', loyaltyLabels, loyaltyData, ['#10B981', '#EF4444', '#F59E0B', '#6B7280'], loyaltyChart);
-
-                const actionLabels = Object.keys(actionCounts).map(key => {
-                    const map = {'canvassing': 'Обход', 'leafleting': 'Листовки', 'meeting': 'Встреча', 'call': 'Звонок', 'positive': 'Позитив', 'negative': 'Негатив'};
-                    return map[key] || key;
-                });
-                const actionData = Object.values(actionCounts);
-                actionChart = renderChart('actionChart', 'bar', actionLabels, actionData, ['#007aff', '#ff3b30', '#FF9500', '#5AC8FA', '#4CD964', '#FF2D55'], actionChart, 'Действия, шт.');
-
-                generateMap(rawData);
-
-                renderLatestData(rawData);
-
-            } catch (e) {
-                console.error("Error fetching reports (Mock Data):", e);
-                showAlert('Ошибка', 'Произошла ошибка при загрузке отчетов (проверьте консоль).');
-                noDataElement.classList.remove('hidden');
-                contentDiv.style.display = 'none';
-                dataCache = [];
+            } catch (error) {
+                showAlert('Ошибка Загрузки', 'Не удалось загрузить данные из Firebase. Возможно, нет сети или требуется создание индексов. ' + error.message);
+                console.error("Firebase fetch error:", error);
             } finally {
                 if (isTMA) Telegram.WebApp.MainButton.hideProgress();
+            }
+        };
+
+        function generateLoyaltyChart(counts) {
+            const ctx = document.getElementById('loyaltyChart').getContext('2d');
+            const data = [counts.loyal, counts.not_loyal, counts.doubtful, counts.not_opened];
+            const labels = ['Лояльный', 'Не лояльный', 'Сомневающийся', 'Не открыли'];
+            const colors = ['#10B981', '#EF4444', '#F59E0B', '#6B7280'];
+
+            if (loyaltyChartInstance) loyaltyChartInstance.destroy();
+            loyaltyChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderColor: '#ffffff', borderWidth: 1 }] },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'right' } }
+                }
+            });
+        }
+
+        function generateActionChart(counts) {
+            const ctx = document.getElementById('actionChart').getContext('2d');
+            const sortedCounts = Object.entries(counts).sort(([, a], [, b]) => b - a);
+            const data = sortedCounts.map(([, count]) => count);
+            const labels = sortedCounts.map(([action]) => action);
+            const colors = ['#007aff', '#34D399', '#FBBF24', '#F87171', '#93C5FD', '#A78BFA'];
+
+            if (actionChartInstance) actionChartInstance.destroy();
+            actionChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: labels, datasets: [{ label: 'Количество действий', data: data, backgroundColor: colors, borderColor: '#ffffff', borderWidth: 1 }] },
+                options: {
+                    responsive: true,
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+
+        function exportToXLSX() {
+            if (dataCache.length === 0) {
+                showAlert('Ошибка', 'Нет данных для экспорта. Пожалуйста, обновите отчеты.');
+                return;
+            }
+            const exportData = dataCache.map(doc => ({
+                'Время': new Date(doc.timestamp).toLocaleString(), 
+                'ID Пользователя': doc.user_id, 
+                'Агитатор (ФИО)': doc.full_name || doc.username,
+                'Населенный пункт': doc.settlement, 
+                'Улица': doc.street, 
+                'Дом': doc.house, 
+                'Квартира': doc.apartment, 
+                'Действие': doc.action,
+                'Лояльность': doc.loyalty, 
+                'Требуется Повтор': doc.requires_followup ? 'ДА' : 'НЕТ', 
+                'Комментарий': doc.comment,
+                'Широта': doc.location ? doc.location.latitude : 'N/A', 
+                'Долгота': doc.location ? doc.location.longitude : 'N/A',
+            }));
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Данные");
+            XLSX.writeFile(workbook, "agitator_data_" + new Date().toISOString().slice(0, 10) + ".xlsx");
+        }
+
+
+        // ❌ Удаление всей коллекции 'surveys' (#10) - Реальное удаление!
+        window.deleteCollection = async () => {
+            if (!isAdmin) return showAlert('Ошибка', 'Нет прав администратора.');
+            
+            if (!confirm('ВНИМАНИЕ! Вы уверены, что хотите БЕЗВОЗВРАТНО удалить ВСЕ данные из Firebase?')) {
+                return;
+            }
+            
+            if (isTMA) Telegram.WebApp.MainButton.showProgress();
+
+            const collectionRef = db.collection('surveys');
+            const batchSize = 100; // Максимальный размер пакета
+            let deletedCount = 0;
+
+            try {
+                while (true) {
+                    // Ограничиваем запрос, чтобы получить только batchSize документов
+                    const snapshot = await collectionRef.limit(batchSize).get();
+                    if (snapshot.size === 0) break;
+
+                    const batch = db.batch();
+                    snapshot.docs.forEach(doc => {
+                        batch.delete(doc.ref);
+                    });
+                    await batch.commit();
+                    deletedCount += snapshot.size;
+
+                    if (snapshot.size < batchSize) break;
+                }
+
+                dataCache = []; // Очищаем локальный кеш после удаления
+                updateOfflineStatus();
+                showAlert('Успешно!', `Удалено ${deletedCount} записей. Данные Firestore очищены.`);
+
+                if (isAdmin) fetchAndRenderReports();
+
+                return true;
+
+            } catch (e) {
+                 console.error("Error deleting collection:", e);
+                 showAlert('Ошибка', 'Произошла ошибка при удалении коллекции: ' + e.message);
+                 return false;
+            } finally {
+                 if (isTMA) Telegram.WebApp.MainButton.hideProgress();
             }
         };
 
@@ -1088,66 +1218,21 @@
         if (isTMA) {
             Telegram.WebApp.ready();
             Telegram.WebApp.expand();
-            // Использование MainButton TMA для сохранения
-            Telegram.WebApp.MainButton.setText('СОХРАНИТЬ ЗАПИСЬ').show();
-            Telegram.WebApp.MainButton.onClick(saveSurveyData);
-            document.getElementById('submitFormBtn').classList.add('hidden'); // Скрыть HTML кнопку
         }
 
         // Инициализация при загрузке
         window.onload = () => {
-            populateSettlements();
-
-            // Автозаполнение улицы
-            document.getElementById('street').value = localStorage.getItem('lastStreet') || '';
-
+            populateSettlements(); // Заполняем список поселений
+            updateOfflineStatus(); // Обновляем статус кэша
             showSection('form');
             lucide.createIcons();
-            updateOfflineStatus(); // 💾 Обновляем статус кэша
 
             // ОТЛАДКА: Заполнение полей
             document.getElementById('debugUserId').textContent = userTelegramId || 'Нет ID';
-            document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА (MOCK)' : 'НЕТ (MOCK)';
-            
-            // Заполнение функций, которые не были изменены, но нужны для работы
-            
-            // 💡 Временные заглушки для функций, которые не были изменены:
-             function populateUserFilter(users) {
-                const selectElement = document.getElementById('userFilter');
-                const currentValue = selectElement.value;
-                selectElement.innerHTML = '<option value="all">Все Агитаторы</option>';
-                users.forEach(user => {
-                    const option = document.createElement('option');
-                    option.value = user.id;
-                    option.textContent = user.name;
-                    if (user.id == currentValue) { option.selected = true; }
-                    selectElement.appendChild(option);
-                });
-            }
+            document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'НЕТ';
 
-            function renderChart(canvasId, type, labels, data, colors, chartInstance, yLabel = 'Количество', xLabel = '') {
-                const ctx = document.getElementById(canvasId).getContext('2d');
-                if (chartInstance) { chartInstance.destroy(); }
-                const chartOptions = { responsive: true, plugins: { legend: { position: type === 'doughnut' ? 'bottom' : 'top', labels: { color: '#1c1c1e', font: { size: 12, family: 'Jost' } } } }, scales: type === 'bar' ? { y: { beginAtZero: true, title: { display: true, text: yLabel, color: '#8e8e93', }, ticks: { color: '#8e8e93', callback: function(value) { if (value % 1 === 0) { return value; } } }, grid: { color: '#e5e5ea', } }, x: { ticks: { color: '#8e8e93', }, grid: { color: 'rgba(0,0,0,0)', } } } : {} };
-                return new Chart(ctx, { type: type, data: { labels: labels, datasets: [{ label: yLabel, data: data, backgroundColor: colors, borderColor: '#ffffff', borderWidth: 1 }] }, options: chartOptions });
-            }
-
-            function exportToXLSX() {
-                if (dataCache.length === 0) {
-                    showAlert('Ошибка', 'Нет данных для экспорта. Пожалуйста, обновите отчеты.');
-                    return;
-                }
-                const exportData = dataCache.map(doc => ({
-                    'Время': new Date(doc.timestamp).toLocaleString(), 'ID Пользователя': doc.user_id, 'Агитатор (ФИО)': doc.full_name || doc.username,
-                    'Населенный пункт': doc.settlement, 'Улица': doc.street, 'Дом': doc.house, 'Квартира': doc.apartment, 'Действие': doc.action,
-                    'Лояльность': doc.loyalty, 'Требуется Повтор': doc.requires_followup ? 'ДА' : 'НЕТ', 'Комментарий': doc.comment,
-                    'Широта': doc.location ? doc.location.latitude : 'N/A', 'Долгота': doc.location ? doc.location.longitude : 'N/A',
-                }));
-                const worksheet = XLSX.utils.json_to_sheet(exportData);
-                const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, "Данные");
-                XLSX.writeFile(workbook, "agitator_data_MOCK_" + new Date().toISOString().slice(0, 10) + ".xlsx");
-                showAlert('Успешно', `Экспортировано ${exportData.length} записей в XLSX (фиктивные данные).`);
+            if (!firebaseConfig.projectId) {
+                showAlert('ВНИМАНИЕ', 'Необходимо вставить ключи конфигурации Firebase в код.');
             }
         };
     </script>
