@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Блокнот Агитатора | v2.3 (Фикс Админа/Онлайн)</title>
+    <title>Блокнот Агитатора | v2.4 (Фикс Админа/Онлайн)</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -441,7 +441,7 @@
         
         // --- КОНФИГУРАЦИЯ FIREBASE (ВАШИ КЛЮЧИ) ---
         const firebaseConfig = {
-            apiKey: "AIzaSyDVeRXO16KtIwoJQb4uHQuCsEv3xTLBGhI",
+            apiKey: "AIzaSyDVeRXO16KtIwoJQb4uHQuCsEv3xTLBGhI", // 👈 ВАШ КЛЮЧ
             authDomain: "agitator-notebook.firebaseapp.com",
             projectId: "agitator-notebook",
             storageBucket: "agitator-notebook.firebasestorage.app",
@@ -495,7 +495,6 @@
                 }
                 
                 // 1. Анонимная аутентификация
-                // Примечание: В модульной версии signInAnonymously возвращает UserCredential, а не просто Promise.
                 await signInAnonymously(auth);
 
                 // 2. Проверка прав администратора (УСИЛЕНО: оба ID приводятся к строке)
@@ -1599,7 +1598,7 @@
         // 🔑 Инициализация при загрузке (Ожидаем authenticateUser) - ИСПРАВЛЕНО
         window.onload = async () => {
             // 1. Сначала аутентификация для установки isAdmin и userTelegramId
-            await authenticateUser(); 
+            await authenticateUser(); // 👈 КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ
             
             // 2. Затем заполнение интерфейса
             populateSettlements(); 
