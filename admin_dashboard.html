@@ -427,23 +427,23 @@
         // Инициализация Firebase и Firestore
         const app = firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-        const auth = firebase.auth(); 
+        const auth = firebase.auth();
 
         // --- ГЛОБАЛЬНЫЕ КОНСТАНТЫ И ПЕРЕМЕННЫЕ ---
         // 🔑 ВАЖНО: ЗАМЕНИТЕ ЭТОТ ID НА ВАШ РЕАЛЬНЫЙ TELEGRAM ID
-        const ADMIN_TELEGRAM_ID = '541459471'; 
+        const ADMIN_TELEGRAM_ID = '541459471';
 
         const isTMA = window.Telegram && window.Telegram.WebApp;
         // 🔑 Правильная инициализация userTelegramId
-        let userTelegramId = isTMA && Telegram.WebApp.initDataUnsafe.user ? Telegram.WebApp.initDataUnsafe.user.id : 'web-test-user-' + (Math.floor(Math.random() * 10000) + 1); 
-        
-        let isAdmin = false; 
-        let userLocation = null; 
+        let userTelegramId = isTMA && Telegram.WebApp.initDataUnsafe.user ? Telegram.WebApp.initDataUnsafe.user.id : 'web-test-user-' + (Math.floor(Math.random() * 10000) + 1);
+
+        let isAdmin = false;
+        let userLocation = null;
         let isLocationPending = false;
-        let dataCache = []; 
-        let offlineCache = JSON.parse(localStorage.getItem('offlineCache') || '[]'); 
+        let dataCache = [];
+        let offlineCache = JSON.parse(localStorage.getItem('offlineCache') || '[]');
         let mapInstance = null;
-        let markerCluster = null; 
+        let markerCluster = null;
 
         const SETTLEMENTS = [
             'г.п. Барсово', 'с.п. Солнечный', 'г.п. Лянтор', 'г.п. Федоровский', 'с.п. Локосово'
@@ -457,7 +457,7 @@
             'call': "Обязательно спросите, удобно ли говорить, прежде чем начинать разговор.",
             'positive': "Спросите, почему поддерживают. Запишите аргументы для использования в агитации."
         };
-        
+
         // --- ФУНКЦИИ ШАГОВ 5, 6, 11 ---
 
         // 🔑 ФУНКЦИЯ АУТЕНТИФИКАЦИИ И ПРОВЕРКИ АДМИНА (ИСПРАВЛЕНО #11)
@@ -468,11 +468,11 @@
                      console.error("User Telegram ID is missing!");
                      userTelegramId = 'web-test-user-0'; // Fallback
                 }
-                
+
                 if (auth.currentUser) {
-                    await auth.signOut(); 
+                    await auth.signOut();
                 }
-                
+
                 // 1. Анонимная аутентификация для доступа к Firestore
                 let userCredential = await auth.signInAnonymously();
                 const userUID = userCredential.user.uid;
@@ -544,8 +544,8 @@
                     return;
                 }
 
-                sendTrackingUpdate(); 
-                trackingInterval = setInterval(sendTrackingUpdate, 60000); 
+                sendTrackingUpdate();
+                trackingInterval = setInterval(sendTrackingUpdate, 60000);
 
                 button.textContent = 'Остановить Трекинг';
                 button.classList.remove('bg-green-500', 'border-green-700');
@@ -555,7 +555,7 @@
             }
             if (isTMA) Telegram.WebApp.HapticFeedback.impactOccurred('medium');
         };
-        
+
         // 🗺️ Получение GPS с реальным обратным геокодированием Nominatim (#3)
         window.getLocation = () => {
              //... (реализация getLocation)
@@ -590,7 +590,7 @@
                         const address = data.address;
 
                         if (address) {
-                            const street = address.road || address.pedestrian || ''; 
+                            const street = address.road || address.pedestrian || '';
                             const house = address.house_number || '';
 
                             if (street && house) {
@@ -613,12 +613,12 @@
                         console.error("Ошибка Nominatim:", error);
                         statusText += ' (Ошибка сети/Nominatim)';
                     }
-                    
+
                     statusElement.textContent = statusText;
                     copyBtn.classList.remove('hidden');
                     btn.disabled = false;
                     isLocationPending = false;
-                    if(addressFound) checkAddressHistory(); 
+                    if(addressFound) checkAddressHistory();
                     if (isTMA) Telegram.WebApp.HapticFeedback.notificationOccurred('success');
                 },
                 (error) => {
@@ -638,12 +638,12 @@
              //... (реализация updateWalklistStatus)
             try {
                 const querySnapshot = await db.collection("walklists")
-                    .where('user_id', '==', userTelegramId.toString()) 
+                    .where('user_id', '==', userTelegramId.toString())
                     .where('settlement', '==', settlement)
                     .where('street', '==', street)
                     .where('house', '==', house)
-                    .where('apartment', '==', apartment || '') 
-                    .where('status', '==', 'pending') 
+                    .where('apartment', '==', apartment || '')
+                    .where('status', '==', 'pending')
                     .limit(1)
                     .get();
 
@@ -663,20 +663,20 @@
                 console.error("Ошибка обновления walklist:", e);
             }
         }
-        
+
         // 🏠 Рендеринг Маршрутного Листа из Firebase (#4)
         window.renderWalkList = async () => {
              //... (реализация renderWalkList)
             const list = document.getElementById('assignedAddresses');
-            if (!list) return; 
+            if (!list) return;
 
-            list.innerHTML = '<li><i data-lucide="loader" class="w-4 h-4 inline-block animate-spin mr-2"></i> Загрузка...</li>'; 
+            list.innerHTML = '<li><i data-lucide="loader" class="w-4 h-4 inline-block animate-spin mr-2"></i> Загрузка...</li>';
             lucide.createIcons();
 
             try {
                 const querySnapshot = await db.collection("walklists")
                     .where('user_id', '==', userTelegramId.toString())
-                    .orderBy('status', 'asc') 
+                    .orderBy('status', 'asc')
                     .get();
 
                 const walkListData = [];
@@ -684,8 +684,8 @@
                     walkListData.push(doc.data());
                 });
 
-                list.innerHTML = ''; 
-                
+                list.innerHTML = '';
+
                 if (walkListData.length === 0) {
                      list.innerHTML = '<li><span class="text-gray-500">Маршрутный лист пуст.</span></li>';
                      return;
@@ -695,10 +695,10 @@
                     const item = document.createElement('li');
                     item.className = `cursor-pointer hover:bg-gray-100 p-1 rounded transition ${address.status === 'done' ? 'text-green-600 line-through' : 'text-gray-900'}`;
                     item.innerHTML = `
-                        **${address.settlement}**, ул. ${address.street}, д. ${address.house}${address.apartment ? `, кв. ${address.apartment}` : ''} 
+                        **${address.settlement}**, ул. ${address.street}, д. ${address.house}${address.apartment ? `, кв. ${address.apartment}` : ''}
                         <span class="text-xs ml-2 text-gray-500">(${address.status === 'done' ? 'Пройдено' : 'Назначено'})</span>
                     `;
-                    
+
                     if (address.status !== 'done') {
                         item.onclick = () => {
                             document.getElementById('settlement').value = address.settlement;
@@ -719,9 +719,9 @@
             }
             lucide.createIcons();
         };
-        
-        // --- ОБЩИЕ ФУНКЦИИ И УТИЛИТЫ --- 
-        
+
+        // --- ОБЩИЕ ФУНКЦИИ И УТИЛИТЫ ---
+
         function showAlert(title, message) {
             //... (реализация showAlert)
             if (isTMA) {
@@ -738,7 +738,7 @@
             const debugElementTop = document.getElementById('debugOfflineCount');
             const debugElementForm = document.getElementById('debugOfflineCountForm');
             const syncButton = document.getElementById('syncButton');
-            
+
             if (debugElementTop) debugElementTop.textContent = count;
             if (debugElementForm) debugElementForm.textContent = count;
             document.getElementById('syncOfflineCount').textContent = count;
@@ -761,13 +761,13 @@
              //... (реализация showSection)
             if ((sectionId === 'reports' || sectionId === 'admin') && !isAdmin) {
                 showAlert('Доступ запрещен', 'У вас нет прав администратора для доступа к этому разделу.');
-                return; 
+                return;
             }
 
             document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
             document.getElementById(sectionId).classList.remove('hidden');
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            
+
             let activeNavElement = document.querySelector(`a[onclick*="${sectionId}"]`);
             if (sectionId === 'reports' && document.getElementById('navReports')) {
                  activeNavElement = document.getElementById('navReports');
@@ -782,8 +782,8 @@
             if (sectionId === 'reports') {
                 fetchAndRenderReports();
             } else if (sectionId === 'walklist') {
-                renderWalkList(); 
-                updateOfflineStatus(); 
+                renderWalkList();
+                updateOfflineStatus();
             }
             lucide.createIcons();
             if (isTMA) Telegram.WebApp.HapticFeedback.impactOccurred('light');
@@ -831,12 +831,12 @@
             if (input.value === value) {
                 input.value = '';
                 container.querySelector(`[data-value="${value}"]`).classList.remove('active-action');
-                updateConversationScript(document.getElementById('loyalty').value); 
+                updateConversationScript(document.getElementById('loyalty').value);
             } else {
                 input.value = value;
                 container.querySelectorAll('.action-btn').forEach(btn => btn.classList.remove('active-action'));
                 container.querySelector(`[data-value="${value}"]`).classList.add('active-action');
-                updateConversationScript(value); 
+                updateConversationScript(value);
             }
             if (isTMA) Telegram.WebApp.HapticFeedback.impactOccurred('light');
         };
@@ -846,10 +846,10 @@
              //... (реализация updateConversationScript)
             const scriptCard = document.getElementById('conversationScript');
             const scriptText = document.getElementById('scriptText');
-            
+
             const activeLoyalty = document.getElementById('loyalty').value;
             const activeAction = document.getElementById('action').value;
-            
+
             let keyToUse = activeAction || activeLoyalty;
 
             if (INTERACTIVE_SCRIPTS[keyToUse]) {
@@ -957,12 +957,12 @@
                 action: document.getElementById('action').value,
                 requires_followup: document.getElementById('requires_followup').checked,
                 comment: document.getElementById('comment').value.trim(),
-                location: userLocation ? { 
-                    latitude: userLocation.latitude, 
+                location: userLocation ? {
+                    latitude: userLocation.latitude,
                     longitude: userLocation.longitude,
                     address_from_gps: `${document.getElementById('street').value}, ${document.getElementById('house').value}`
                 } : null,
-                is_admin: isAdmin, 
+                is_admin: isAdmin,
             };
 
             localStorage.setItem('lastSettlement', data.settlement);
@@ -973,14 +973,14 @@
                 const docRef = await db.collection("surveys").add(data);
                 statusMessage = `Запись сохранена в базу данных (ID: ${docRef.id}).`;
                 if (isTMA) Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-                
+
                 // 🚀 Обновляем статус в маршрутном листе (#4)
-                await updateWalklistStatus(data.settlement, data.street, data.house, data.apartment); 
-                
+                await updateWalklistStatus(data.settlement, data.street, data.house, data.apartment);
+
             } catch (error) {
                 // 2. Офлайн-кэш (ИСПРАВЛЕНО #2)
                 console.warn("Ошибка Firebase, сохранение в кэш:", error.message);
-                data.offline_timestamp = new Date().toISOString(); 
+                data.offline_timestamp = new Date().toISOString();
                 offlineCache.push(data);
                 localStorage.setItem('offlineCache', JSON.stringify(offlineCache));
                 updateOfflineStatus();
@@ -1008,7 +1008,7 @@
             btn.disabled = false;
             if (isTMA) Telegram.WebApp.MainButton.hideLoader();
         };
-        
+
         // 🔄 Синхронизация Офлайн-Данных (ПОЛНОСТЬЮ РЕАЛИЗОВАНО #2)
         window.syncOfflineData = async () => {
             if (offlineCache.length === 0) {
@@ -1026,9 +1026,9 @@
                 try {
                     // Пытаемся сохранить запись в Firestore
                     await db.collection("surveys").add(data);
-                    
+
                     // Обновляем walklist
-                    await updateWalklistStatus(data.settlement, data.street, data.house, data.apartment); 
+                    await updateWalklistStatus(data.settlement, data.street, data.house, data.apartment);
 
                     successfulSyncs++;
                 } catch (error) {
@@ -1055,17 +1055,17 @@
         };
 
         // --- ФУНКЦИИ ОТЧЕТОВ (ПОЛНОСТЬЮ РЕАЛИЗОВАНЫ #7, #8, #10) ---
-        
+
         async function fetchAndRenderReports() {
              //... (реализация fetchAndRenderReports)
-            if (!isAdmin) return; 
+            if (!isAdmin) return;
 
             const filterStatus = document.getElementById('filterStatus');
             filterStatus.textContent = "Загрузка данных...";
 
             const dateRange = document.getElementById('dateRangeFilter').value;
             const selectedUser = document.getElementById('userFilter').value;
-            
+
             let query = db.collection("surveys").orderBy('timestamp', 'desc');
 
             // 1. Фильтр по дате
@@ -1100,7 +1100,7 @@
                 allUsers.add(doc.full_name || doc.username);
             });
             renderUserFilter(Array.from(allUsers));
-            
+
             let filteredData = dataCache;
             if (selectedUser !== 'all') {
                 filteredData = dataCache.filter(doc => (doc.full_name || doc.username) === selectedUser);
@@ -1110,23 +1110,23 @@
             renderSummary(filteredData);
             renderLeaderboard(filteredData);
             renderCharts(filteredData);
-            renderLatestData(filteredData); 
-            generateMap(filteredData); 
-            
+            renderLatestData(filteredData);
+            generateMap(filteredData);
+
             filterStatus.textContent = `Данные загружены. Всего записей: ${dataCache.length}.`;
-            
+
             document.getElementById('admin-reports-content').classList.remove('hidden');
             document.getElementById('no-reports-data').classList.add('hidden');
             if (filteredData.length === 0) {
                  document.getElementById('no-reports-data').classList.remove('hidden');
             }
         }
-        
+
         // 🗺️ Генерация Карты (#7, #8)
         function generateMap(data) {
              //... (реализация generateMap)
             const mapContainer = document.getElementById('map-container');
-            
+
             // Проверка и уничтожение предыдущего экземпляра карты
             if (mapInstance) {
                 mapInstance.remove();
@@ -1139,7 +1139,7 @@
                 mapContainer.innerHTML = '<div class="h-full flex items-center justify-center text-gray-500">Нет геолокационных данных для отображения.</div>';
                 return;
             }
-            
+
             mapContainer.innerHTML = ''; // Очистка, если было сообщение об отсутствии данных
 
             // Инициализация карты
@@ -1172,7 +1172,7 @@
                         html: `<i data-lucide="map-pin" class="w-4 h-4"></i>`,
                         iconSize: [30, 30]
                     })});
-                    
+
                     const popupContent = `
                         <div class="text-sm">
                             <strong>${d.settlement}, ул. ${d.street}, д. ${d.house}</strong>
@@ -1190,7 +1190,7 @@
                 if (geoData.length > 0) {
                      mapInstance.fitBounds(markerCluster.getBounds());
                 }
-                
+
                 lucide.createIcons(); // Важно для иконок в маркерах
 
             } else if (mapType === 'heat') {
@@ -1211,7 +1211,7 @@
              //... (реализация renderLatestData)
             const body = document.getElementById('latestDataBody');
             const followUpFilter = document.getElementById('followUpFilter').checked;
-            
+
             body.innerHTML = '';
 
             let displayData = data;
@@ -1224,14 +1224,14 @@
             latest.forEach(d => {
                 const row = body.insertRow();
                 const loyaltyColor = { loyal: 'text-green-600', not_loyal: 'text-red-600', doubtful: 'text-orange-500', not_opened: 'text-gray-500' }[d.loyalty] || 'text-gray-900';
-                
+
                 row.insertCell().textContent = new Date(d.timestamp).toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
                 row.insertCell().textContent = `${d.street}, ${d.house}${d.apartment ? `/${d.apartment}` : ''}`;
                 row.insertCell().innerHTML = `<span class="${loyaltyColor} font-semibold">${d.loyalty}</span>`;
                 row.insertCell().textContent = d.full_name || d.username;
                 row.insertCell().innerHTML = d.requires_followup ? '<i data-lucide="check" class="w-4 h-4 text-red-600 mx-auto"></i>' : '<i data-lucide="x" class="w-4 h-4 text-gray-400 mx-auto"></i>';
                 row.insertCell().textContent = d.comment ? d.comment.substring(0, 30) + (d.comment.length > 30 ? '...' : '') : '-';
-                
+
                 row.classList.add('border-b', 'border-gray-100');
             });
             lucide.createIcons();
@@ -1242,7 +1242,7 @@
              //... (реализация renderLeaderboard)
             const leaderboardBody = document.getElementById('leaderboardBody');
             leaderboardBody.innerHTML = '';
-            
+
             const userStats = {};
             data.forEach(d => {
                 const userKey = d.full_name || d.username;
@@ -1272,11 +1272,11 @@
                 row.insertCell().textContent = item.total;
                 row.insertCell().textContent = item.loyal;
                 row.insertCell().textContent = `${item.rate}%`;
-                
+
                 row.cells[1].className = 'text-center';
                 row.cells[2].className = 'text-center';
                 row.cells[3].className = 'text-center font-bold';
-                
+
                 if (index === 0) row.classList.add('bg-yellow-100', 'font-semibold');
             });
         }
@@ -1286,12 +1286,12 @@
              //... (реализация renderSummary)
             const summaryMetrics = document.getElementById('summary-metrics');
             summaryMetrics.innerHTML = '';
-            
+
             const total = data.length;
             const loyal = data.filter(d => d.loyalty === 'loyal').length;
             const notLoyal = data.filter(d => d.loyalty === 'not_loyal').length;
             const followUp = data.filter(d => d.requires_followup).length;
-            
+
             const loyalRate = total > 0 ? ((loyal / total) * 100).toFixed(1) : 0;
 
             const metrics = [
@@ -1352,8 +1352,8 @@
 
             const labels = Object.keys(dataCounts);
             const data = Object.values(dataCounts);
-            const colors = labels.map(l => colorMap[l] || '#D1D5DB'); 
-            
+            const colors = labels.map(l => colorMap[l] || '#D1D5DB');
+
             const chartOptions = {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -1375,7 +1375,7 @@
             const userFilter = document.getElementById('userFilter');
             const selectedValue = userFilter.value;
             userFilter.innerHTML = '<option value="all">Все Агитаторы</option>';
-            
+
             users.sort().forEach(user => {
                 const option = document.createElement('option');
                 option.value = user;
@@ -1386,7 +1386,7 @@
                 userFilter.appendChild(option);
             });
         }
-        
+
         // Экспорт в XLSX (#10)
         function exportToXLSX() {
              //... (реализация exportToXLSX)
@@ -1395,18 +1395,18 @@
                 return;
             }
             const exportData = dataCache.map(doc => ({
-                'Время': new Date(doc.timestamp).toLocaleString(), 
-                'ID Пользователя': doc.user_id, 
+                'Время': new Date(doc.timestamp).toLocaleString(),
+                'ID Пользователя': doc.user_id,
                 'Агитатор (ФИО)': doc.full_name || doc.username,
-                'Населенный пункт': doc.settlement, 
-                'Улица': doc.street, 
-                'Дом': doc.house, 
-                'Квартира': doc.apartment, 
+                'Населенный пункт': doc.settlement,
+                'Улица': doc.street,
+                'Дом': doc.house,
+                'Квартира': doc.apartment,
                 'Действие': doc.action,
-                'Лояльность': doc.loyalty, 
-                'Требуется Повтор': doc.requires_followup ? 'ДА' : 'НЕТ', 
+                'Лояльность': doc.loyalty,
+                'Требуется Повтор': doc.requires_followup ? 'ДА' : 'НЕТ',
                 'Комментарий': doc.comment,
-                'Широта': doc.location ? doc.location.latitude : 'N/A', 
+                'Широта': doc.location ? doc.location.latitude : 'N/A',
                 'Долгота': doc.location ? doc.location.longitude : 'N/A',
                 'Адрес из GPS': doc.location ? doc.location.address_from_gps : 'N/A',
             }));
@@ -1424,7 +1424,7 @@
             const table = document.getElementById("latestDataTbl");
             const tbody = table.querySelector("tbody");
             const rows = Array.from(tbody.querySelectorAll("tr"));
-            const isAsc = sortDirection[n] !== 'asc'; 
+            const isAsc = sortDirection[n] !== 'asc';
             sortDirection[n] = isAsc ? 'asc' : 'desc';
 
             rows.sort((a, b) => {
@@ -1457,9 +1457,9 @@
 
             const confirmation = confirm("ВНИМАНИЕ! Вы уверены, что хотите безвозвратно удалить ВСЕ записи из коллекции surveys? Это действие нельзя отменить.");
             if (!confirmation) return;
-            
+
             if (isTMA) Telegram.WebApp.MainButton.showLoader();
-            
+
             const batchSize = 500;
             const collectionRef = db.collection('surveys');
             let deletedCount = 0;
@@ -1473,7 +1473,7 @@
                     snapshot.docs.forEach(doc => {
                         batch.delete(doc.ref);
                     });
-                    
+
                     await batch.commit();
                     deletedCount += snapshot.size;
 
@@ -1481,7 +1481,7 @@
                 }
 
                 // Также очистим локальный кэш
-                offlineCache = []; 
+                offlineCache = [];
                 localStorage.removeItem('offlineCache');
                 dataCache = []; // Очищаем локальный кеш после удаления
                 updateOfflineStatus();
@@ -1509,11 +1509,11 @@
         // Инициализация при загрузке (ИСПРАВЛЕНО)
         window.onload = async () => {
             await authenticateUser(); // 🔑 Сначала аутентификация для установки isAdmin
-            populateSettlements(); 
-            updateOfflineStatus(); 
-            showSection('form'); 
+            populateSettlements();
+            updateOfflineStatus();
+            showSection('form');
             lucide.createIcons();
-            
+
             // ОТЛАДКА: Заполнение полей (повторное, чтобы показать после аутентификации)
             document.getElementById('debugUserId').textContent = userTelegramId || 'Нет ID';
             document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'НЕТ';
