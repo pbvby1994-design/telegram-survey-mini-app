@@ -23,7 +23,7 @@
     <style>
         body { 
             font-family: 'Jost', sans-serif; 
-            background-color: #f4f6f9; /* Светло-серый фон */
+            background-color: #f4f6f9;
         }
         .card {
             background-color: #ffffff;
@@ -36,11 +36,13 @@
             border-bottom: 3px solid transparent;
         }
         .tab-button.active {
-            border-bottom-color: #4f46e5; /* Индиго */
+            border-bottom-color: #4f46e5;
             color: #4f46e5;
             font-weight: 600;
         }
         #map { height: 400px; border-radius: 8px; }
+        .content-section { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="min-h-screen">
@@ -81,8 +83,13 @@
                         </div>
                         
                         <div class="space-y-2">
-                            <label for="support" class="block text-sm font-medium text-gray-700">Поддержка кандидата</label>
-                            <select id="support" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
+                            <label for="house" class="block text-sm font-medium text-gray-700">Номер дома</label>
+                            <input type="text" id="house" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
+                        </div>
+                        
+                        <div class="space-y-2">
+                            <label for="loyalty" class="block text-sm font-medium text-gray-700">Лояльность кандидата</label>
+                            <select id="loyalty" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
                                 <option value="" disabled selected>Выберите уровень</option>
                                 <option value="strong">Сильная (ДА)</option>
                                 <option value="moderate">Умеренная (СКОРЕЕ ДА)</option>
@@ -91,18 +98,18 @@
                             </select>
                         </div>
                         
-                        <div class="space-y-2">
-                            <label for="importance" class="block text-sm font-medium text-gray-700">Важность вопроса</label>
-                            <select id="importance" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
-                                <option value="" disabled selected>Оцените важность</option>
-                                <option value="high">Высокая</option>
-                                <option value="medium">Средняя</option>
-                                <option value="low">Низкая</option>
+                        <div class="space-y-2 col-span-full md:col-span-1">
+                            <label for="action" class="block text-sm font-medium text-gray-700">Целевое действие</label>
+                            <select id="action" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
+                                <option value="" disabled selected>Выберите действие</option>
+                                <option value="Опрос">Опрос</option>
+                                <option value="Агитация">Агитация</option>
+                                <option value="Жалоба">Жалоба/Запрос</option>
                             </select>
                         </div>
                         
                         <div class="space-y-2 col-span-full">
-                            <label for="comment" class="block text-sm font-medium text-gray-700">Комментарий / Запрос</label>
+                            <label for="comment" class="block text-sm font-medium text-gray-700">Комментарий / Запрос (дополнительно)</label>
                             <textarea id="comment" rows="3" class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"></textarea>
                         </div>
                         
@@ -140,10 +147,19 @@
         </section>
 
         <section id="reports" class="content-section hidden">
-            </section>
+             <div class="card p-6">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Сводные Отчеты</h2>
+                <p class="text-gray-500">Данные отчетов будут загружены после успешной авторизации.</p>
+            </div>
+        </section>
 
         <section id="map-view" class="content-section hidden">
-            </section>
+            <div class="card p-6">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Карта Активности</h2>
+                <div id="map"></div>
+                <p class="mt-4 text-sm text-gray-600">На карте отображаются точки опросов.</p>
+            </div>
+        </section>
 
     </main>
     
@@ -162,46 +178,40 @@
 
     <script type="module">
         // ----------------------------------------------------------------------------------
-        // ИМПОРТЫ FIREBASE (Client SDK)
+        // ИМПОРТЫ FIREBASE
         // ----------------------------------------------------------------------------------
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, orderBy, getDocs, where, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // Используем коллекцию 'reports' как указано в правилах Firestore
+        import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; 
+        import { getAuth, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
 
         // ----------------------------------------------------------------------------------
-        // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И КОНФИГУРАЦИЯ (С ИЗМЕНЕНИЯМИ)
+        // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И КОНФИГУРАЦИЯ
         // ----------------------------------------------------------------------------------
         
-        // Вспомогательная функция для получения параметра из URL
         function getUrlParameter(name) {
             name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
             var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
             var results = regex.exec(location.search);
-            // Используем decodeURIComponent, но не для Base64, так как он чистый
             return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
         };
 
-        // Чтение конфигурации и токена из URL
-        // *** ИЗМЕНЕНИЕ ЗДЕСЬ: ищем firebaseConfigB64 ***
         const firebaseConfigStrB64 = getUrlParameter('firebaseConfigB64');
         const initialAuthToken = getUrlParameter('initialAuthToken');
         const urlUserTelegramId = getUrlParameter('telegramUserId');
 
-        // Парсим firebaseConfig
         let firebaseConfig = {};
         if (firebaseConfigStrB64) {
             try {
-                // *** ИЗМЕНЕНИЕ ЗДЕСЬ: Декодируем Base64 с помощью atob() ***
                 const firebaseConfigJson = atob(firebaseConfigStrB64);
                 firebaseConfig = JSON.parse(firebaseConfigJson);
             } catch (e) {
                 console.error("Failed to decode or parse firebaseConfig from URL:", e);
-                window.showAlert('Ошибка Конфигурации', 'Не удалось декодировать ключи Firebase. Проверьте кодирование в боте.', false, null);
+                window.showAlert('Ошибка Конфигурации', 'Не удалось декодировать ключи Firebase.');
             }
         }
         
-        // Инициализация Firebase
         const app = firebaseConfig.projectId ? initializeApp(firebaseConfig) : null;
         const db = app ? getFirestore(app) : null;
         const auth = app ? getAuth(app) : null;
@@ -209,41 +219,29 @@
         // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
         let userTelegramId = urlUserTelegramId || null;
         let isAdmin = false; 
-        const ADMIN_IDS_LIST = [541459471]; // Ваш ID
+        const ADMIN_IDS_LIST = [541459471]; // Ваш Telegram ID (вставьте свои)
         
-        // ВАШ СПИСОК НАСЕЛЕННЫХ ПУНКТОВ
-        const SETTLEMENTS = ['Город А', 'Село Б', 'Деревня В', 'Поселок Г'];
+        // ВАШ СПИСОК НАСЕЛЕННЫХ ПУНКТОВ (ОБНОВЛЕНО)
+        const SETTLEMENTS = [
+            'г.п. Лянтор',
+            'с.п. Русскинская',
+            'г.п. Федоровский',
+            'г.п. Барсово',
+            'г.п. Белый Яр',
+            'с.п. Лямина',
+            'с.п. Сытомино',
+            'с.п. Угут',
+            'с.п. Ульт-Ягун',
+            'с.п. Солнечный',
+            'с.п. Нижнесортымский',
+            'с.п. Тундрино',
+            'с.п. Локосово'
+        ];
 
         // ----------------------------------------------------------------------------------
-        // ФУНКЦИИ АУТЕНТИФИКАЦИИ И СОХРАНЕНИЯ (Остаются прежними по логике)
+        // ФУНКЦИИ АУТЕНТИФИКАЦИИ И СОХРАНЕНИЯ
         // ----------------------------------------------------------------------------------
         
-        async function authenticateUser() {
-            if (!auth || !initialAuthToken) {
-                console.error("Firebase Auth not initialized or Token missing.");
-                return false;
-            }
-            
-            try {
-                const userCredential = await signInWithCustomToken(auth, initialAuthToken);
-                const user = userCredential.user;
-
-                userTelegramId = user.uid;
-                // Проверка администратора по ID
-                isAdmin = ADMIN_IDS_LIST.includes(parseInt(userTelegramId));
-                
-                document.getElementById('debugUserId').textContent = userTelegramId;
-                document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'НЕТ';
-                document.getElementById('saveButton').disabled = false;
-                
-                return true;
-            } catch (error) {
-                console.error("Firebase Authentication Error:", error);
-                window.showAlert('Ошибка Аутентификации', `Не удалось войти: ${error.code}. Запустите бота заново.`, false, null);
-                return false;
-            }
-        }
-
         function populateSettlements() {
             const select = document.getElementById('settlement');
             select.innerHTML = '<option value="" disabled selected>Выберите населенный пункт</option>';
@@ -255,46 +253,155 @@
             });
         }
         
-        // ... (Остальные функции: getGeolocation, saveSurveyData, showSection, showAlert, closeAlert, fetchAndRenderReports, updateMetrics, renderCharts, generateMap) ...
-        // ВАЖНО: Остальные функции должны быть в коде, но здесь опущены для краткости.
+        async function authenticateUser() {
+            const adminStatus = document.getElementById('debugAdminStatus');
+            adminStatus.textContent = 'Подключение...';
+            adminStatus.classList.remove('text-red-500');
+            adminStatus.classList.add('text-yellow-500');
+
+            if (!auth || !initialAuthToken) {
+                console.error("Firebase Auth not initialized or Token missing.");
+                adminStatus.textContent = 'ОШИБКА';
+                return false;
+            }
+            
+            try {
+                const userCredential = await signInWithCustomToken(auth, initialAuthToken);
+                
+                // Пользователь успешно вошел. Получаем актуальный токен и проверяем Claims.
+                const tokenResult = await userCredential.user.getIdTokenResult();
+                
+                userTelegramId = tokenResult.claims.telegram_id || userCredential.user.uid;
+                // Проверка claims, установленных в Python-боте
+                isAdmin = tokenResult.claims.admin === true; 
+                
+                document.getElementById('debugUserId').textContent = userTelegramId;
+                document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'ПОЛЬЗОВАТЕЛЬ';
+                document.getElementById('debugAdminStatus').classList.remove('text-yellow-500', 'text-red-500');
+                document.getElementById('debugAdminStatus').classList.add(isAdmin ? 'text-green-600' : 'text-green-500');
+                
+                document.getElementById('saveButton').disabled = false;
+                
+                return true;
+            } catch (error) {
+                console.error("Firebase Authentication Error:", error);
+                document.getElementById('debugAdminStatus').textContent = 'ОШИБКА: ' + error.code;
+                document.getElementById('debugAdminStatus').classList.remove('text-yellow-500');
+                document.getElementById('debugAdminStatus').classList.add('text-red-500');
+                window.showAlert('Ошибка Аутентификации', `Не удалось войти: ${error.code}. Проверьте ключи и Custom Claims.`, false, null);
+                return false;
+            }
+        }
+
+        function getGeolocation() {
+            // ... (Ваша логика геолокации) ...
+        }
+
+        async function saveSurveyData(event) {
+            event.preventDefault();
+            
+            if (!db || !userTelegramId) {
+                window.showAlert('Ошибка', 'Приложение не подключено к базе данных или пользователь не авторизован.');
+                return;
+            }
+
+            // ПОЛЯ АДАПТИРОВАНЫ ПОД ПРАВИЛА FIRESTORE
+            const data = {
+                // КРИТИЧЕСКИ ВАЖНО: user_id должен совпадать с полем в правилах
+                user_id: userTelegramId, 
+                timestamp: new Date(), 
+                settlement: document.getElementById('settlement').value,
+                street: document.getElementById('street').value,
+                house: document.getElementById('house').value, // Новое поле
+                action: document.getElementById('action').value, // Новое поле
+                loyalty: document.getElementById('loyalty').value, // Изменено с support на loyalty
+                comment: document.getElementById('comment').value || "" // Необязательное поле
+            };
+            
+            document.getElementById('saveButton').disabled = true;
+            document.getElementById('saveButton').textContent = 'Сохранение...';
+
+            try {
+                // Используем коллекцию 'reports' как указано в правилах
+                await addDoc(collection(db, "reports"), data); 
+                window.showAlert('Успех', 'Данные успешно сохранены!');
+                document.getElementById('surveyForm').reset();
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                window.showAlert('Ошибка', `Не удалось сохранить данные: ${e.message}. Проверьте правила Firestore.`);
+            } finally {
+                document.getElementById('saveButton').disabled = false;
+                document.getElementById('saveButton').textContent = 'Сохранить Запись';
+            }
+        }
+
+        // ----------------------------------------------------------------------------------
+        // ФУНКЦИИ ИНТЕРФЕЙСА (ДЛЯ ДИЗАЙНА)
+        // ----------------------------------------------------------------------------------
+        function showSection(sectionId) {
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.classList.add('hidden');
+            });
+            document.getElementById(sectionId).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active', 'text-indigo-600');
+            });
+            document.getElementById(`btn-${sectionId}`).classList.add('active');
+
+            if (sectionId === 'map-view') {
+                if (window.generateMap) setTimeout(window.generateMap, 100); 
+            }
+        }
         
+        function showAlert(title, message) {
+            document.getElementById('alertTitle').textContent = title;
+            document.getElementById('alertMessage').textContent = message;
+            
+            document.getElementById('alertModal').classList.remove('hidden');
+            document.getElementById('alertModal').classList.add('flex');
+        }
+
+        function closeAlert() {
+            document.getElementById('alertModal').classList.add('hidden');
+            document.getElementById('alertModal').classList.remove('flex');
+        }
+
+
         // ----------------------------------------------------------------------------------
         // ГЛАВНЫЙ БЛОК ЗАПУСКА
         // ----------------------------------------------------------------------------------
 
-        // Экспорт функций в глобальный скоуп для доступа из HTML
+        // Экспорт функций в глобальный скоуп
         window.showAlert = showAlert;
         window.closeAlert = closeAlert;
         window.showSection = showSection;
         window.getGeolocation = getGeolocation;
         window.saveSurveyData = saveSurveyData;
-        window.fetchAndRenderReports = () => {}; // Заглушка
-        window.renderLatestData = () => {}; // Заглушка
+        
+        // Заглушки для функций отчетов
+        window.fetchAndRenderReports = () => {};
+        window.generateMap = () => { /* Логика карты */ };
 
         window.onload = async () => {
-            // 1. Проверка конфигурации
-            if (!firebaseConfig.projectId) {
-                window.showAlert('ВНИМАНИЕ', 'Необходимо вставить ключи конфигурации Firebase в код, либо ошибка в передаче URL-параметров от бота.', false, null);
-                document.getElementById('saveButton').disabled = true;
-                return;
-            }
+            // 1. Заполнение интерфейса
+            populateSettlements();
+            lucide.createIcons();
             
             // 2. Аутентификация
             const isAuthenticated = await authenticateUser();
 
-            // 3. Заполнение интерфейса
-            populateSettlements();
-            lucide.createIcons();
-
             if (isAuthenticated) {
                 if (isAdmin) {
                     showSection('reports');
-                    // fetchAndRenderReports('today'); // Раскомментировать, когда функция будет полной
+                    // window.fetchAndRenderReports('today'); // Загрузка админ-данных
                 } else {
                     showSection('form');
                 }
-            } else {
-                 showSection('form');
+            } 
+            
+            if (!firebaseConfig.projectId) {
+                window.showAlert('ВНИМАНИЕ', 'Конфигурация Firebase не загружена. Проверьте передачу Base64 параметра.');
             }
         };
 
