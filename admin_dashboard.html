@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Блокнот Агитатора | v2.5 (Фикс Firebase Соединения)</title>
+    <title>Блокнот Агитатора | v2.5 (Фикс Auth)</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -19,1013 +19,767 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
     <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
 
-    <!-- 💡 ЕДИНСТВЕННЫЕ ИМПОРТЫ FIREBASE (v9 COMPAT) -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#007bff',
+                        'secondary': '#6c757d',
+                        'tma-bg': 'var(--tg-theme-bg-color, #ffffff)',
+                        'tma-text': 'var(--tg-theme-text-color, #000000)',
+                        'tma-hint': 'var(--tg-theme-hint-color, #999999)',
+                        'tma-link': 'var(--tg-theme-link-color, #007bff)',
+                        'tma-button': 'var(--tg-theme-button-color, #007bff)',
+                        'tma-button-text': 'var(--tg-theme-button-text-color, #ffffff)',
+                    },
+                    fontFamily: {
+                        sans: ['Jost', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --tg-theme-bg-color: #ffffff;
+            --tg-theme-text-color: #000000;
+            --tg-theme-hint-color: #999999;
+            --tg-theme-link-color: #007bff;
+            --tg-theme-button-color: #007bff;
+            --tg-theme-button-text-color: #ffffff;
+        }
 
-<style>
-    /* ... (CSS код не изменен) ... */
-    :root { font-family: 'Jost', sans-serif; }
-    .nav-button-active { background-color: #f7fafc; color: #3b82f6; }
-    .nav-button:hover:not(.nav-button-active) { background-color: #f3f4f6; }
-    .loading-overlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(255, 255, 255, 0.8); z-index: 1000;
-        display: none; align-items: center; justify-content: center;
-        flex-direction: column;
-    }
-    #map { height: 60vh; width: 100%; }
-</style>
+        body {
+            background-color: var(--tg-theme-bg-color);
+            color: var(--tg-theme-text-color);
+            font-family: 'Jost', sans-serif;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .input-field {
+            background-color: var(--tg-theme-secondary-bg-color, #f4f4f5);
+            color: var(--tg-theme-text-color);
+            border: 1px solid var(--tg-theme-hint-color);
+            transition: background-color 0.3s;
+        }
+
+        .btn-primary {
+            background-color: var(--tg-theme-button-color);
+            color: var(--tg-theme-button-text-color);
+            transition: background-color 0.3s;
+        }
+        
+        .btn-primary:hover {
+            background-color: color-mix(in srgb, var(--tg-theme-button-color) 80%, black);
+        }
+
+        .tab-btn {
+            color: var(--tg-theme-hint-color);
+            border-bottom: 2px solid transparent;
+            transition: color 0.3s, border-bottom-color 0.3s;
+        }
+
+        .tab-btn.active {
+            color: var(--tg-theme-link-color);
+            border-bottom-color: var(--tg-theme-link-color);
+        }
+
+        .card {
+            background-color: var(--tg-theme-secondary-bg-color, #f4f4f5);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+        }
+        
+        #map-container {
+            height: 400px; 
+            width: 100%;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            z-index: 10;
+        }
+
+        .leaflet-container {
+            background-color: var(--tg-theme-secondary-bg-color, #f4f4f5) !important;
+        }
+
+        .tooltip-text {
+            color: var(--tg-theme-text-color);
+        }
+
+        /* Адаптивный дизайн */
+        @media (min-width: 768px) {
+            .container {
+                max-width: 800px;
+            }
+        }
+    </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="p-4 md:p-6 min-h-screen">
+    <div class="container mx-auto">
+        <h1 class="text-xl font-bold mb-4 text-center">Блокнот Агитатора <span id="auth-status" class="text-xs font-normal text-red-500">(Offline)</span></h1>
 
-    <div id="loadingOverlay" class="loading-overlay">
-        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-        <p class="mt-4 text-blue-600 font-semibold">Загрузка данных...</p>
-    </div>
-
-    <div id="modalOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm">
-            <h3 id="modalTitle" class="text-xl font-bold mb-3 text-gray-800">Заголовок</h3>
-            <p id="modalMessage" class="text-gray-600 mb-6">Сообщение</p>
-            <div class="flex justify-end space-x-3">
-                <button onclick="document.getElementById('modalOverlay').classList.add('hidden');" class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition">Закрыть</button>
-                <button id="modalConfirmBtn" onclick="modalConfirmHandler()" class="px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition hidden">Подтвердить</button>
+        <!-- Панель отладки/статуса -->
+        <div class="card p-3 mb-4 text-xs rounded-lg shadow-md">
+            <div class="flex flex-wrap justify-between">
+                <p>Telegram ID: <span id="debugUserId" class="font-medium">...</span></p>
+                <p>Админ: <span id="debugAdminStatus" class="font-medium">...</span></p>
+                <p>Кэш: <span id="debugCacheStatus" class="font-medium">...</span></p>
             </div>
         </div>
-    </div>
 
-    <header class="bg-white shadow-md sticky top-0 z-10">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-            <h1 class="text-2xl font-bold text-gray-900 flex items-center">
-                <i data-lucide="compass" class="h-6 w-6 mr-3 text-blue-600"></i>
-                Блокнот Агитатора
-                <span id="offlineBadge" class="ml-3 text-xs font-medium text-red-700 bg-red-100 px-2.5 py-0.5 rounded-full hidden">
-                    ОФФЛАЙН КЭШ
-                </span>
-            </h1>
-            <nav class="flex space-x-2">
-                <button id="navForm" onclick="showSection('form', this)" class="nav-button nav-button-active flex items-center px-4 py-2 text-gray-600 rounded-lg transition">
-                    <i data-lucide="clipboard-list" class="h-5 w-5 mr-2"></i> Форма
-                </button>
-                <button id="navReports" onclick="showSection('reports', this); if(isAdmin) fetchAndRenderReports(); else showAlert('Ошибка', 'Нет доступа к отчетам.');" class="nav-button flex items-center px-4 py-2 text-gray-600 rounded-lg transition" disabled>
-                    <i data-lucide="bar-chart-3" class="h-5 w-5 mr-2"></i> Отчеты
-                </button>
-                <button id="navMap" onclick="showSection('map', this); generateMap(dataCache);" class="nav-button flex items-center px-4 py-2 text-gray-600 rounded-lg transition" disabled>
-                    <i data-lucide="map" class="h-5 w-5 mr-2"></i> Карта
-                </button>
-                <button id="navAdmin" onclick="showSection('admin', this)" class="nav-button flex items-center px-4 py-2 text-gray-600 rounded-lg transition hidden">
-                    <i data-lucide="shield" class="h-5 w-5 mr-2"></i> Админ
-                </button>
-            </nav>
+        <!-- Навигация -->
+        <div class="flex justify-around mb-6 border-b border-gray-300">
+            <button class="tab-btn p-2 flex-1 text-center font-medium active" data-section="form" onclick="showSection('form')">
+                <i data-lucide="edit-3" class="w-5 h-5 inline-block mr-1 align-middle"></i> Отчет
+            </button>
+            <button class="tab-btn p-2 flex-1 text-center font-medium" data-section="data" onclick="showSection('data')">
+                <i data-lucide="database" class="w-5 h-5 inline-block mr-1 align-middle"></i> Данные
+            </button>
+            <button class="tab-btn p-2 flex-1 text-center font-medium" data-section="map" onclick="showSection('map')">
+                <i data-lucide="map" class="w-5 h-5 inline-block mr-1 align-middle"></i> Карта
+            </button>
         </div>
-    </header>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- 1. Секция ФОРМА ОТЧЕТА -->
+        <section id="form-section" class="mb-8">
+            <form id="reportForm" class="space-y-4 card p-4 rounded-xl">
+                <div>
+                    <label for="settlement" class="block text-sm font-medium mb-1">Поселение (Обязательно)</label>
+                    <select id="settlement" name="settlement" required class="input-field w-full p-2 rounded-lg">
+                        <!-- Options will be populated by JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="address" class="block text-sm font-medium mb-1">Улица, адрес</label>
+                    <input type="text" id="address" name="address" class="input-field w-full p-2 rounded-lg" placeholder="Например: Ленина 10">
+                </div>
+                <div>
+                    <label for="sentiment" class="block text-sm font-medium mb-1">Настроение жильцов (Обязательно)</label>
+                    <select id="sentiment" name="sentiment" required class="input-field w-full p-2 rounded-lg">
+                        <option value="">Выберите настроение</option>
+                        <option value="positive">Позитивное (за)</option>
+                        <option value="neutral">Нейтральное (безразлично)</option>
+                        <option value="negative">Негативное (против)</option>
+                        <option value="unknown">Неизвестно (не удалось поговорить)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="comment" class="block text-sm font-medium mb-1">Комментарий (Опционально)</label>
+                    <textarea id="comment" name="comment" rows="3" class="input-field w-full p-2 rounded-lg" placeholder="Кратко о проблемах, просьбах, или о чем говорили..."></textarea>
+                </div>
+                <button type="submit" class="btn-primary w-full p-3 font-semibold rounded-xl flex items-center justify-center">
+                    <i data-lucide="send" class="w-5 h-5 mr-2"></i> Отправить Отчет
+                </button>
+            </form>
+        </section>
 
-        <!-- Секция Формы -->
-        <section id="form" class="space-y-6">
-            <div class="bg-white p-6 rounded-xl shadow-lg">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Ввод данных</h2>
-                <form id="reportForm" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Поселение -->
-                    <div>
-                        <label for="settlement" class="block text-sm font-medium text-gray-700">Населенный пункт</label>
-                        <select id="settlement" name="settlement" required class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white">
-                            <!-- Опции будут добавлены JavaScript -->
-                        </select>
-                    </div>
-
-                    <!-- Улица -->
-                    <div>
-                        <label for="street" class="block text-sm font-medium text-gray-700">Улица</label>
-                        <input type="text" id="street" name="street" required class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-
-                    <!-- Дом -->
-                    <div>
-                        <label for="house" class="block text-sm font-medium text-gray-700">Дом / Номер участка</label>
-                        <input type="text" id="house" name="house" required class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-
-                    <!-- Квартира -->
-                    <div>
-                        <label for="apartment" class="block text-sm font-medium text-gray-700">Квартира (опционально)</label>
-                        <input type="text" id="apartment" name="apartment" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-
-                    <!-- Действие -->
-                    <div>
-                        <label for="action" class="block text-sm font-medium text-gray-700">Действие</label>
-                        <select id="action" name="action" required class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white">
-                            <option value="">Выберите...</option>
-                            <option value="Встреча">Встреча (провели агитацию)</option>
-                            <option value="Не открыли">Не открыли</option>
-                            <option value="Отказались">Отказались (от агитации)</option>
-                            <option value="Не проживает">Не проживает</option>
-                            <option value="Другое">Другое</option>
-                        </select>
-                    </div>
-
-                    <!-- Лояльность -->
-                    <div>
-                        <label for="loyalty" class="block text-sm font-medium text-gray-700">Лояльность</label>
-                        <select id="loyalty" name="loyalty" required class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white">
-                            <option value="">Выберите...</option>
-                            <option value="Лоялен">Лоялен</option>
-                            <option value="Нейтрален">Нейтрален</option>
-                            <option value="Нелоялен">Нелоялен</option>
-                            <option value="Не определено">Не определено (если не встретили)</option>
-                        </select>
-                    </div>
-
-                    <!-- Требуется Повтор -->
-                    <div class="flex items-center space-x-2 md:col-span-2">
-                        <input type="checkbox" id="requiresFollowup" name="requiresFollowup" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
-                        <label for="requiresFollowup" class="text-sm font-medium text-gray-700">Требуется повторный визит / дополнительная информация</label>
-                    </div>
-
-                    <!-- Комментарий -->
-                    <div class="md:col-span-2">
-                        <label for="comment" class="block text-sm font-medium text-gray-700">Комментарий (важные детали)</label>
-                        <textarea id="comment" name="comment" rows="3" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
-                    </div>
-
-                    <!-- Кнопка определения местоположения -->
-                    <div class="md:col-span-2 flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
-                         <div id="locationStatus" class="text-sm text-gray-600">
-                            <i data-lucide="map-pin" class="h-4 w-4 inline mr-1 text-gray-500"></i>
-                            Координаты: <span id="latDisplay">N/A</span>, <span id="lngDisplay">N/A</span>
-                         </div>
-                         <button type="button" onclick="getCurrentLocation()" class="flex items-center px-4 py-2 bg-yellow-500 text-white font-medium rounded-lg hover:bg-yellow-600 transition shadow-md">
-                            <i data-lucide="locate-fixed" class="h-5 w-5 mr-2"></i>
-                            Определить GPS
-                        </button>
-                        <input type="hidden" id="latitude" name="latitude">
-                        <input type="hidden" id="longitude" name="longitude">
-                    </div>
-
-                    <!-- Кнопка Отправки -->
-                    <div class="md:col-span-2">
-                        <button type="submit" class="w-full flex items-center justify-center px-4 py-3 border border-transparent text-lg font-medium rounded-lg shadow-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50 transition transform hover:scale-[1.01]">
-                            <i data-lucide="send" class="h-5 w-5 mr-3"></i>
-                            Сохранить Отчет
-                        </button>
-                    </div>
-                </form>
-            </div>
-            <!-- Последние отчеты -->
-            <div class="bg-white p-6 rounded-xl shadow-lg">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex justify-between items-center">
-                    Последние 5 отчетов
-                    <button onclick="renderLatestData(true)" class="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center">
-                        <i data-lucide="rotate-cw" class="h-4 w-4 mr-1"></i> Обновить
+        <!-- 2. Секция ДАННЫЕ (только для Админа) -->
+        <section id="data-section" class="hidden">
+            <div id="admin-data-view" class="space-y-4">
+                <h2 class="text-lg font-semibold border-b pb-2 mb-4">Админ-панель Отчетов</h2>
+                
+                <div class="flex space-x-2 mb-4">
+                    <button id="loadReportsBtn" onclick="fetchAndRenderReports()" class="btn-primary p-2 text-sm rounded-lg flex-1">
+                        <i data-lucide="download" class="w-4 h-4 inline-block mr-1 align-middle"></i> Загрузить Онлайн
                     </button>
-                </h2>
-                <div id="latestDataContainer" class="space-y-3">
-                    <p class="text-gray-500">Здесь будут отображены ваши последние отчеты.</p>
+                    <button id="clearDataBtn" onclick="window.showAlert('Подтверждение', 'Вы уверены, что хотите удалить ВСЕ данные из базы Firestore?', () => clearAllData(), true)" class="bg-red-500 text-white p-2 text-sm rounded-lg flex-1 hover:bg-red-600">
+                        <i data-lucide="trash-2" class="w-4 h-4 inline-block mr-1 align-middle"></i> Очистить Базу
+                    </button>
                 </div>
-            </div>
-        </section>
 
-        <!-- Секция Отчетов -->
-        <section id="reports" class="space-y-8 hidden">
-             <!-- Статистика -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="bg-white p-5 rounded-xl shadow-lg border-l-4 border-blue-500">
-                    <p class="text-sm font-medium text-gray-500">Всего записей</p>
-                    <p id="statTotal" class="text-3xl font-bold text-gray-900 mt-1">0</p>
-                </div>
-                <div class="bg-white p-5 rounded-xl shadow-lg border-l-4 border-green-500">
-                    <p class="text-sm font-medium text-gray-500">Лоялен</p>
-                    <p id="statLoyal" class="text-3xl font-bold text-gray-900 mt-1">0</p>
-                </div>
-                <div class="bg-white p-5 rounded-xl shadow-lg border-l-4 border-red-500">
-                    <p class="text-sm font-medium text-gray-500">Нелоялен</p>
-                    <p id="statDisloyal" class="text-3xl font-bold text-gray-900 mt-1">0</p>
-                </div>
-            </div>
-
-            <!-- Графики -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="bg-white p-6 rounded-xl shadow-lg">
-                    <h3 class="text-lg font-semibold mb-4">Лояльность по действиям</h3>
-                    <canvas id="loyaltyChart"></canvas>
-                </div>
-                <div class="bg-white p-6 rounded-xl shadow-lg">
-                    <h3 class="text-lg font-semibold mb-4">Действия по поселениям</h3>
-                    <canvas id="settlementChart"></canvas>
-                </div>
-            </div>
-
-            <!-- Таблица с данными -->
-            <div class="bg-white p-6 rounded-xl shadow-lg">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex justify-between items-center">
-                    Полный Отчет
-                    <div class="flex space-x-3">
-                        <button onclick="fetchAndRenderReports()" class="flex items-center px-3 py-2 bg-blue-100 text-blue-700 font-medium rounded-lg hover:bg-blue-200 transition text-sm shadow-sm">
-                            <i data-lucide="refresh-ccw" class="h-4 w-4 mr-2"></i> Обновить данные
-                        </button>
-                        <button onclick="exportToXLSX()" class="flex items-center px-3 py-2 bg-green-500 text-white font-medium rounded-lg hover:bg-green-600 transition text-sm shadow-sm">
-                            <i data-lucide="download" class="h-4 w-4 mr-2"></i> Экспорт в XLSX
-                        </button>
+                <!-- Статистика -->
+                <div id="report-stats" class="grid grid-cols-2 gap-2 text-sm mb-4">
+                    <div class="card p-3 rounded-lg text-center">
+                        <p class="font-bold text-xl text-tma-link" id="totalReports">0</p>
+                        <p class="text-tma-hint">Отчетов всего</p>
                     </div>
-                </h2>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Время</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ФИО</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Адрес</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действие</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Лояльность</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Повтор</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Комментарий</th>
-                            </tr>
-                        </thead>
-                        <tbody id="reportsTableBody" class="bg-white divide-y divide-gray-200">
-                            <tr><td colspan="7" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">Нажмите "Обновить данные" для загрузки отчета.</td></tr>
-                        </tbody>
-                    </table>
+                    <div class="card p-3 rounded-lg text-center">
+                        <p class="font-bold text-xl text-green-500" id="positiveReports">0</p>
+                        <p class="text-tma-hint">Позитив</p>
+                    </div>
+                    <div class="card p-3 rounded-lg text-center col-span-2">
+                        <canvas id="sentimentChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Список отчетов -->
+                <div class="card p-4 rounded-xl">
+                    <h3 class="font-semibold mb-3">Последние 10 Отчетов</h3>
+                    <div id="reportsList" class="space-y-3">
+                        <p class="text-tma-hint" id="loading-indicator">Загрузка данных...</p>
+                        <!-- Reports will be inserted here -->
+                    </div>
                 </div>
             </div>
+            <div id="non-admin-view" class="card p-6 text-center text-red-500 font-semibold rounded-xl hidden">
+                Доступ ограничен. Только для администраторов.
+            </div>
+        </section>
+        
+        <!-- 3. Секция КАРТА (только для Админа) -->
+        <section id="map-section" class="hidden">
+            <h2 class="text-lg font-semibold border-b pb-2 mb-4">Карта Активности</h2>
+            <div id="map-container">
+                <!-- Карта Leaflet будет здесь -->
+            </div>
+            <div class="mt-4 card p-3 rounded-lg">
+                <p class="text-sm text-tma-hint">На карте отображаются кластеры отчетов (синие/красные) и тепловая карта активности.</p>
+            </div>
         </section>
 
-        <!-- Секция Карты -->
-        <section id="map" class="space-y-6 hidden">
-            <div class="bg-white p-6 rounded-xl shadow-lg">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Тепловая Карта и Кластеры Отчетов</h2>
-                <div id="map" class="rounded-xl shadow-inner"></div>
-                <p class="text-sm text-gray-500 mt-4">Карта отображает геолокации, собранные в отчетах. Используйте кластеры для групп и тепловую карту для плотности.</p>
-                <div class="mt-4 flex space-x-4">
-                    <button onclick="mapMode='cluster'; generateMap(dataCache);" class="px-4 py-2 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition">Кластеры</button>
-                    <button onclick="mapMode='heat'; generateMap(dataCache);" class="px-4 py-2 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition">Тепловая Карта</button>
+        <!-- Модальное окно (Alert/Confirm) -->
+        <div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm">
+                <h3 id="alert-title" class="text-xl font-bold mb-3 text-tma-text">Уведомление</h3>
+                <p id="alert-message" class="mb-4 text-tma-text"></p>
+                <div class="flex justify-end space-x-3">
+                    <button id="alert-cancel-btn" class="px-4 py-2 text-sm rounded-lg bg-secondary text-white hidden">Отмена</button>
+                    <button id="alert-ok-btn" class="px-4 py-2 text-sm rounded-lg btn-primary">ОК</button>
                 </div>
             </div>
-        </section>
-
-        <!-- Секция Администрирования -->
-        <section id="admin" class="space-y-6 hidden">
-            <div class="bg-red-50 border border-red-200 p-6 rounded-xl shadow-lg">
-                <h2 class="text-xl font-bold text-red-800 mb-4 flex items-center">
-                    <i data-lucide="alert-triangle" class="h-6 w-6 mr-2"></i>
-                    Администрирование Базы Данных
-                </h2>
-                <p class="text-red-700 mb-6">
-                    Эта секция предназначена только для администраторов. Действия здесь необратимы!
-                </p>
-                <button onclick="showConfirmDeleteModal()" class="flex items-center px-6 py-3 bg-red-600 text-white font-medium rounded-lg shadow-lg hover:bg-red-700 transition transform hover:scale-[1.01]">
-                    <i data-lucide="trash-2" class="h-5 w-5 mr-3"></i>
-                    ОЧИСТИТЬ ВСЮ БАЗУ ДАННЫХ
-                </button>
-            </div>
-        </section>
-
-        <!-- Debug Info -->
-        <div class="mt-8 text-xs text-gray-400 p-4 border-t border-gray-200">
-            <p>Текущий ID Telegram: <span id="debugUserId">N/A</span></p>
-            <p>Статус Админа: <span id="debugAdminStatus">НЕТ</span></p>
-            <p>Версия UI: v2.5</p>
         </div>
+    </div>
 
-    </main>
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"; // 👈 ИМПОРТ AUTH
+        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, setDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    <!-- ОСНОВНОЙ СКРИПТ -->
-<script>
-    // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ FIREBASE ---
-    let app;
-    let db;
-    let userTelegramId = null; // ID текущего пользователя Telegram
-    let isAdmin = false;       // Статус администратора
+        // --- КОНФИГУРАЦИЯ FIREBASE (ЗАМЕНИТЕ НА СВОИ КЛЮЧИ) ---
+        const firebaseConfig = {
+             // Здесь должны быть ваши ключи!
+        };
 
-    // ⚠️ ВАЖНО: Вставьте сюда свои ключи конфигурации Firebase
-    const firebaseConfig = {
-        apiKey: "AIzaSyDVeRXO16KtIwoJQb4uHQuCsEv3xTLBGhI", // ЗАМЕНИТЬ НА СВОЙ КЛЮЧ
-        authDomain: "agitator-notebook.firebaseapp.com", // ЗАМЕНИТЬ НА СВОЙ DOMAIN
-        projectId: "agitator-notebook", // ЗАМЕНИТЬ НА СВОЙ PROJECT ID
-        storageBucket: "agitator-notebook.firebasestorage.app",
-        messagingSenderId: "518555352011",
-        appId: "1:518555352011:web:2b1f8791097e34d16853e5"
-    };
+        // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
+        const isTMA = typeof Telegram !== 'undefined' && Telegram.WebApp.initData;
+        const app = firebaseConfig.projectId ? initializeApp(firebaseConfig) : null;
+        const db = app ? getFirestore(app) : null;
+        const auth = app ? getAuth(app) : null; // 👈 ИНИЦИАЛИЗАЦИЯ AUTH
 
-    const ADMIN_IDS = [541459471]; // ⚠️ ЗАМЕНИТЬ НА ID АДМИНИСТРАТОРОВ TELEGRAM
+        let userTelegramId = isTMA ? (new URLSearchParams(Telegram.WebApp.initData).get('user') ? JSON.parse(new URLSearchParams(Telegram.WebApp.initData).get('user')).id : null) : null;
+        let isAdmin = false;
+        let dataCache = JSON.parse(localStorage.getItem('reports_cache') || '[]');
+        let chartInstance = null;
+        let mapInstance = null;
+        let markerClusterLayer = null;
 
-    // Инициализация Firebase с добавлением проверки (НОВОЕ ИЗМЕНЕНИЕ)
-    try {
-        // ВАЖНО: Используем 'firebase' из compat.js
-        app = firebase.initializeApp(firebaseConfig);
-        db = app.firestore();
-        console.log("✅ Firebase и Firestore успешно инициализированы.");
-        // Добавляем настройки для совместимости с будущими версиями
-        db.settings({ timestampsInSnapshots: true });
-    } catch (e) {
-        console.error("❌ Ошибка инициализации Firebase:", e);
-        // Показываем критическую ошибку
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось инициализировать Firebase: ${e.message}. Проверьте console.log и ключи в firebaseConfig.`);
-    }
+        // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ UI ---
+        
+        window.showAlert = (title, message, callback = null, isConfirm = false) => {
+            const modal = document.getElementById('alert-modal');
+            document.getElementById('alert-title').textContent = title;
+            document.getElementById('alert-message').textContent = message;
+            const okBtn = document.getElementById('alert-ok-btn');
+            const cancelBtn = document.getElementById('alert-cancel-btn');
 
-    // ВАЖНЫЕ ПЕРЕМЕННЫЕ
-    const isTMA = typeof Telegram !== 'undefined' && Telegram.WebApp;
-    let dataCache = [];
-    let mapInstance = null;
-    let markerClusterGroup = null;
-    let mapMode = 'cluster';
-
-    // ВАШИ ПОСЕЛЕНИЯ (ЗАМЕНИТЕ НА СВОЙ СПИСОК)
-    const settlementsList = [
-        "Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск", "Казань", "Нижний Новгород"
-    ];
-
-    // --- УТИЛИТЫ ---
-
-    // Глобальный обработчик подтверждения для модального окна
-    let modalConfirmHandler = () => {};
-
-    function showConfirmDeleteModal() {
-        if (!isAdmin) {
-            showAlert('Ошибка доступа', 'Вы не являетесь администратором.');
-            return;
-        }
-
-        showAlert(
-            'Подтверждение удаления',
-            'Вы уверены, что хотите безвозвратно удалить ВСЕ данные из коллекции "reports"? Это действие НЕОБРАТИМО.',
-            () => {
-                deleteCollection('reports');
-            },
-            true // showConfirm
-        );
-    }
-
-    function showAlert(title, message, onConfirm = null, showConfirm = false) {
-        document.getElementById('modalTitle').textContent = title;
-        document.getElementById('modalMessage').textContent = message;
-        const confirmBtn = document.getElementById('modalConfirmBtn');
-
-        if (showConfirm && onConfirm) {
-            confirmBtn.classList.remove('hidden');
-            modalConfirmHandler = () => {
-                document.getElementById('modalOverlay').classList.add('hidden');
-                onConfirm(); // Выполняем действие
+            okBtn.onclick = () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                if (callback) callback(true);
             };
-        } else {
-            confirmBtn.classList.add('hidden');
-            modalConfirmHandler = () => {
-                document.getElementById('modalOverlay').classList.add('hidden');
+
+            if (isConfirm) {
+                cancelBtn.classList.remove('hidden');
+                cancelBtn.onclick = () => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                    if (callback) callback(false);
+                };
+            } else {
+                cancelBtn.classList.add('hidden');
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        };
+
+        window.showSection = (sectionName) => {
+            document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
+            document.getElementById(`${sectionName}-section`).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.tab-btn[data-section="${sectionName}"]`).classList.add('active');
+
+            if (sectionName === 'data' || sectionName === 'map') {
+                if (isAdmin) {
+                    document.getElementById('non-admin-view').classList.add('hidden');
+                    document.getElementById('admin-data-view').classList.remove('hidden');
+                    // Если это вкладка Админа, обновляем данные
+                    if (dataCache.length === 0) {
+                        fetchAndRenderReports(true); // Принудительная загрузка
+                    } else {
+                        renderLatestData(dataCache);
+                        if (sectionName === 'map') generateMap(dataCache);
+                    }
+                } else {
+                    document.getElementById('non-admin-view').classList.remove('hidden');
+                    document.getElementById('admin-data-view').classList.add('hidden');
+                }
+            }
+            if (sectionName === 'map' && isAdmin) {
+                // Инициализация карты, если она еще не создана
+                 if (!mapInstance) generateMap(dataCache);
+                 else if (mapInstance) mapInstance.invalidateSize(); // Важно для Leaflet в скрытом блоке
+            }
+        };
+
+        const updateOfflineStatus = (isOnline = false) => {
+            const statusElement = document.getElementById('auth-status');
+            const cacheStatusElement = document.getElementById('debugCacheStatus');
+
+            if (isOnline) {
+                statusElement.textContent = '(Онлайн, Auth OK)';
+                statusElement.classList.remove('text-red-500', 'text-orange-500');
+                statusElement.classList.add('text-green-500');
+            } else if (app) {
+                // Если Auth null, но приложение инициализировано
+                statusElement.textContent = '(Offline, Auth Fail)';
+                statusElement.classList.remove('text-green-500');
+                statusElement.classList.add('text-red-500');
+            } else {
+                 statusElement.textContent = '(Firebase Missing)';
+                 statusElement.classList.remove('text-green-500');
+                 statusElement.classList.add('text-orange-500');
+            }
+
+            cacheStatusElement.textContent = `${dataCache.length} записей`;
+        };
+
+        const populateSettlements = async () => {
+            const select = document.getElementById('settlement');
+            select.innerHTML = '<option value="">Загрузка поселений...</option>';
+
+            // В отличие от reports, settlements доступны для чтения всем аутентифицированным пользователям
+            if (db && auth.currentUser) {
+                try {
+                    const settlementsRef = collection(db, "settlements");
+                    const snapshot = await getDocs(settlementsRef);
+                    
+                    const settlements = snapshot.docs.map(doc => doc.data().name).sort();
+
+                    select.innerHTML = '<option value="">Выберите поселение</option>';
+                    settlements.forEach(name => {
+                        const option = document.createElement('option');
+                        option.value = name;
+                        option.textContent = name;
+                        select.appendChild(option);
+                    });
+
+                } catch (e) {
+                    console.error("Error loading settlements:", e);
+                    select.innerHTML = '<option value="">Ошибка загрузки (Проверьте правила/Auth)</option>';
+                }
+            } else {
+                select.innerHTML = '<option value="">Auth не пройдена или Firebase не настроен</option>';
+            }
+        };
+        
+        // --- АУТЕНТИФИКАЦИЯ FIREBASE (КРИТИЧЕСКИ ВАЖНО) ---
+        
+        const authenticateUser = async () => {
+            if (!isTMA || !app || !userTelegramId) {
+                console.warn('TMA или Firebase не готовы для аутентификации.');
+                updateOfflineStatus();
+                return;
+            }
+
+            // 1. Получение Custom Token от вашего Python-бота
+            // В реальном приложении это должен быть безопасный AJAX-запрос к вашему бэкенду.
+            // Предположим, что вы отправляете initData через fetch.
+            
+            const authData = Telegram.WebApp.initData;
+            
+            // Заглушка: Здесь должен быть реальный запрос к бэкенду!
+            // Пример: const response = await fetch('YOUR_BOT_API_ENDPOINT/auth', { method: 'POST', body: authData });
+            // Вместо этого мы используем встроенные в Canvas переменные, если они доступны
+            // Здесь мы полагаемся на то, что бот должен предоставить токен
+            
+            let customToken = '';
+            
+            // ПРИМЕЧАНИЕ: В реальном TMA, токен генерируется ботом и передается
+            // через URL или другим безопасным способом. Здесь используем заглушку,
+            // предполагая, что вы замените это реальным запросом.
+            // Для целей Canvas используем глобальную переменную, если она определена.
+            if (typeof __initial_auth_token !== 'undefined') {
+                 customToken = __initial_auth_token;
+            } else {
+                 // ВНИМАНИЕ: Без токена, пользователь будет анонимным, и все 
+                 // правила, требующие Custom Claims, провалятся.
+                 console.warn("Custom Auth Token не предоставлен. Попытка анонимного входа.");
+            }
+
+            try {
+                if (customToken) {
+                     // Вход с токеном, который может содержать claims (admin: true)
+                    const userCredential = await signInWithCustomToken(auth, customToken);
+                    
+                    // Успешный вход. Получаем токен с claims.
+                    const tokenResult = await userCredential.user.getIdTokenResult();
+                    isAdmin = tokenResult.claims.admin === true;
+                    
+                    // Обновляем userTelegramId (становится Firebase UID)
+                    userTelegramId = userCredential.user.uid;
+                    
+                    console.log('Firebase Auth Success. Is Admin:', isAdmin);
+                }
+            } catch (error) {
+                console.error("Firebase Authentication Error:", error);
+                window.showAlert('Ошибка Auth', 'Не удалось войти в Firebase. ' + error.message);
+            }
+            
+            // Настраиваем слушателя состояния Auth для обновления UI
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    updateOfflineStatus(true); // Онлайн, аутентификация успешна
+                    // Если админ, запускаем загрузку данных
+                    if (isAdmin) fetchAndRenderReports(false);
+                } else {
+                    updateOfflineStatus(false); // Оффлайн / Нет аутентификации
+                }
+                
+                // Обновляем отладочные поля после Auth
+                document.getElementById('debugUserId').textContent = userTelegramId || 'Нет ID';
+                document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'НЕТ';
+                
+                // После успешного Auth, загружаем поселения
+                populateSettlements();
+            });
+
+            // Возвращаем флаг, чтобы window.onload мог дождаться
+            return auth.currentUser !== null;
+        };
+
+        // --- ОБРАБОТКА ФОРМЫ И ОТПРАВКА ---
+
+        document.getElementById('reportForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!auth.currentUser) {
+                showAlert('ВНИМАНИЕ', 'Вы не аутентифицированы. Подождите, пока Auth не станет "Online", или проверьте настройки Firebase/Бота.');
+                return;
+            }
+            if (isTMA) Telegram.WebApp.MainButton.showProgress();
+
+            const form = e.target;
+            const data = {
+                settlement: form.settlement.value,
+                address: form.address.value,
+                sentiment: form.sentiment.value,
+                comment: form.comment.value || '',
+                timestamp: new Date(),
+                reporterId: userTelegramId, // Используем Firebase UID (который должен быть ID Telegram)
             };
-        }
 
-        document.getElementById('modalOverlay').classList.remove('hidden');
-    }
-
-    function showLoader() {
-        document.getElementById('loadingOverlay').style.display = 'flex';
-    }
-
-    function hideLoader() {
-        document.getElementById('loadingOverlay').style.display = 'none';
-    }
-
-    function showSection(sectionId, element = null) {
-        document.querySelectorAll('section').forEach(section => {
-            section.classList.add('hidden');
+            try {
+                if (db) {
+                    // Используем коллекцию 'reports'
+                    const docRef = await addDoc(collection(db, "reports"), data);
+                    showAlert('Отчет отправлен!', `Ваш отчет для ${data.settlement} сохранен в облаке.`);
+                    form.reset();
+                    // Обновляем данные на панели админа, если пользователь - админ
+                    if (isAdmin) fetchAndRenderReports();
+                } else {
+                    // Если нет подключения к Firestore, сохраняем в локальный кеш
+                    dataCache.push(data);
+                    localStorage.setItem('reports_cache', JSON.stringify(dataCache));
+                    showAlert('Сохранено локально', `Отчет для ${data.settlement} сохранен локально. Отправьте его, когда восстановится соединение.`);
+                    form.reset();
+                    updateOfflineStatus();
+                }
+            } catch (e) {
+                console.error("Ошибка при отправке отчета:", e);
+                // Если ошибка связана с недостаточными правами, сообщаем об этом
+                if (e.code === 'permission-denied') {
+                     showAlert('Ошибка доступа', 'Отказано в доступе. Проверьте правила Firebase и Auth статус.');
+                } else {
+                     showAlert('Ошибка', 'Произошла ошибка при сохранении: ' + e.message);
+                }
+            } finally {
+                if (isTMA) Telegram.WebApp.MainButton.hideProgress();
+            }
         });
-        document.getElementById(sectionId).classList.remove('hidden');
 
-        document.querySelectorAll('.nav-button').forEach(btn => {
-            btn.classList.remove('nav-button-active');
-        });
-        if (element) {
-            element.classList.add('nav-button-active');
-        }
-    }
+        // --- УПРАВЛЕНИЕ ДАННЫМИ (АДМИН) ---
 
-    function populateSettlements() {
-        const select = document.getElementById('settlement');
-        select.innerHTML = '<option value="">Выберите...</option>';
-        settlementsList.forEach(settlement => {
-            const option = document.createElement('option');
-            option.value = settlement;
-            option.textContent = settlement;
-            select.appendChild(option);
-        });
-    }
+        const fetchAndRenderReports = async (forceReload = false) => {
+            if (!db || !isAdmin) return;
 
-    // --- ГЕОЛОКАЦИЯ ---
+            document.getElementById('loading-indicator').textContent = 'Загрузка данных...';
 
-    let currentLatitude = null;
-    let currentLongitude = null;
+            if (isTMA) Telegram.WebApp.MainButton.showLoader();
 
-    function getCurrentLocation() {
+            try {
+                // Если не нужно принудительно обновлять, используем кеш
+                if (!forceReload && dataCache.length > 0) {
+                     renderLatestData(dataCache);
+                     return;
+                }
+                
+                // Загружаем все отчеты (или последние 1000 для оптимизации)
+                const reportsRef = collection(db, "reports");
+                // Сортируем по timestamp и ограничиваем, чтобы не перегружать
+                const q = query(reportsRef, orderBy("timestamp", "desc"), limit(1000)); 
+                const snapshot = await getDocs(q);
+                
+                const reports = snapshot.docs.map(doc => ({ 
+                    id: doc.id,
+                    ...doc.data(), 
+                    timestamp: doc.data().timestamp.toDate() // Преобразование Firestore Timestamp
+                }));
+
+                dataCache = reports;
+                localStorage.setItem('reports_cache', JSON.stringify(dataCache));
+                updateOfflineStatus();
+                renderLatestData(reports);
+                generateMap(reports);
+
+            } catch (e) {
+                console.error("Error fetching reports:", e);
+                showAlert('Ошибка загрузки', 'Не удалось загрузить отчеты: ' + e.message + '. Проверьте подключение и права админа.');
+                document.getElementById('loading-indicator').textContent = 'Ошибка загрузки данных.';
+            } finally {
+                if (isTMA) Telegram.WebApp.MainButton.hideLoader();
+            }
+        };
+
+        window.renderLatestData = (reports) => {
+            const reportsList = document.getElementById('reportsList');
+            reportsList.innerHTML = '';
+            
+            // Считаем статистику
+            const total = reports.length;
+            const positive = reports.filter(r => r.sentiment === 'positive').length;
+            const negative = reports.filter(r => r.sentiment === 'negative').length;
+            const neutral = reports.filter(r => r.sentiment === 'neutral').length;
+            const unknown = reports.filter(r => r.sentiment === 'unknown').length;
+            
+            document.getElementById('totalReports').textContent = total;
+            document.getElementById('positiveReports').textContent = positive;
+            
+            // Обновление графика
+            if (chartInstance) chartInstance.destroy();
+            const ctx = document.getElementById('sentimentChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Позитив', 'Нейтрально', 'Негатив', 'Неизвестно'],
+                    datasets: [{
+                        data: [positive, neutral, negative, unknown],
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#6b7280'],
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: 'var(--tg-theme-text-color)'
+                            }
+                        },
+                        title: {
+                            display: false
+                        }
+                    }
+                }
+            });
+
+
+            // Отображение списка (только последние 10)
+            const latest10 = reports.slice(0, 10);
+
+            if (latest10.length === 0) {
+                 reportsList.innerHTML = '<p class="text-tma-hint">Нет отчетов для отображения.</p>';
+                 return;
+            }
+
+            latest10.forEach(report => {
+                const date = report.timestamp ? report.timestamp.toLocaleDateString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'Нет даты';
+                let colorClass = '';
+                switch (report.sentiment) {
+                    case 'positive': colorClass = 'bg-green-100 text-green-700'; break;
+                    case 'negative': colorClass = 'bg-red-100 text-red-700'; break;
+                    case 'neutral': colorClass = 'bg-yellow-100 text-yellow-700'; break;
+                    default: colorClass = 'bg-gray-100 text-gray-700';
+                }
+
+                const reportDiv = document.createElement('div');
+                reportDiv.className = `p-3 rounded-lg border border-gray-200 ${colorClass}`;
+                reportDiv.innerHTML = `
+                    <p class="font-semibold">${report.settlement} (${report.address || 'Адрес не указан'})</p>
+                    <p class="text-xs text-tma-hint">От: ${report.reporterId} &bull; ${date}</p>
+                    <p class="mt-1 text-sm">${report.comment || 'Нет комментария'}</p>
+                `;
+                reportsList.appendChild(reportDiv);
+            });
+        };
+
+        window.generateMap = (reports) => {
+            if (!document.getElementById('map-section').classList.contains('hidden')) {
+                const geoData = reports.filter(r => r.lat && r.lng).map(r => [r.lat, r.lng, r.sentiment === 'positive' ? 0.8 : (r.sentiment === 'negative' ? 1.0 : 0.4)]);
+                const markerData = reports.filter(r => r.lat && r.lng);
+
+                if (mapInstance) {
+                    mapInstance.remove();
+                    mapInstance = null;
+                }
+
+                const initialLat = markerData.length > 0 ? markerData[0].lat : 55.751244; // Москва
+                const initialLng = markerData.length > 0 ? markerData[0].lng : 37.618423;
+
+                mapInstance = L.map('map-container').setView([initialLat, initialLng], 6);
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+                }).addTo(mapInstance);
+
+                // Тепловая карта
+                L.heatLayer(geoData, { 
+                    radius: 25, 
+                    blur: 15, 
+                    maxZoom: 17,
+                    gradient: {0.0: 'blue', 0.5: 'lime', 1.0: 'red'}
+                }).addTo(mapInstance);
+                
+                // Маркеры с кластеризацией
+                markerClusterLayer = L.markerClusterGroup();
+
+                markerData.forEach(r => {
+                    let color = 'gray';
+                    if (r.sentiment === 'positive') color = 'green';
+                    else if (r.sentiment === 'negative') color = 'red';
+                    else if (r.sentiment === 'neutral') color = 'blue';
+
+                    const markerHtmlStyles = `
+                        background-color: ${color};
+                        width: 1.5rem;
+                        height: 1.5rem;
+                        display: block;
+                        left: -0.75rem;
+                        top: -0.75rem;
+                        position: relative;
+                        border-radius: 3rem 3rem 0;
+                        transform: rotate(45deg);
+                        border: 1px solid #FFFFFF
+                    `;
+
+                    const icon = L.divIcon({
+                        className: "my-custom-pin",
+                        iconAnchor: [0, 24],
+                        popupAnchor: [0, -36],
+                        html: `<span style="${markerHtmlStyles}" />`
+                    });
+
+                    const popupContent = `
+                        <h4 class="font-bold text-tma-text">${r.settlement}</h4>
+                        <p class="text-tma-text">Адрес: ${r.address || 'Не указан'}</p>
+                        <p class="text-tma-text">Настроение: ${r.sentiment}</p>
+                        <p class="text-tma-text">Комментарий: ${r.comment || 'Нет'}</p>
+                        <p class="text-xs text-tma-hint">Отчет: ${r.timestamp.toLocaleDateString()}</p>
+                    `;
+
+                    const marker = L.marker([r.lat, r.lng], { icon: icon })
+                        .bindPopup(popupContent);
+                    
+                    markerClusterLayer.addLayer(marker);
+                });
+
+                mapInstance.addLayer(markerClusterLayer);
+
+                // Корректировка зума, если есть маркеры
+                if (markerData.length > 0) {
+                    mapInstance.fitBounds(markerClusterLayer.getBounds(), { padding: [50, 50] });
+                }
+            }
+        };
+
+
+        const clearAllData = async () => {
+             if (!db || !isAdmin) {
+                 showAlert('Ошибка', 'У вас нет прав администратора для этой операции.');
+                 return false;
+             }
+
+             if (isTMA) Telegram.WebApp.MainButton.showLoader();
+
+             const batchSize = 100;
+             let deletedCount = 0;
+
+             try {
+                const reportsRef = collection(db, "reports");
+                let q = query(reportsRef, limit(batchSize));
+                
+                let snapshot;
+                do {
+                    snapshot = await getDocs(q);
+                    
+                    if (snapshot.size === 0) break;
+
+                    const batch = writeBatch(db); // Используем writeBatch
+                    
+                    snapshot.docs.forEach(doc => {
+                        batch.delete(doc.ref);
+                    });
+
+                    await batch.commit();
+                    deletedCount += snapshot.size;
+
+                    // Установка нового запроса для следующей партии
+                    q = query(reportsRef, limit(batchSize));
+
+                } while (snapshot.size > 0);
+
+
+                dataCache = []; // Очищаем локальный кеш после удаления
+                updateOfflineStatus();
+                showAlert('Успешно!', `Удалено ${deletedCount} записей. Данные Firestore очищены.`);
+
+                if (isAdmin) fetchAndRenderReports();
+
+                return true;
+
+            } catch (e) {
+                 console.error("Error deleting collection:", e);
+                 showAlert('Ошибка', 'Произошла ошибка при удалении коллекции: ' + e.message);
+                 return false;
+            } finally {
+                 if (isTMA) Telegram.WebApp.MainButton.hideProgress();
+            }
+        };
+
+
+        // --- ИНИЦИАЛИЗАЦИЯ WEBAPP ---
         if (isTMA) {
-             // Для Telegram Mini App
-             Telegram.WebApp.MainButton.setText('Определяем GPS...');
-             Telegram.WebApp.MainButton.showProgress();
-
-             Telegram.WebApp.sendData(JSON.stringify({ type: 'get_location' }));
-             // Обработка ответа будет в боте, который отправит данные обратно через webapp_data_handler (если бы мы работали с ботом)
-             // В текущем окружении Canvas, мы используем стандартный API
+            Telegram.WebApp.ready();
+            Telegram.WebApp.expand();
         }
 
-        const statusDisplay = document.getElementById('locationStatus');
-        statusDisplay.innerHTML = `<i data-lucide="loader-2" class="h-4 w-4 inline mr-1 text-yellow-500 animate-spin"></i> Определение...`;
-        lucide.createIcons();
-
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    currentLatitude = position.coords.latitude;
-                    currentLongitude = position.coords.longitude;
-                    document.getElementById('latitude').value = currentLatitude;
-                    document.getElementById('longitude').value = currentLongitude;
-                    document.getElementById('latDisplay').textContent = currentLatitude.toFixed(6);
-                    document.getElementById('lngDisplay').textContent = currentLongitude.toFixed(6);
-
-                    statusDisplay.innerHTML = `<i data-lucide="check-circle" class="h-4 w-4 inline mr-1 text-green-500"></i> Координаты: ${currentLatitude.toFixed(6)}, ${currentLongitude.toFixed(6)}`;
-                    lucide.createIcons();
-
-                    if (isTMA) {
-                        Telegram.WebApp.MainButton.hideProgress();
-                        Telegram.WebApp.MainButton.setText('Сохранить Отчет');
-                    }
-                },
-                (error) => {
-                    console.error("Ошибка геолокации:", error);
-                    statusDisplay.innerHTML = `<i data-lucide="map-pin-off" class="h-4 w-4 inline mr-1 text-red-500"></i> Ошибка: ${error.message}`;
-                    lucide.createIcons();
-                    showAlert('Ошибка GPS', 'Не удалось определить местоположение. Убедитесь, что разрешение на геолокацию предоставлено.');
-
-                    if (isTMA) {
-                        Telegram.WebApp.MainButton.hideProgress();
-                        Telegram.WebApp.MainButton.setText('Сохранить Отчет');
-                    }
-                },
-                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-            );
-        } else {
-            statusDisplay.innerHTML = `<i data-lucide="map-pin-off" class="h-4 w-4 inline mr-1 text-red-500"></i> Геолокация не поддерживается.`;
+        // 🔑 Инициализация при загрузке (Ожидаем authenticateUser) - ИСПРАВЛЕНО
+        window.onload = async () => {
+            // 1. Сначала аутентификация для установки isAdmin и userTelegramId
+            await authenticateUser(); // 👈 КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ
+            
+            // 2. Затем заполнение интерфейса
+            populateSettlements(); 
+            updateOfflineStatus();
+            window.showSection('form');
             lucide.createIcons();
-            showAlert('Ошибка GPS', 'Ваш браузер или устройство не поддерживает геолокацию.');
-        }
-    }
 
-    // --- АУТЕНТИФИКАЦИЯ И ПРОВЕРКА АДМИНА ---
-
-    async function authenticateUser() {
-        // Логика аутентификации (проверка ID в Mini App)
-        // В этом упрощенном TMA/Canvas приложении мы определяем ID и статус админа
-        // на основе initData (которого здесь нет) или заглушки.
-        try {
-            if (isTMA && Telegram.WebApp.initDataUnsafe.user) {
-                userTelegramId = Telegram.WebApp.initDataUnsafe.user.id;
-            } else {
-                // Заглушка для Canvas: используем ID из ADMIN_IDS для имитации админа
-                userTelegramId = ADMIN_IDS[0];
-            }
-
-            if (ADMIN_IDS.includes(userTelegramId)) {
-                isAdmin = true;
-                document.getElementById('navReports').removeAttribute('disabled');
-                document.getElementById('navMap').removeAttribute('disabled');
-                document.getElementById('navAdmin').classList.remove('hidden');
-            } else {
-                isAdmin = false;
-            }
-
-            // Обновляем информацию для отладки
+            // ОТЛАДКА: Повторное обновление полей, чтобы гарантировать актуальность
             document.getElementById('debugUserId').textContent = userTelegramId || 'Нет ID';
             document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'НЕТ';
 
-        } catch (e) {
-            console.error("Ошибка аутентификации пользователя:", e);
-            showAlert('Ошибка Аутентификации', 'Не удалось определить ID пользователя Telegram.');
-        }
-    }
-
-
-    // --- ОФФЛАЙН/КЭШ ЛОГИКА ---
-
-    function saveToCache(data) {
-        try {
-            const cachedReports = JSON.parse(localStorage.getItem('cachedReports') || '[]');
-            cachedReports.push(data);
-            localStorage.setItem('cachedReports', JSON.stringify(cachedReports));
-            updateOfflineStatus();
-            renderLatestData(false); // Обновить список последних отчетов
-            return true;
-        } catch (e) {
-            console.error("Ошибка сохранения в кэш:", e);
-            showAlert('Ошибка Кэша', 'Не удалось сохранить отчет в локальное хранилище.');
-            return false;
-        }
-    }
-
-    function updateOfflineStatus() {
-        const cachedReports = JSON.parse(localStorage.getItem('cachedReports') || '[]');
-        const badge = document.getElementById('offlineBadge');
-        if (cachedReports.length > 0) {
-            badge.textContent = `ОФФЛАЙН КЭШ (${cachedReports.length})`;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
-        }
-    }
-
-    async function processCache() {
-        const cachedReports = JSON.parse(localStorage.getItem('cachedReports') || '[]');
-        if (cachedReports.length === 0) return true; // Ничего делать не нужно
-
-        if (isTMA) Telegram.WebApp.MainButton.setText(`Отправка кэша (${cachedReports.length})...`);
-        showLoader();
-
-        try {
-            // Массовая отправка (для простоты - последовательная)
-            for (const report of cachedReports) {
-                await db.collection('reports').add(report);
+            if (!firebaseConfig.projectId) {
+                window.showAlert('ВНИМАНИЕ', 'Необходимо вставить ключи конфигурации Firebase в код.');
             }
-            // Если все успешно:
-            localStorage.removeItem('cachedReports');
-            updateOfflineStatus();
-            showAlert('Успех', `Успешно отправлено ${cachedReports.length} кэшированных отчетов в Firebase.`);
-            if (isAdmin) fetchAndRenderReports(); // Обновить отчеты админа
-            renderLatestData(true); // Обновить последние отчеты пользователя
-            return true;
-
-        } catch (e) {
-            console.error("Ошибка отправки кэша:", e);
-            showAlert('Ошибка', `Не удалось отправить кэш в Firebase: ${e.message}. Попробуйте позже.`);
-            return false;
-        } finally {
-            hideLoader();
-            if (isTMA) Telegram.WebApp.MainButton.setText('Сохранить Отчет');
-        }
-    }
-
-    // --- ОТПРАВКА ДАННЫХ ---
-
-    document.getElementById('reportForm').onsubmit = async (e) => {
-        e.preventDefault();
-        const form = e.target;
-        const submitButton = form.querySelector('button[type="submit"]');
-
-        if (isTMA) Telegram.WebApp.MainButton.showProgress();
-        submitButton.disabled = true;
-        submitButton.textContent = 'Сохранение...';
-
-        const reportData = {
-            user_id: userTelegramId,
-            full_name: isTMA && Telegram.WebApp.initDataUnsafe.user ? (Telegram.WebApp.initDataUnsafe.user.first_name + ' ' + (Telegram.WebApp.initDataUnsafe.user.last_name || '')).trim() : userTelegramId,
-            username: isTMA && Telegram.WebApp.initDataUnsafe.user ? (Telegram.WebApp.initDataUnsafe.user.username || 'n/a') : 'n/a',
-            timestamp: new Date().getTime(),
-            settlement: form.settlement.value,
-            street: form.street.value.trim(),
-            house: form.house.value.trim(),
-            apartment: form.apartment.value.trim() || 'N/A',
-            action: form.action.value,
-            loyalty: form.loyalty.value,
-            requires_followup: form.requiresFollowup.checked,
-            comment: form.comment.value.trim() || 'N/A',
-            location: (currentLatitude && currentLongitude) ? {
-                latitude: currentLatitude,
-                longitude: currentLongitude
-            } : null
         };
 
-        try {
-            // Сначала пробуем отправить
-            if (db) {
-                await db.collection('reports').add(reportData);
-                showAlert('Успех!', 'Отчет успешно сохранен в Firebase.');
-                form.reset();
-                currentLatitude = null;
-                currentLongitude = null;
-                document.getElementById('latDisplay').textContent = 'N/A';
-                document.getElementById('lngDisplay').textContent = 'N/A';
-
-                // Попытаться отправить кэш после успешной онлайн-отправки
-                await processCache();
-
-            } else {
-                // Если нет соединения с Firebase, сохраняем в кэш
-                if (saveToCache(reportData)) {
-                    showAlert('Оффлайн Сохранение', 'Нет соединения с Firebase. Отчет сохранен в локальный кэш и будет отправлен позже.');
-                    form.reset();
-                }
-            }
-            if (isAdmin) fetchAndRenderReports(); // Обновить отчеты админа
-            renderLatestData(true); // Обновить последние отчеты пользователя
-
-        } catch (e) {
-            console.error("Ошибка сохранения отчета:", e);
-            // Если онлайн-отправка не удалась, сохраняем в кэш
-            if (saveToCache(reportData)) {
-                showAlert('Ошибка и Кэш', `Не удалось сохранить отчет в Firebase: ${e.message}. Сохранено в локальный кэш.`);
-                form.reset();
-            }
-        } finally {
-            if (isTMA) Telegram.WebApp.MainButton.hideProgress();
-            submitButton.disabled = false;
-            submitButton.textContent = 'Сохранить Отчет';
-            lucide.createIcons();
-        }
-    };
-
-    // --- ОТОБРАЖЕНИЕ ПОСЛЕДНИХ ОТЧЕТОВ ПОЛЬЗОВАТЕЛЯ ---
-
-    function renderLatestData(fromCache) {
-        const container = document.getElementById('latestDataContainer');
-        container.innerHTML = '';
-        const dataToRender = [];
-
-        // 1. Из кэша
-        const cachedReports = JSON.parse(localStorage.getItem('cachedReports') || '[]');
-        cachedReports.forEach(r => dataToRender.push({ ...r, is_cached: true }));
-
-        // 2. Из dataCache (последние онлайн-данные пользователя)
-        const userOnlineReports = dataCache
-            .filter(r => r.user_id === userTelegramId)
-            .sort((a, b) => b.timestamp - a.timestamp)
-            .slice(0, 5 - cachedReports.length); // Берем столько, сколько осталось места
-
-        dataToRender.push(...userOnlineReports.map(r => ({ ...r, is_cached: false })));
-
-        if (dataToRender.length === 0) {
-            container.innerHTML = '<p class="text-gray-500">Пока нет сохраненных отчетов.</p>';
-            return;
-        }
-
-        dataToRender
-            .sort((a, b) => b.timestamp - a.timestamp)
-            .slice(0, 5)
-            .forEach(report => {
-            const date = new Date(report.timestamp).toLocaleString();
-            const locationStr = report.location ? ` | GPS: ${report.location.latitude.toFixed(4)}, ${report.location.longitude.toFixed(4)}` : '';
-            const cacheBadge = report.is_cached ?
-                '<span class="ml-2 text-xs font-medium text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full">Кэш</span>' :
-                '<span class="ml-2 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">Online</span>';
-
-            const loyaltyColor = {
-                "Лоялен": "bg-green-100 text-green-800",
-                "Нейтрален": "bg-blue-100 text-blue-800",
-                "Нелоялен": "bg-red-100 text-red-800",
-                "Не определено": "bg-gray-100 text-gray-800"
-            }[report.loyalty] || "bg-gray-100 text-gray-800";
-
-            container.innerHTML += `
-                <div class="p-4 border border-gray-200 rounded-lg shadow-sm">
-                    <div class="flex justify-between items-center mb-2">
-                        <p class="text-sm font-medium text-gray-500">${date} ${cacheBadge}</p>
-                        <span class="text-xs font-semibold ${loyaltyColor} px-2 py-1 rounded-full">${report.loyalty}</span>
-                    </div>
-                    <p class="text-gray-900 font-semibold mb-1">
-                        ${report.settlement}, ул. ${report.street}, д. ${report.house}${report.apartment !== 'N/A' ? `, кв. ${report.apartment}` : ''}
-                    </p>
-                    <p class="text-sm text-gray-700">Действие: <span class="font-medium">${report.action}</span></p>
-                    <p class="text-sm text-gray-700 truncate">Комментарий: ${report.comment}</p>
-                    ${locationStr ? `<p class="text-xs text-gray-400 mt-1">${locationStr}</p>` : ''}
-                </div>
-            `;
-        });
-    }
-
-
-    // --- ОТЧЕТЫ АДМИНА ---
-
-    async function fetchAndRenderReports() {
-        if (!isAdmin) return;
-        if (!db) {
-             showAlert('Ошибка Firebase', 'База данных не инициализирована. Проверьте консоль на наличие ошибок.');
-             return;
-        }
-        showLoader();
-
-        try {
-            const snapshot = await db.collection('reports').get();
-            dataCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-            // Обновляем статистику
-            const total = dataCache.length;
-            const loyal = dataCache.filter(d => d.loyalty === 'Лоялен').length;
-            const disloyal = dataCache.filter(d => d.loyalty === 'Нелоялен').length;
-
-            document.getElementById('statTotal').textContent = total;
-            document.getElementById('statLoyal').textContent = loyal;
-            document.getElementById('statDisloyal').textContent = disloyal;
-
-            // Рендер графиков и таблицы
-            renderCharts();
-            renderReportsTable();
-            generateMap(dataCache); // Обновить карту
-            renderLatestData(false); // Обновить список последних отчетов
-
-        } catch (e) {
-            console.error("Ошибка загрузки отчетов:", e);
-            showAlert('Ошибка Загрузки', 'Не удалось загрузить данные из Firebase. Возможно, проблема с правилами безопасности.');
-        } finally {
-            hideLoader();
-        }
-    }
-
-    function renderCharts() {
-        // Лояльность по Действиям
-        const loyaltyByAction = dataCache.reduce((acc, doc) => {
-            if (!acc[doc.action]) acc[doc.action] = { loyal: 0, neutral: 0, disloyal: 0, undefined: 0 };
-            if (doc.loyalty === 'Лоялен') acc[doc.action].loyal++;
-            else if (doc.loyalty === 'Нейтрален') acc[doc.action].neutral++;
-            else if (doc.loyalty === 'Нелоялен') acc[doc.action].disloyal++;
-            else acc[doc.action].undefined++;
-            return acc;
-        }, {});
-
-        const actionLabels = Object.keys(loyaltyByAction);
-        const loyalData = actionLabels.map(a => loyaltyByAction[a].loyal);
-        const neutralData = actionLabels.map(a => loyaltyByAction[a].neutral);
-        const disloyalData = actionLabels.map(a => loyaltyByAction[a].disloyal);
-
-        renderBarChart('loyaltyChart', actionLabels, [
-            { label: 'Лоялен', data: loyalData, backgroundColor: '#34d399' },
-            { label: 'Нейтрален', data: neutralData, backgroundColor: '#60a5fa' },
-            { label: 'Нелоялен', data: disloyalData, backgroundColor: '#f87171' },
-        ], 'bar', 'Лояльность');
-
-        // Действия по Поселениям
-        const actionBySettlement = dataCache.reduce((acc, doc) => {
-            if (!acc[doc.settlement]) acc[doc.settlement] = 0;
-            acc[doc.settlement]++;
-            return acc;
-        }, {});
-
-        const settlementLabels = Object.keys(actionBySettlement);
-        const settlementData = Object.values(actionBySettlement);
-
-        renderBarChart('settlementChart', settlementLabels, [
-            { label: 'Отчеты', data: settlementData, backgroundColor: '#818cf8' }
-        ], 'bar', 'Отчеты');
-    }
-
-    let chartInstances = {};
-
-    function renderBarChart(canvasId, labels, datasets, type, titleText) {
-        if (chartInstances[canvasId]) {
-            chartInstances[canvasId].destroy();
-        }
-        const ctx = document.getElementById(canvasId).getContext('2d');
-        chartInstances[canvasId] = new Chart(ctx, {
-            type: type,
-            data: { labels, datasets },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'top' },
-                    title: { display: false, text: titleText }
-                },
-                scales: {
-                    x: { stacked: type === 'bar' && datasets.length > 1, title: { display: false } },
-                    y: { stacked: type === 'bar' && datasets.length > 1, beginAtZero: true }
-                }
-            }
-        });
-    }
-
-
-    function renderReportsTable() {
-        const tableBody = document.getElementById('reportsTableBody');
-        tableBody.innerHTML = ''; // Очищаем таблицу
-
-        // Сортируем по времени (новые сверху)
-        const sortedData = [...dataCache].sort((a, b) => b.timestamp - a.timestamp);
-
-        if (sortedData.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="7" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">Нет данных для отображения.</td></tr>';
-            return;
-        }
-
-        sortedData.forEach(doc => {
-            const date = new Date(doc.timestamp).toLocaleString();
-            const loyaltyColor = {
-                "Лоялен": "text-green-600 font-semibold",
-                "Нейтрален": "text-blue-600 font-semibold",
-                "Нелоялен": "text-red-600 font-semibold",
-                "Не определено": "text-gray-500"
-            }[doc.loyalty] || "text-gray-500";
-
-            const row = `
-                <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${date}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${doc.full_name || doc.username}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${doc.settlement}, ул. ${doc.street}, д. ${doc.house}${doc.apartment !== 'N/A' ? `, кв. ${doc.apartment}` : ''}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${doc.action}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm ${loyaltyColor}">${doc.loyalty}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${doc.requires_followup ? 'ДА' : 'НЕТ'}</td>
-                    <td class="px-6 py-4 whitespace-normal text-sm text-gray-500 max-w-xs">${doc.comment}</td>
-                </tr>
-            `;
-            tableBody.innerHTML += row;
-        });
-    }
-
-    function exportToXLSX() {
-        if (dataCache.length === 0) {
-            showAlert('Ошибка', 'Нет данных для экспорта. Пожалуйста, обновите отчеты.');
-            return;
-        }
-        const exportData = dataCache.map(doc => ({
-            'Время': new Date(doc.timestamp).toLocaleString(), 'ID Пользователя': doc.user_id, 'Агитатор (ФИО)': doc.full_name || doc.username,
-            'Населенный пункт': doc.settlement, 'Улица': doc.street, 'Дом': doc.house, 'Квартира': doc.apartment, 'Действие': doc.action,
-            'Лояльность': doc.loyalty, 'Требуется Повтор': doc.requires_followup ? 'ДА' : 'НЕТ', 'Комментарий': doc.comment,
-            'Широта': doc.location ? doc.location.latitude : 'N/A', 'Долгота': doc.location ? doc.location.longitude : 'N/A',
-        }));
-        const worksheet = XLSX.utils.json_to_sheet(exportData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Данные");
-        XLSX.writeFile(workbook, "agitator_data_" + new Date().toISOString().slice(0, 10) + ".xlsx");
-    }
-
-    // --- ЛИСТАЯ КАРТА ---
-
-    function generateMap(data) {
-        if (mapInstance) {
-            mapInstance.remove(); // Удаляем старую карту, чтобы избежать дублирования
-        }
-
-        // Фильтруем только записи с координатами
-        const geoData = data.filter(doc => doc.location && doc.location.latitude && doc.location.longitude);
-
-        if (geoData.length === 0) {
-            const mapContainer = document.getElementById('map');
-            mapContainer.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500">Нет данных о геолокации для отображения.</div>';
-            return;
-        }
-
-        // Центр карты: средние координаты
-        const avgLat = geoData.reduce((sum, doc) => sum + doc.location.latitude, 0) / geoData.length;
-        const avgLng = geoData.reduce((sum, doc) => sum + doc.location.longitude, 0) / geoData.length;
-
-        mapInstance = L.map('map').setView([avgLat, avgLng], 12);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        }).addTo(mapInstance);
-
-        if (mapMode === 'cluster') {
-            if (markerClusterGroup) {
-                markerClusterGroup.clearLayers();
-            } else {
-                markerClusterGroup = L.markerClusterGroup();
-            }
-
-            geoData.forEach(doc => {
-                const marker = L.marker([doc.location.latitude, doc.location.longitude]);
-                const popupContent = `
-                    <div style="font-family: Arial, sans-serif; font-size: 12px;">
-                        <strong>${doc.full_name || doc.username}</strong>
-                        <br>${new Date(doc.timestamp).toLocaleString()}
-                        <br>Адрес: ${doc.street}, ${doc.house}
-                        <br>Действие: ${doc.action}
-                        <br>Лояльность: <strong>${doc.loyalty}</strong>
-                        ${doc.requires_followup ? '<br><span style="color: red;">Требуется Повтор</span>' : ''}
-                    </div>
-                `;
-                marker.bindPopup(popupContent);
-                markerClusterGroup.addLayer(marker);
-            });
-
-            mapInstance.addLayer(markerClusterGroup);
-
-        } else if (mapMode === 'heat') {
-            const heatData = geoData.map(doc => [doc.location.latitude, doc.location.longitude, 0.5]); // intensity 0.5
-            L.heatLayer(heatData, { radius: 25 }).addTo(mapInstance);
-        }
-
-        // Обновляем размер карты для корректного отображения
-        setTimeout(() => mapInstance.invalidateSize(), 300);
-    }
-
-
-    // --- АДМИНИСТРИРОВАНИЕ ---
-
-    // Функция для рекурсивного удаления коллекции (Firebase требует итераций)
-    async function deleteCollection(collectionPath) {
-        if (!isAdmin) {
-            showAlert('Ошибка доступа', 'У вас нет прав для выполнения этой операции.');
-            return false;
-        }
-        if (!db) {
-             showAlert('Ошибка Firebase', 'База данных не инициализирована.');
-             return false;
-        }
-
-        if (isTMA) Telegram.WebApp.MainButton.showProgress();
-        showLoader();
-
-        try {
-            const collectionRef = db.collection(collectionPath);
-            const query = collectionRef.orderBy('__name__').limit(50); // Удаляем по 50 документов
-            let deletedCount = 0;
-
-            const deleteQueryBatch = async (db, query) => {
-                const snapshot = await query.get();
-
-                if (snapshot.size === 0) {
-                    return 0; // Все удалено
-                }
-
-                const batch = db.batch();
-                snapshot.docs.forEach(doc => {
-                    batch.delete(doc.ref);
-                });
-
-                await batch.commit();
-                deletedCount += snapshot.size;
-
-                if (snapshot.size === 50) {
-                    // Есть еще, рекурсивно вызываем
-                    return deleteQueryBatch(db, query);
-                }
-                return deletedCount;
-            };
-
-            await deleteQueryBatch(db, query);
-
-            localStorage.removeItem('cachedReports');
-            dataCache = []; // Очищаем локальный кеш после удаления
-            updateOfflineStatus();
-            showAlert('Успешно!', `Удалено ${deletedCount} записей. Данные Firestore очищены.`);
-
-            if (isAdmin) fetchAndRenderReports();
-
-            return true;
-
-        } catch (e) {
-             console.error("Error deleting collection:", e);
-             showAlert('Ошибка', 'Произошла ошибка при удалении коллекции: ' + e.message);
-             return false;
-        } finally {
-             hideLoader();
-             if (isTMA) Telegram.WebApp.MainButton.hideProgress();
-        }
-    }
-
-
-    // --- ИНИЦИАЛИЗАЦИЯ WEBAPP ---
-    if (isTMA) {
-        Telegram.WebApp.ready();
-        Telegram.WebApp.expand();
-    }
-
-    // 🔑 Инициализация при загрузке (Ожидаем authenticateUser)
-    window.onload = async () => {
-        // 1. Сначала аутентификация для установки isAdmin и userTelegramId
-        await authenticateUser();
-
-        // 2. Затем заполнение интерфейса
-        populateSettlements();
-        updateOfflineStatus();
-        window.showSection('form');
-        lucide.createIcons();
-
-        // ОТЛАДКА: Повторное обновление полей, чтобы гарантировать актуальность
-        document.getElementById('debugUserId').textContent = userTelegramId || 'Нет ID';
-        document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'НЕТ';
-
-        if (!firebaseConfig.projectId) {
-            window.showAlert('ВНИМАНИЕ', 'Необходимо вставить ключи конфигурации Firebase в код.');
-        }
-
-        // 3. Если админ, пытаемся загрузить отчеты
-        if (isAdmin && db) {
-            // Загружаем отчеты, но без showLoader/hideLoader, т.к. onload уже управляет ими
-            try {
-                const snapshot = await db.collection('reports').get();
-                dataCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderLatestData(false);
-            } catch (e) {
-                console.warn("Предупреждение: Не удалось загрузить данные при инициализации:", e);
-                renderLatestData(true); // Рендерим только из кэша
-            }
-        } else {
-             // Для обычного пользователя - просто рендерим кэш, если он есть
-             renderLatestData(true);
-        }
-
-        // Пробуем отправить кэш, если он есть
-        await processCache();
-    };
-
-    // Экспортируем функции для доступа из HTML
-    window.authenticateUser = authenticateUser;
-    window.fetchAndRenderReports = fetchAndRenderReports;
-    window.renderLatestData = renderLatestData;
-    window.generateMap = generateMap;
-    window.showSection = showSection;
-    window.showAlert = showAlert;
-    window.exportToXLSX = exportToXLSX;
-    window.showConfirmDeleteModal = showConfirmDeleteModal;
-</script>
+        // Экспортируем функции для доступа из HTML
+        window.authenticateUser = authenticateUser;
+        window.fetchAndRenderReports = fetchAndRenderReports;
+        window.renderLatestData = renderLatestData;
+        window.generateMap = generateMap;
+    </script>
 </body>
 </html>
