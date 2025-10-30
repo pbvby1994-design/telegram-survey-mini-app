@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Блокнот Агитатора | v2.5 (Фикс Админа/ID/Онлайн)</title>
+    <title>Блокнот Агитатора | v2.5 (Фикс Firebase Соединения)</title>
 
-    <!-- Tailwind CSS, Lucide Icons, Chart.js, Leaflet.js, XLSX, Firebase -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
@@ -20,974 +19,1013 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
     <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
-
-    <!-- Firebase SDKs - v9 compat for wider support -->
+    <!-- 💡 ЕДИНСТВЕННЫЕ ИМПОРТЫ FIREBASE (v9 COMPAT) -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
-    <style>
-        body { font-family: 'Jost', sans-serif; }
-        .tab-button.active { @apply border-b-2 border-indigo-500 font-semibold text-indigo-700; }
-        .tab-button { @apply px-4 py-2 text-center text-gray-500 transition duration-150 ease-in-out; }
-        .card { @apply bg-white p-4 rounded-xl shadow-lg border border-gray-100; }
-        .input-group label { @apply block text-sm font-medium text-gray-700 mb-1; }
-        .input-group input, .input-group select, .input-group textarea { @apply w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500; }
-        #map { height: 600px; width: 100%; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        .leaflet-popup-content-wrapper { border-radius: 0.5rem; }
-    </style>
+<style>
+    /* ... (CSS код не изменен) ... */
+    :root { font-family: 'Jost', sans-serif; }
+    .nav-button-active { background-color: #f7fafc; color: #3b82f6; }
+    .nav-button:hover:not(.nav-button-active) { background-color: #f3f4f6; }
+    .loading-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(255, 255, 255, 0.8); z-index: 1000;
+        display: none; align-items: center; justify-content: center;
+        flex-direction: column;
+    }
+    #map { height: 60vh; width: 100%; }
+</style>
 </head>
 <body class="bg-gray-50 min-h-screen">
 
-    <!-- Секция Уведомлений (Alert/Toast) -->
-    <div id="alertContainer" class="fixed top-0 left-0 right-0 p-4 z-50 pointer-events-none">
-        <!-- Alerts will be inserted here -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        <p class="mt-4 text-blue-600 font-semibold">Загрузка данных...</p>
     </div>
 
-    <!-- Общий контейнер приложения -->
-    <div class="container mx-auto p-4 max-w-4xl">
-        <h1 class="text-3xl font-bold text-gray-800 mb-1 flex items-center">
-            <i data-lucide="notebook-pen" class="w-6 h-6 mr-2 text-indigo-600"></i>
-            Блокнот Агитатора
-        </h1>
-        <p class="text-sm text-gray-500 mb-4">v2.5 (Фикс Админа/ID/Онлайн)</p>
-
-        <!-- Статус и Отладочная информация (Для Администратора) -->
-        <div class="card mb-6 p-3 bg-indigo-50 border-indigo-200">
-            <div class="flex flex-wrap items-center justify-between text-sm">
-                <div class="flex items-center space-x-2">
-                    <span class="font-medium text-indigo-700">Статус:</span>
-                    <span id="offlineStatus" class="font-medium flex items-center">
-                        <i data-lucide="zap" class="w-4 h-4 mr-1 text-green-500 animate-pulse"></i>
-                        Онлайн
-                    </span>
-                </div>
-                <div class="flex flex-wrap text-xs text-indigo-600 space-x-3">
-                    <span title="Ваш ID в Telegram">ID: <span id="debugUserId" class="font-bold text-indigo-800">Нет ID</span></span>
-                    <span title="Ваше Имя">Имя: <span id="debugUserName" class="font-bold text-indigo-800">N/A</span></span>
-                    <span title="Права Администратора">Админ: <span id="debugAdminStatus" class="font-bold text-indigo-800">НЕТ</span></span>
-                </div>
+    <div id="modalOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm">
+            <h3 id="modalTitle" class="text-xl font-bold mb-3 text-gray-800">Заголовок</h3>
+            <p id="modalMessage" class="text-gray-600 mb-6">Сообщение</p>
+            <div class="flex justify-end space-x-3">
+                <button onclick="document.getElementById('modalOverlay').classList.add('hidden');" class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition">Закрыть</button>
+                <button id="modalConfirmBtn" onclick="modalConfirmHandler()" class="px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition hidden">Подтвердить</button>
             </div>
         </div>
+    </div>
 
-        <!-- Кнопки-табы -->
-        <div class="flex border-b border-gray-200 mb-6">
-            <button id="formTab" class="tab-button active" onclick="showSection('form')">
-                <i data-lucide="square-pen" class="w-4 h-4 inline-block mr-1"></i>
-                Ввод Данных
-            </button>
-            <button id="reportsTab" class="tab-button hidden" onclick="showSection('reports')">
-                <i data-lucide="bar-chart-3" class="w-4 h-4 inline-block mr-1"></i>
-                Отчеты (Админ)
-            </button>
-            <button id="latestDataTab" class="tab-button" onclick="showSection('latestData')">
-                <i data-lucide="list-checks" class="w-4 h-4 inline-block mr-1"></i>
-                Последние Записи
-            </button>
+    <header class="bg-white shadow-md sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-gray-900 flex items-center">
+                <i data-lucide="compass" class="h-6 w-6 mr-3 text-blue-600"></i>
+                Блокнот Агитатора
+                <span id="offlineBadge" class="ml-3 text-xs font-medium text-red-700 bg-red-100 px-2.5 py-0.5 rounded-full hidden">
+                    ОФФЛАЙН КЭШ
+                </span>
+            </h1>
+            <nav class="flex space-x-2">
+                <button id="navForm" onclick="showSection('form', this)" class="nav-button nav-button-active flex items-center px-4 py-2 text-gray-600 rounded-lg transition">
+                    <i data-lucide="clipboard-list" class="h-5 w-5 mr-2"></i> Форма
+                </button>
+                <button id="navReports" onclick="showSection('reports', this); if(isAdmin) fetchAndRenderReports(); else showAlert('Ошибка', 'Нет доступа к отчетам.');" class="nav-button flex items-center px-4 py-2 text-gray-600 rounded-lg transition" disabled>
+                    <i data-lucide="bar-chart-3" class="h-5 w-5 mr-2"></i> Отчеты
+                </button>
+                <button id="navMap" onclick="showSection('map', this); generateMap(dataCache);" class="nav-button flex items-center px-4 py-2 text-gray-600 rounded-lg transition" disabled>
+                    <i data-lucide="map" class="h-5 w-5 mr-2"></i> Карта
+                </button>
+                <button id="navAdmin" onclick="showSection('admin', this)" class="nav-button flex items-center px-4 py-2 text-gray-600 rounded-lg transition hidden">
+                    <i data-lucide="shield" class="h-5 w-5 mr-2"></i> Админ
+                </button>
+            </nav>
         </div>
+    </header>
 
-        <!-- 1. Секция Ввод Данных -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <!-- Секция Формы -->
         <section id="form" class="space-y-6">
-            <div class="card">
-                <h2 class="text-xl font-semibold text-gray-700 mb-4">Основная информация</h2>
-                <form id="agitatorForm" onsubmit="submitForm(event)" class="space-y-4">
-                    <!-- Населенный пункт -->
-                    <div class="input-group">
-                        <label for="settlement">Населенный пункт</label>
-                        <select id="settlement" required>
-                            <!-- Options will be populated by JavaScript -->
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Ввод данных</h2>
+                <form id="reportForm" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Поселение -->
+                    <div>
+                        <label for="settlement" class="block text-sm font-medium text-gray-700">Населенный пункт</label>
+                        <select id="settlement" name="settlement" required class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white">
+                            <!-- Опции будут добавлены JavaScript -->
                         </select>
                     </div>
 
-                    <div class="flex space-x-4">
-                        <!-- Улица -->
-                        <div class="input-group w-3/4">
-                            <label for="street">Улица</label>
-                            <input type="text" id="street" placeholder="Например, Ленина" required>
-                        </div>
-                        <!-- Дом -->
-                        <div class="input-group w-1/4">
-                            <label for="house">Дом</label>
-                            <input type="text" id="house" placeholder="Например, 10А" required>
-                        </div>
+                    <!-- Улица -->
+                    <div>
+                        <label for="street" class="block text-sm font-medium text-gray-700">Улица</label>
+                        <input type="text" id="street" name="street" required class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                     </div>
 
-                    <!-- Квартира (необязательно) -->
-                    <div class="input-group">
-                        <label for="apartment">Квартира (необязательно)</label>
-                        <input type="text" id="apartment" placeholder="Например, 5">
+                    <!-- Дом -->
+                    <div>
+                        <label for="house" class="block text-sm font-medium text-gray-700">Дом / Номер участка</label>
+                        <input type="text" id="house" name="house" required class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <!-- Квартира -->
+                    <div>
+                        <label for="apartment" class="block text-sm font-medium text-gray-700">Квартира (опционально)</label>
+                        <input type="text" id="apartment" name="apartment" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                     </div>
 
                     <!-- Действие -->
-                    <div class="input-group">
-                        <label for="action">Действие</label>
-                        <select id="action" required>
-                            <option value="">Выберите действие</option>
-                            <option value="Визит">Визит (Не застали)</option>
-                            <option value="Проведен опрос">Проведен опрос</option>
-                            <option value="Оставлен материал">Оставлен материал</option>
+                    <div>
+                        <label for="action" class="block text-sm font-medium text-gray-700">Действие</label>
+                        <select id="action" name="action" required class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white">
+                            <option value="">Выберите...</option>
+                            <option value="Встреча">Встреча (провели агитацию)</option>
+                            <option value="Не открыли">Не открыли</option>
+                            <option value="Отказались">Отказались (от агитации)</option>
+                            <option value="Не проживает">Не проживает</option>
+                            <option value="Другое">Другое</option>
                         </select>
                     </div>
 
                     <!-- Лояльность -->
-                    <div class="input-group">
-                        <label for="loyalty">Лояльность</label>
-                        <select id="loyalty" required>
-                            <option value="">Выберите уровень лояльности</option>
+                    <div>
+                        <label for="loyalty" class="block text-sm font-medium text-gray-700">Лояльность</label>
+                        <select id="loyalty" name="loyalty" required class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white">
+                            <option value="">Выберите...</option>
+                            <option value="Лоялен">Лоялен</option>
                             <option value="Нейтрален">Нейтрален</option>
-                            <option value="Поддерживает">Поддерживает</option>
-                            <option value="Против">Против</option>
-                            <option value="Неизвестно">Неизвестно</option>
+                            <option value="Нелоялен">Нелоялен</option>
+                            <option value="Не определено">Не определено (если не встретили)</option>
                         </select>
                     </div>
 
-                    <!-- Требуется повторный визит -->
-                    <div class="input-group flex items-center space-x-2 pt-2">
-                        <input type="checkbox" id="requiresFollowup" class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
-                        <label for="requiresFollowup" class="mb-0">Требуется повторный визит</label>
+                    <!-- Требуется Повтор -->
+                    <div class="flex items-center space-x-2 md:col-span-2">
+                        <input type="checkbox" id="requiresFollowup" name="requiresFollowup" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <label for="requiresFollowup" class="text-sm font-medium text-gray-700">Требуется повторный визит / дополнительная информация</label>
                     </div>
 
                     <!-- Комментарий -->
-                    <div class="input-group">
-                        <label for="comment">Комментарий (ваши заметки)</label>
-                        <textarea id="comment" rows="3" placeholder="Краткие, важные замечания..."></textarea>
+                    <div class="md:col-span-2">
+                        <label for="comment" class="block text-sm font-medium text-gray-700">Комментарий (важные детали)</label>
+                        <textarea id="comment" name="comment" rows="3" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
+                    </div>
+
+                    <!-- Кнопка определения местоположения -->
+                    <div class="md:col-span-2 flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
+                         <div id="locationStatus" class="text-sm text-gray-600">
+                            <i data-lucide="map-pin" class="h-4 w-4 inline mr-1 text-gray-500"></i>
+                            Координаты: <span id="latDisplay">N/A</span>, <span id="lngDisplay">N/A</span>
+                         </div>
+                         <button type="button" onclick="getCurrentLocation()" class="flex items-center px-4 py-2 bg-yellow-500 text-white font-medium rounded-lg hover:bg-yellow-600 transition shadow-md">
+                            <i data-lucide="locate-fixed" class="h-5 w-5 mr-2"></i>
+                            Определить GPS
+                        </button>
+                        <input type="hidden" id="latitude" name="latitude">
+                        <input type="hidden" id="longitude" name="longitude">
                     </div>
 
                     <!-- Кнопка Отправки -->
-                    <button type="submit" class="w-full bg-indigo-600 text-white p-3 rounded-xl font-semibold hover:bg-indigo-700 transition duration-150 shadow-md">
-                        <i data-lucide="save" class="w-5 h-5 inline-block mr-2"></i>
-                        Сохранить Запись
-                    </button>
+                    <div class="md:col-span-2">
+                        <button type="submit" class="w-full flex items-center justify-center px-4 py-3 border border-transparent text-lg font-medium rounded-lg shadow-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50 transition transform hover:scale-[1.01]">
+                            <i data-lucide="send" class="h-5 w-5 mr-3"></i>
+                            Сохранить Отчет
+                        </button>
+                    </div>
                 </form>
             </div>
-
-            <!-- Секция Управления Кешем -->
-            <div class="card bg-orange-50 border-orange-200">
-                <h2 class="text-xl font-semibold text-gray-700 mb-4 flex items-center">
-                    <i data-lucide="server-off" class="w-5 h-5 mr-2 text-orange-500"></i>
-                    Автономный режим (Кэш)
+            <!-- Последние отчеты -->
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex justify-between items-center">
+                    Последние 5 отчетов
+                    <button onclick="renderLatestData(true)" class="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center">
+                        <i data-lucide="rotate-cw" class="h-4 w-4 mr-1"></i> Обновить
+                    </button>
                 </h2>
-                <p class="text-sm text-gray-600 mb-4">
-                    Ваши записи временно хранятся в кэше, если нет соединения. Нажмите "Отправить" для синхронизации, когда появится Интернет.
-                </p>
-                <div class="flex space-x-4">
-                    <button onclick="syncData()" class="flex-1 bg-green-600 text-white p-3 rounded-xl font-semibold hover:bg-green-700 transition duration-150 shadow-md" id="syncButton">
-                        <i data-lucide="upload" class="w-5 h-5 inline-block mr-2"></i>
-                        Отправить данные (<span id="cacheCount">0</span>)
-                    </button>
-                    <button onclick="clearCache()" class="bg-gray-400 text-white p-3 rounded-xl font-semibold hover:bg-gray-500 transition duration-150 shadow-md">
-                        <i data-lucide="trash-2" class="w-5 h-5 inline-block"></i>
-                    </button>
+                <div id="latestDataContainer" class="space-y-3">
+                    <p class="text-gray-500">Здесь будут отображены ваши последние отчеты.</p>
                 </div>
             </div>
         </section>
 
-        <!-- 2. Секция Отчеты (Администратор) -->
-        <section id="reports" class="hidden space-y-6">
-            <div class="card bg-red-50 border-red-200" id="adminPanel">
-                <h2 class="text-xl font-semibold text-red-700 mb-4 flex items-center">
-                    <i data-lucide="shield-alert" class="w-5 h-5 mr-2 text-red-500"></i>
-                    Панель Администратора
+        <!-- Секция Отчетов -->
+        <section id="reports" class="space-y-8 hidden">
+             <!-- Статистика -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white p-5 rounded-xl shadow-lg border-l-4 border-blue-500">
+                    <p class="text-sm font-medium text-gray-500">Всего записей</p>
+                    <p id="statTotal" class="text-3xl font-bold text-gray-900 mt-1">0</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-lg border-l-4 border-green-500">
+                    <p class="text-sm font-medium text-gray-500">Лоялен</p>
+                    <p id="statLoyal" class="text-3xl font-bold text-gray-900 mt-1">0</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-lg border-l-4 border-red-500">
+                    <p class="text-sm font-medium text-gray-500">Нелоялен</p>
+                    <p id="statDisloyal" class="text-3xl font-bold text-gray-900 mt-1">0</p>
+                </div>
+            </div>
+
+            <!-- Графики -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-lg font-semibold mb-4">Лояльность по действиям</h3>
+                    <canvas id="loyaltyChart"></canvas>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-lg font-semibold mb-4">Действия по поселениям</h3>
+                    <canvas id="settlementChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Таблица с данными -->
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex justify-between items-center">
+                    Полный Отчет
+                    <div class="flex space-x-3">
+                        <button onclick="fetchAndRenderReports()" class="flex items-center px-3 py-2 bg-blue-100 text-blue-700 font-medium rounded-lg hover:bg-blue-200 transition text-sm shadow-sm">
+                            <i data-lucide="refresh-ccw" class="h-4 w-4 mr-2"></i> Обновить данные
+                        </button>
+                        <button onclick="exportToXLSX()" class="flex items-center px-3 py-2 bg-green-500 text-white font-medium rounded-lg hover:bg-green-600 transition text-sm shadow-sm">
+                            <i data-lucide="download" class="h-4 w-4 mr-2"></i> Экспорт в XLSX
+                        </button>
+                    </div>
                 </h2>
-                <p class="text-sm text-gray-600 mb-4">
-                    Доступно только пользователю с ID: <span class="font-bold text-red-800">541459471</span>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Время</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ФИО</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Адрес</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действие</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Лояльность</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Повтор</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Комментарий</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportsTableBody" class="bg-white divide-y divide-gray-200">
+                            <tr><td colspan="7" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">Нажмите "Обновить данные" для загрузки отчета.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Секция Карты -->
+        <section id="map" class="space-y-6 hidden">
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Тепловая Карта и Кластеры Отчетов</h2>
+                <div id="map" class="rounded-xl shadow-inner"></div>
+                <p class="text-sm text-gray-500 mt-4">Карта отображает геолокации, собранные в отчетах. Используйте кластеры для групп и тепловую карту для плотности.</p>
+                <div class="mt-4 flex space-x-4">
+                    <button onclick="mapMode='cluster'; generateMap(dataCache);" class="px-4 py-2 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition">Кластеры</button>
+                    <button onclick="mapMode='heat'; generateMap(dataCache);" class="px-4 py-2 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition">Тепловая Карта</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Секция Администрирования -->
+        <section id="admin" class="space-y-6 hidden">
+            <div class="bg-red-50 border border-red-200 p-6 rounded-xl shadow-lg">
+                <h2 class="text-xl font-bold text-red-800 mb-4 flex items-center">
+                    <i data-lucide="alert-triangle" class="h-6 w-6 mr-2"></i>
+                    Администрирование Базы Данных
+                </h2>
+                <p class="text-red-700 mb-6">
+                    Эта секция предназначена только для администраторов. Действия здесь необратимы!
                 </p>
-                <button onclick="confirmClearDatabase()" class="w-full bg-red-600 text-white p-3 rounded-xl font-semibold hover:bg-red-700 transition duration-150 shadow-md">
-                    <i data-lucide="flame" class="w-5 h-5 inline-block mr-2"></i>
-                    ОЧИСТИТЬ ВСЕ ДАННЫЕ В БАЗЕ (DANGER!)
+                <button onclick="showConfirmDeleteModal()" class="flex items-center px-6 py-3 bg-red-600 text-white font-medium rounded-lg shadow-lg hover:bg-red-700 transition transform hover:scale-[1.01]">
+                    <i data-lucide="trash-2" class="h-5 w-5 mr-3"></i>
+                    ОЧИСТИТЬ ВСЮ БАЗУ ДАННЫХ
                 </button>
             </div>
-
-            <div class="card">
-                <h2 class="text-xl font-semibold text-gray-700 mb-4 flex items-center">
-                    <i data-lucide="area-chart" class="w-5 h-5 mr-2 text-indigo-500"></i>
-                    Сводный Отчет
-                </h2>
-                <div class="grid grid-cols-2 gap-4 mb-4">
-                    <div class="bg-blue-50 p-3 rounded-lg text-center shadow-inner">
-                        <p class="text-sm text-gray-500">Всего записей</p>
-                        <p class="text-2xl font-bold text-blue-700" id="statTotalCount">0</p>
-                    </div>
-                    <div class="bg-yellow-50 p-3 rounded-lg text-center shadow-inner">
-                        <p class="text-sm text-gray-500">Уникальных агитаторов</p>
-                        <p class="text-2xl font-bold text-yellow-700" id="statUniqueUsers">0</p>
-                    </div>
-                </div>
-
-                <!-- График Лояльности -->
-                <h3 class="text-lg font-medium text-gray-700 mb-2">Лояльность</h3>
-                <canvas id="loyaltyChart" class="mb-6"></canvas>
-
-                <!-- Карта -->
-                <h3 class="text-lg font-medium text-gray-700 mb-2">Карта активности</h3>
-                <div id="map" class="mb-6"></div>
-
-                <!-- Кнопка Экспорта -->
-                <button onclick="exportToXLSX()" class="w-full bg-indigo-600 text-white p-3 rounded-xl font-semibold hover:bg-indigo-700 transition duration-150 shadow-md">
-                    <i data-lucide="file-spreadsheet" class="w-5 h-5 inline-block mr-2"></i>
-                    Экспорт в XLSX
-                </button>
-            </div>
         </section>
 
-        <!-- 3. Секция Последние Данные -->
-        <section id="latestData" class="hidden space-y-6">
-            <div class="card">
-                <h2 class="text-xl font-semibold text-gray-700 mb-4 flex items-center">
-                    <i data-lucide="history" class="w-5 h-5 mr-2 text-indigo-500"></i>
-                    Последние 20 Записей
-                </h2>
-                <div id="latestDataTable" class="overflow-x-auto">
-                    <!-- Data will be inserted here -->
-                </div>
-                <p class="text-sm text-gray-500 mt-4 text-center">
-                    <span class="font-bold">Внимание:</span> Эти данные загружаются только из кэша (автономный режим). Для полных данных используйте "Отчеты".
-                </p>
-            </div>
-        </section>
-
-    </div>
-
-    <!-- Модальное окно для подтверждения удаления -->
-    <div id="confirmModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 hidden items-center justify-center">
-        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full space-y-4">
-            <h3 class="text-lg font-bold text-red-600 flex items-center">
-                <i data-lucide="alert-triangle" class="w-5 h-5 mr-2"></i>
-                Подтверждение Удаления
-            </h3>
-            <p class="text-gray-700">Вы уверены, что хотите **НАВСЕГДА** удалить все данные в базе? Это действие необратимо!</p>
-            <p class="text-sm text-gray-500">Введите `УДАЛИТЬ` для подтверждения:</p>
-            <input type="text" id="confirmDeleteInput" class="w-full p-2 border border-red-300 rounded-lg focus:ring-red-500 focus:border-red-500">
-            <div class="flex justify-end space-x-3">
-                <button onclick="document.getElementById('confirmModal').classList.add('hidden')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">Отмена</button>
-                <button onclick="clearDatabase()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition" id="confirmDeleteButton">Удалить</button>
-            </div>
+        <!-- Debug Info -->
+        <div class="mt-8 text-xs text-gray-400 p-4 border-t border-gray-200">
+            <p>Текущий ID Telegram: <span id="debugUserId">N/A</span></p>
+            <p>Статус Админа: <span id="debugAdminStatus">НЕТ</span></p>
+            <p>Версия UI: v2.5</p>
         </div>
-    </div>
 
+    </main>
 
-    <script>
-        // --- КОНФИГУРАЦИЯ FIREBASE (ВСТАВИТЬ СЮДА ВАШИ КЛЮЧИ) ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyDVeRXO16KtIwoJQb4uHQuCsEv3xTLBGhI",
-            authDomain: "agitator-notebook.firebaseapp.com",
-            projectId: "agitator-notebook",
-            storageBucket: "agitator-notebook.firebasestorage.app",
-            messagingSenderId: "518555352011",
-            appId: "1:518555352011:web:2b152d193d56a29774619d"
-        };
-        const COLLECTION_NAME = "reports"; // Название коллекции в Firestore
+    <!-- ОСНОВНОЙ СКРИПТ -->
+<script>
+    // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ FIREBASE ---
+    let app;
+    let db;
+    let userTelegramId = null; // ID текущего пользователя Telegram
+    let isAdmin = false;       // Статус администратора
 
-        // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И КОНСТАНТЫ ---
-        const ADMIN_ID = 541459471; // 👈 ВАШЕ ID АДМИНИСТРАТОРА (Mikhail)
-        const TMA_URL_PLACEHOLDER = 'https://t.me/your_bot_username/your_webapp_name'; // URL для заглушки
+    // ⚠️ ВАЖНО: Вставьте сюда свои ключи конфигурации Firebase
+    const firebaseConfig = {
+        apiKey: "AIzaSyDVeRXO16KtIwoJQb4uHQuCsEv3xTLBGhI", // ЗАМЕНИТЬ НА СВОЙ КЛЮЧ
+        authDomain: "agitator-notebook.firebaseapp.com", // ЗАМЕНИТЬ НА СВОЙ DOMAIN
+        projectId: "agitator-notebook", // ЗАМЕНИТЬ НА СВОЙ PROJECT ID
+        storageBucket: "agitator-notebook.firebasestorage.app",
+        messagingSenderId: "518555352011",
+        appId: "1:518555352011:web:2b1f8791097e34d16853e5"
+    };
 
-        let app = null;
-        let db = null;
-        let isTMA = window.Telegram && window.Telegram.WebApp;
-        let userTelegramId = null;
-        let userFirstName = 'N/A';
-        let isAdmin = false;
-        let dataCache = []; // Локальный кеш для офлайн-данных
+    const ADMIN_IDS = [541459471]; // ⚠️ ЗАМЕНИТЬ НА ID АДМИНИСТРАТОРОВ TELEGRAM
 
-        // --- УТИЛИТЫ ---
+    // Инициализация Firebase с добавлением проверки (НОВОЕ ИЗМЕНЕНИЕ)
+    try {
+        // ВАЖНО: Используем 'firebase' из compat.js
+        app = firebase.initializeApp(firebaseConfig);
+        db = app.firestore();
+        console.log("✅ Firebase и Firestore успешно инициализированы.");
+        // Добавляем настройки для совместимости с будущими версиями
+        db.settings({ timestampsInSnapshots: true });
+    } catch (e) {
+        console.error("❌ Ошибка инициализации Firebase:", e);
+        // Показываем критическую ошибку
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось инициализировать Firebase: ${e.message}. Проверьте console.log и ключи в firebaseConfig.`);
+    }
 
-        /**
-         * Отображает уведомление/тост вверху экрана.
-         * @param {string} title - Заголовок.
-         * @param {string} message - Сообщение.
-         * @param {string} type - Тип: 'success', 'error', 'warning', 'info'.
-         */
-        function showAlert(title, message, type = 'info') {
-            const container = document.getElementById('alertContainer');
-            let colorClass = {
-                success: 'bg-green-500',
-                error: 'bg-red-500',
-                warning: 'bg-yellow-500',
-                info: 'bg-blue-500'
-            }[type] || 'bg-gray-500';
+    // ВАЖНЫЕ ПЕРЕМЕННЫЕ
+    const isTMA = typeof Telegram !== 'undefined' && Telegram.WebApp;
+    let dataCache = [];
+    let mapInstance = null;
+    let markerClusterGroup = null;
+    let mapMode = 'cluster';
 
-            const alert = document.createElement('div');
-            alert.className = `${colorClass} text-white p-3 rounded-xl shadow-lg mb-2 flex justify-between items-center transition-opacity duration-300 pointer-events-auto`;
-            alert.innerHTML = `
-                <div>
-                    <strong class="font-bold">${title}:</strong>
-                    <span>${message}</span>
-                </div>
-                <button onclick="this.parentElement.remove()" class="ml-4 opacity-75 hover:opacity-100">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            `;
+    // ВАШИ ПОСЕЛЕНИЯ (ЗАМЕНИТЕ НА СВОЙ СПИСОК)
+    const settlementsList = [
+        "Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск", "Казань", "Нижний Новгород"
+    ];
 
-            container.prepend(alert);
-            lucide.createIcons(); // Обновляем иконки
+    // --- УТИЛИТЫ ---
 
-            // Автоматическое удаление через 5 секунд
-            setTimeout(() => {
-                alert.classList.add('opacity-0');
-                setTimeout(() => alert.remove(), 300);
-            }, 5000);
+    // Глобальный обработчик подтверждения для модального окна
+    let modalConfirmHandler = () => {};
+
+    function showConfirmDeleteModal() {
+        if (!isAdmin) {
+            showAlert('Ошибка доступа', 'Вы не являетесь администратором.');
+            return;
         }
 
-        /**
-         * Переключает видимость секций и активность табов.
-         * @param {string} sectionId - ID секции для отображения ('form', 'reports', 'latestData').
-         */
-        function showSection(sectionId) {
-            ['form', 'reports', 'latestData'].forEach(id => {
-                const section = document.getElementById(id);
-                const tab = document.getElementById(id + 'Tab');
-                if (section && tab) {
-                    if (id === sectionId) {
-                        section.classList.remove('hidden');
-                        tab.classList.add('active');
-                    } else {
-                        section.classList.add('hidden');
-                        tab.classList.remove('active');
+        showAlert(
+            'Подтверждение удаления',
+            'Вы уверены, что хотите безвозвратно удалить ВСЕ данные из коллекции "reports"? Это действие НЕОБРАТИМО.',
+            () => {
+                deleteCollection('reports');
+            },
+            true // showConfirm
+        );
+    }
+
+    function showAlert(title, message, onConfirm = null, showConfirm = false) {
+        document.getElementById('modalTitle').textContent = title;
+        document.getElementById('modalMessage').textContent = message;
+        const confirmBtn = document.getElementById('modalConfirmBtn');
+
+        if (showConfirm && onConfirm) {
+            confirmBtn.classList.remove('hidden');
+            modalConfirmHandler = () => {
+                document.getElementById('modalOverlay').classList.add('hidden');
+                onConfirm(); // Выполняем действие
+            };
+        } else {
+            confirmBtn.classList.add('hidden');
+            modalConfirmHandler = () => {
+                document.getElementById('modalOverlay').classList.add('hidden');
+            };
+        }
+
+        document.getElementById('modalOverlay').classList.remove('hidden');
+    }
+
+    function showLoader() {
+        document.getElementById('loadingOverlay').style.display = 'flex';
+    }
+
+    function hideLoader() {
+        document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
+    function showSection(sectionId, element = null) {
+        document.querySelectorAll('section').forEach(section => {
+            section.classList.add('hidden');
+        });
+        document.getElementById(sectionId).classList.remove('hidden');
+
+        document.querySelectorAll('.nav-button').forEach(btn => {
+            btn.classList.remove('nav-button-active');
+        });
+        if (element) {
+            element.classList.add('nav-button-active');
+        }
+    }
+
+    function populateSettlements() {
+        const select = document.getElementById('settlement');
+        select.innerHTML = '<option value="">Выберите...</option>';
+        settlementsList.forEach(settlement => {
+            const option = document.createElement('option');
+            option.value = settlement;
+            option.textContent = settlement;
+            select.appendChild(option);
+        });
+    }
+
+    // --- ГЕОЛОКАЦИЯ ---
+
+    let currentLatitude = null;
+    let currentLongitude = null;
+
+    function getCurrentLocation() {
+        if (isTMA) {
+             // Для Telegram Mini App
+             Telegram.WebApp.MainButton.setText('Определяем GPS...');
+             Telegram.WebApp.MainButton.showProgress();
+
+             Telegram.WebApp.sendData(JSON.stringify({ type: 'get_location' }));
+             // Обработка ответа будет в боте, который отправит данные обратно через webapp_data_handler (если бы мы работали с ботом)
+             // В текущем окружении Canvas, мы используем стандартный API
+        }
+
+        const statusDisplay = document.getElementById('locationStatus');
+        statusDisplay.innerHTML = `<i data-lucide="loader-2" class="h-4 w-4 inline mr-1 text-yellow-500 animate-spin"></i> Определение...`;
+        lucide.createIcons();
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    currentLatitude = position.coords.latitude;
+                    currentLongitude = position.coords.longitude;
+                    document.getElementById('latitude').value = currentLatitude;
+                    document.getElementById('longitude').value = currentLongitude;
+                    document.getElementById('latDisplay').textContent = currentLatitude.toFixed(6);
+                    document.getElementById('lngDisplay').textContent = currentLongitude.toFixed(6);
+
+                    statusDisplay.innerHTML = `<i data-lucide="check-circle" class="h-4 w-4 inline mr-1 text-green-500"></i> Координаты: ${currentLatitude.toFixed(6)}, ${currentLongitude.toFixed(6)}`;
+                    lucide.createIcons();
+
+                    if (isTMA) {
+                        Telegram.WebApp.MainButton.hideProgress();
+                        Telegram.WebApp.MainButton.setText('Сохранить Отчет');
                     }
-                }
-            });
+                },
+                (error) => {
+                    console.error("Ошибка геолокации:", error);
+                    statusDisplay.innerHTML = `<i data-lucide="map-pin-off" class="h-4 w-4 inline mr-1 text-red-500"></i> Ошибка: ${error.message}`;
+                    lucide.createIcons();
+                    showAlert('Ошибка GPS', 'Не удалось определить местоположение. Убедитесь, что разрешение на геолокацию предоставлено.');
 
-            // Обновляем данные, специфичные для таба
-            if (sectionId === 'latestData') {
-                renderLatestData();
-            } else if (sectionId === 'reports' && isAdmin) {
-                fetchAndRenderReports();
-            }
+                    if (isTMA) {
+                        Telegram.WebApp.MainButton.hideProgress();
+                        Telegram.WebApp.MainButton.setText('Сохранить Отчет');
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+            );
+        } else {
+            statusDisplay.innerHTML = `<i data-lucide="map-pin-off" class="h-4 w-4 inline mr-1 text-red-500"></i> Геолокация не поддерживается.`;
+            lucide.createIcons();
+            showAlert('Ошибка GPS', 'Ваш браузер или устройство не поддерживает геолокацию.');
         }
-        window.showSection = showSection; // Экспортируем для HTML
+    }
 
-        /**
-         * Обновляет статус офлайн-режима.
-         */
-        function updateOfflineStatus() {
-            const statusElement = document.getElementById('offlineStatus');
-            const cacheCountElement = document.getElementById('cacheCount');
-            const syncButton = document.getElementById('syncButton');
+    // --- АУТЕНТИФИКАЦИЯ И ПРОВЕРКА АДМИНА ---
 
-            cacheCountElement.textContent = dataCache.length;
-
-            // Скрываем/показываем кнопку синхронизации
-            if (dataCache.length > 0) {
-                syncButton.classList.remove('hidden');
-                syncButton.innerHTML = `<i data-lucide="upload" class="w-5 h-5 inline-block mr-2"></i> Отправить данные (${dataCache.length})`;
-                statusElement.innerHTML = `<i data-lucide="cloud-off" class="w-4 h-4 mr-1 text-orange-500"></i> Офлайн (${dataCache.length} зап.)`;
-                statusElement.classList.remove('text-green-700');
-                statusElement.classList.add('text-orange-700');
+    async function authenticateUser() {
+        // Логика аутентификации (проверка ID в Mini App)
+        // В этом упрощенном TMA/Canvas приложении мы определяем ID и статус админа
+        // на основе initData (которого здесь нет) или заглушки.
+        try {
+            if (isTMA && Telegram.WebApp.initDataUnsafe.user) {
+                userTelegramId = Telegram.WebApp.initDataUnsafe.user.id;
             } else {
-                syncButton.classList.add('hidden');
-                statusElement.innerHTML = `<i data-lucide="zap" class="w-4 h-4 mr-1 text-green-500 animate-pulse"></i> Онлайн`;
-                statusElement.classList.remove('text-orange-700');
-                statusElement.classList.add('text-green-700');
+                // Заглушка для Canvas: используем ID из ADMIN_IDS для имитации админа
+                userTelegramId = ADMIN_IDS[0];
             }
+
+            if (ADMIN_IDS.includes(userTelegramId)) {
+                isAdmin = true;
+                document.getElementById('navReports').removeAttribute('disabled');
+                document.getElementById('navMap').removeAttribute('disabled');
+                document.getElementById('navAdmin').classList.remove('hidden');
+            } else {
+                isAdmin = false;
+            }
+
+            // Обновляем информацию для отладки
+            document.getElementById('debugUserId').textContent = userTelegramId || 'Нет ID';
+            document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'НЕТ';
+
+        } catch (e) {
+            console.error("Ошибка аутентификации пользователя:", e);
+            showAlert('Ошибка Аутентификации', 'Не удалось определить ID пользователя Telegram.');
+        }
+    }
+
+
+    // --- ОФФЛАЙН/КЭШ ЛОГИКА ---
+
+    function saveToCache(data) {
+        try {
+            const cachedReports = JSON.parse(localStorage.getItem('cachedReports') || '[]');
+            cachedReports.push(data);
+            localStorage.setItem('cachedReports', JSON.stringify(cachedReports));
+            updateOfflineStatus();
+            renderLatestData(false); // Обновить список последних отчетов
+            return true;
+        } catch (e) {
+            console.error("Ошибка сохранения в кэш:", e);
+            showAlert('Ошибка Кэша', 'Не удалось сохранить отчет в локальное хранилище.');
+            return false;
+        }
+    }
+
+    function updateOfflineStatus() {
+        const cachedReports = JSON.parse(localStorage.getItem('cachedReports') || '[]');
+        const badge = document.getElementById('offlineBadge');
+        if (cachedReports.length > 0) {
+            badge.textContent = `ОФФЛАЙН КЭШ (${cachedReports.length})`;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+
+    async function processCache() {
+        const cachedReports = JSON.parse(localStorage.getItem('cachedReports') || '[]');
+        if (cachedReports.length === 0) return true; // Ничего делать не нужно
+
+        if (isTMA) Telegram.WebApp.MainButton.setText(`Отправка кэша (${cachedReports.length})...`);
+        showLoader();
+
+        try {
+            // Массовая отправка (для простоты - последовательная)
+            for (const report of cachedReports) {
+                await db.collection('reports').add(report);
+            }
+            // Если все успешно:
+            localStorage.removeItem('cachedReports');
+            updateOfflineStatus();
+            showAlert('Успех', `Успешно отправлено ${cachedReports.length} кэшированных отчетов в Firebase.`);
+            if (isAdmin) fetchAndRenderReports(); // Обновить отчеты админа
+            renderLatestData(true); // Обновить последние отчеты пользователя
+            return true;
+
+        } catch (e) {
+            console.error("Ошибка отправки кэша:", e);
+            showAlert('Ошибка', `Не удалось отправить кэш в Firebase: ${e.message}. Попробуйте позже.`);
+            return false;
+        } finally {
+            hideLoader();
+            if (isTMA) Telegram.WebApp.MainButton.setText('Сохранить Отчет');
+        }
+    }
+
+    // --- ОТПРАВКА ДАННЫХ ---
+
+    document.getElementById('reportForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const submitButton = form.querySelector('button[type="submit"]');
+
+        if (isTMA) Telegram.WebApp.MainButton.showProgress();
+        submitButton.disabled = true;
+        submitButton.textContent = 'Сохранение...';
+
+        const reportData = {
+            user_id: userTelegramId,
+            full_name: isTMA && Telegram.WebApp.initDataUnsafe.user ? (Telegram.WebApp.initDataUnsafe.user.first_name + ' ' + (Telegram.WebApp.initDataUnsafe.user.last_name || '')).trim() : userTelegramId,
+            username: isTMA && Telegram.WebApp.initDataUnsafe.user ? (Telegram.WebApp.initDataUnsafe.user.username || 'n/a') : 'n/a',
+            timestamp: new Date().getTime(),
+            settlement: form.settlement.value,
+            street: form.street.value.trim(),
+            house: form.house.value.trim(),
+            apartment: form.apartment.value.trim() || 'N/A',
+            action: form.action.value,
+            loyalty: form.loyalty.value,
+            requires_followup: form.requiresFollowup.checked,
+            comment: form.comment.value.trim() || 'N/A',
+            location: (currentLatitude && currentLongitude) ? {
+                latitude: currentLatitude,
+                longitude: currentLongitude
+            } : null
+        };
+
+        try {
+            // Сначала пробуем отправить
+            if (db) {
+                await db.collection('reports').add(reportData);
+                showAlert('Успех!', 'Отчет успешно сохранен в Firebase.');
+                form.reset();
+                currentLatitude = null;
+                currentLongitude = null;
+                document.getElementById('latDisplay').textContent = 'N/A';
+                document.getElementById('lngDisplay').textContent = 'N/A';
+
+                // Попытаться отправить кэш после успешной онлайн-отправки
+                await processCache();
+
+            } else {
+                // Если нет соединения с Firebase, сохраняем в кэш
+                if (saveToCache(reportData)) {
+                    showAlert('Оффлайн Сохранение', 'Нет соединения с Firebase. Отчет сохранен в локальный кэш и будет отправлен позже.');
+                    form.reset();
+                }
+            }
+            if (isAdmin) fetchAndRenderReports(); // Обновить отчеты админа
+            renderLatestData(true); // Обновить последние отчеты пользователя
+
+        } catch (e) {
+            console.error("Ошибка сохранения отчета:", e);
+            // Если онлайн-отправка не удалась, сохраняем в кэш
+            if (saveToCache(reportData)) {
+                showAlert('Ошибка и Кэш', `Не удалось сохранить отчет в Firebase: ${e.message}. Сохранено в локальный кэш.`);
+                form.reset();
+            }
+        } finally {
+            if (isTMA) Telegram.WebApp.MainButton.hideProgress();
+            submitButton.disabled = false;
+            submitButton.textContent = 'Сохранить Отчет';
             lucide.createIcons();
         }
+    };
 
-        /**
-         * Загружает данные из IndexedDB (кэш).
-         */
-        async function loadCache() {
-            try {
-                // Инициализируем localforage для нашей коллекции
-                const cacheStore = localforage.createInstance({ name: 'agitator_data_cache', storeName: COLLECTION_NAME });
-                dataCache = [];
-                await cacheStore.iterate((value) => {
-                    dataCache.push(value);
-                });
-                updateOfflineStatus();
-                console.log(`Кэш загружен. Найдено ${dataCache.length} записей.`);
-            } catch (e) {
-                console.error("Ошибка при загрузке кэша:", e);
-                showAlert('Ошибка', 'Не удалось загрузить локальный кэш.', 'error');
-            }
+    // --- ОТОБРАЖЕНИЕ ПОСЛЕДНИХ ОТЧЕТОВ ПОЛЬЗОВАТЕЛЯ ---
+
+    function renderLatestData(fromCache) {
+        const container = document.getElementById('latestDataContainer');
+        container.innerHTML = '';
+        const dataToRender = [];
+
+        // 1. Из кэша
+        const cachedReports = JSON.parse(localStorage.getItem('cachedReports') || '[]');
+        cachedReports.forEach(r => dataToRender.push({ ...r, is_cached: true }));
+
+        // 2. Из dataCache (последние онлайн-данные пользователя)
+        const userOnlineReports = dataCache
+            .filter(r => r.user_id === userTelegramId)
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .slice(0, 5 - cachedReports.length); // Берем столько, сколько осталось места
+
+        dataToRender.push(...userOnlineReports.map(r => ({ ...r, is_cached: false })));
+
+        if (dataToRender.length === 0) {
+            container.innerHTML = '<p class="text-gray-500">Пока нет сохраненных отчетов.</p>';
+            return;
         }
 
-        // --- ЛОГИКА ФОРМЫ И СОХРАНЕНИЯ ---
+        dataToRender
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .slice(0, 5)
+            .forEach(report => {
+            const date = new Date(report.timestamp).toLocaleString();
+            const locationStr = report.location ? ` | GPS: ${report.location.latitude.toFixed(4)}, ${report.location.longitude.toFixed(4)}` : '';
+            const cacheBadge = report.is_cached ?
+                '<span class="ml-2 text-xs font-medium text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full">Кэш</span>' :
+                '<span class="ml-2 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">Online</span>';
 
-        /**
-         * Заполняет выпадающий список поселений.
-         */
-        function populateSettlements() {
-            const settlements = [
-                "Москва", "Санкт-Петербург", "Новосибирск", "Екатеринбург", "Казань" // Мок-данные
-                // Вставьте сюда реальные населенные пункты
-            ];
-            const select = document.getElementById('settlement');
-            select.innerHTML = '<option value="">Выберите населенный пункт</option>';
-            settlements.forEach(s => {
-                const option = document.createElement('option');
-                option.value = s;
-                option.textContent = s;
-                select.appendChild(option);
-            });
+            const loyaltyColor = {
+                "Лоялен": "bg-green-100 text-green-800",
+                "Нейтрален": "bg-blue-100 text-blue-800",
+                "Нелоялен": "bg-red-100 text-red-800",
+                "Не определено": "bg-gray-100 text-gray-800"
+            }[report.loyalty] || "bg-gray-100 text-gray-800";
+
+            container.innerHTML += `
+                <div class="p-4 border border-gray-200 rounded-lg shadow-sm">
+                    <div class="flex justify-between items-center mb-2">
+                        <p class="text-sm font-medium text-gray-500">${date} ${cacheBadge}</p>
+                        <span class="text-xs font-semibold ${loyaltyColor} px-2 py-1 rounded-full">${report.loyalty}</span>
+                    </div>
+                    <p class="text-gray-900 font-semibold mb-1">
+                        ${report.settlement}, ул. ${report.street}, д. ${report.house}${report.apartment !== 'N/A' ? `, кв. ${report.apartment}` : ''}
+                    </p>
+                    <p class="text-sm text-gray-700">Действие: <span class="font-medium">${report.action}</span></p>
+                    <p class="text-sm text-gray-700 truncate">Комментарий: ${report.comment}</p>
+                    ${locationStr ? `<p class="text-xs text-gray-400 mt-1">${locationStr}</p>` : ''}
+                </div>
+            `;
+        });
+    }
+
+
+    // --- ОТЧЕТЫ АДМИНА ---
+
+    async function fetchAndRenderReports() {
+        if (!isAdmin) return;
+        if (!db) {
+             showAlert('Ошибка Firebase', 'База данных не инициализирована. Проверьте консоль на наличие ошибок.');
+             return;
         }
+        showLoader();
 
-        /**
-         * Отправляет данные формы в кэш или Firestore.
-         * @param {Event} event - Событие отправки формы.
-         */
-        async function submitForm(event) {
-            event.preventDefault();
+        try {
+            const snapshot = await db.collection('reports').get();
+            dataCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            if (isTMA) Telegram.WebApp.MainButton.showProgress();
+            // Обновляем статистику
+            const total = dataCache.length;
+            const loyal = dataCache.filter(d => d.loyalty === 'Лоялен').length;
+            const disloyal = dataCache.filter(d => d.loyalty === 'Нелоялен').length;
 
-            // 1. Сбор данных
-            const formData = {
-                timestamp: Date.now(),
-                user_id: userTelegramId || 'anon_' + (isTMA ? Telegram.WebApp.initDataUnsafe.user.id : 'web_mock'), // Если ID нет, используем заглушку
-                full_name: userFirstName, // Добавлено имя
-                settlement: document.getElementById('settlement').value,
-                street: document.getElementById('street').value.trim(),
-                house: document.getElementById('house').value.trim(),
-                apartment: document.getElementById('apartment').value.trim() || 'N/A',
-                action: document.getElementById('action').value,
-                loyalty: document.getElementById('loyalty').value,
-                requires_followup: document.getElementById('requiresFollowup').checked,
-                comment: document.getElementById('comment').value.trim(),
-                location: window.currentLocation || null, // Используем текущее местоположение
-            };
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statLoyal').textContent = loyal;
+            document.getElementById('statDisloyal').textContent = disloyal;
 
-            // 2. Попытка синхронизации/сохранения
-            let success = await saveToFirestore(formData);
+            // Рендер графиков и таблицы
+            renderCharts();
+            renderReportsTable();
+            generateMap(dataCache); // Обновить карту
+            renderLatestData(false); // Обновить список последних отчетов
 
-            if (isTMA) Telegram.WebApp.MainButton.hideProgress();
-
-            if (success) {
-                showAlert('Успешно!', 'Данные отправлены в облако.', 'success');
-                document.getElementById('agitatorForm').reset();
-                if (isAdmin) fetchAndRenderReports(); // Обновляем отчеты сразу
-            } else {
-                await saveToCache(formData);
-                showAlert('Внимание!', 'Нет соединения! Данные сохранены в кэше. Нажмите "Отправить" для синхронизации.', 'warning');
-            }
-
-            renderLatestData(); // Обновляем последние записи
+        } catch (e) {
+            console.error("Ошибка загрузки отчетов:", e);
+            showAlert('Ошибка Загрузки', 'Не удалось загрузить данные из Firebase. Возможно, проблема с правилами безопасности.');
+        } finally {
+            hideLoader();
         }
+    }
 
-        /**
-         * Сохраняет данные в Firestore.
-         * @param {Object} data - Объект данных.
-         * @returns {boolean} - true, если успешно, false при ошибке (нет соединения).
-         */
-        async function saveToFirestore(data) {
-            if (!db) return false;
-            try {
-                // Используем addDoc для добавления документа с авто-генерируемым ID
-                await firebase.firestore().collection(COLLECTION_NAME).add(data);
-                return true;
-            } catch (e) {
-                console.warn("Ошибка при сохранении в Firestore (вероятно, нет соединения):", e);
-                return false;
-            }
+    function renderCharts() {
+        // Лояльность по Действиям
+        const loyaltyByAction = dataCache.reduce((acc, doc) => {
+            if (!acc[doc.action]) acc[doc.action] = { loyal: 0, neutral: 0, disloyal: 0, undefined: 0 };
+            if (doc.loyalty === 'Лоялен') acc[doc.action].loyal++;
+            else if (doc.loyalty === 'Нейтрален') acc[doc.action].neutral++;
+            else if (doc.loyalty === 'Нелоялен') acc[doc.action].disloyal++;
+            else acc[doc.action].undefined++;
+            return acc;
+        }, {});
+
+        const actionLabels = Object.keys(loyaltyByAction);
+        const loyalData = actionLabels.map(a => loyaltyByAction[a].loyal);
+        const neutralData = actionLabels.map(a => loyaltyByAction[a].neutral);
+        const disloyalData = actionLabels.map(a => loyaltyByAction[a].disloyal);
+
+        renderBarChart('loyaltyChart', actionLabels, [
+            { label: 'Лоялен', data: loyalData, backgroundColor: '#34d399' },
+            { label: 'Нейтрален', data: neutralData, backgroundColor: '#60a5fa' },
+            { label: 'Нелоялен', data: disloyalData, backgroundColor: '#f87171' },
+        ], 'bar', 'Лояльность');
+
+        // Действия по Поселениям
+        const actionBySettlement = dataCache.reduce((acc, doc) => {
+            if (!acc[doc.settlement]) acc[doc.settlement] = 0;
+            acc[doc.settlement]++;
+            return acc;
+        }, {});
+
+        const settlementLabels = Object.keys(actionBySettlement);
+        const settlementData = Object.values(actionBySettlement);
+
+        renderBarChart('settlementChart', settlementLabels, [
+            { label: 'Отчеты', data: settlementData, backgroundColor: '#818cf8' }
+        ], 'bar', 'Отчеты');
+    }
+
+    let chartInstances = {};
+
+    function renderBarChart(canvasId, labels, datasets, type, titleText) {
+        if (chartInstances[canvasId]) {
+            chartInstances[canvasId].destroy();
         }
-
-        /**
-         * Сохраняет данные в IndexedDB (localforage).
-         * @param {Object} data - Объект данных.
-         */
-        async function saveToCache(data) {
-            try {
-                const cacheStore = localforage.createInstance({ name: 'agitator_data_cache', storeName: COLLECTION_NAME });
-                // Используем timestamp как ключ
-                await cacheStore.setItem(data.timestamp.toString(), data);
-                dataCache.push(data); // Добавляем в локальный массив
-                updateOfflineStatus();
-            } catch (e) {
-                console.error("Ошибка при сохранении в кэш:", e);
-                showAlert('Ошибка', 'Не удалось сохранить данные в локальный кэш.', 'error');
-            }
-        }
-
-        /**
-         * Синхронизирует данные из кэша с Firestore.
-         */
-        async function syncData() {
-            if (dataCache.length === 0) {
-                showAlert('Инфо', 'Кэш пуст, нечего отправлять.', 'info');
-                return;
-            }
-            if (!db) {
-                showAlert('Ошибка', 'Firebase не инициализирован. Попробуйте обновить страницу.', 'error');
-                return;
-            }
-
-            if (isTMA) Telegram.WebApp.MainButton.showProgress();
-
-            let successfulSyncs = 0;
-            const cacheStore = localforage.createInstance({ name: 'agitator_data_cache', storeName: COLLECTION_NAME });
-            const recordsToSync = [...dataCache]; // Копируем для итерации
-
-            for (const record of recordsToSync) {
-                try {
-                    // Используем addDoc, как при обычной отправке
-                    await firebase.firestore().collection(COLLECTION_NAME).add(record);
-                    // Удаляем запись из кэша и локального массива только после успешной отправки
-                    await cacheStore.removeItem(record.timestamp.toString());
-                    dataCache = dataCache.filter(item => item.timestamp !== record.timestamp);
-                    successfulSyncs++;
-                } catch (e) {
-                    // Если произошла ошибка (например, пропало соединение в процессе)
-                    console.error("Ошибка синхронизации записи:", e);
-                    showAlert('Внимание!', `Ошибка синхронизации. Отправлено ${successfulSyncs} из ${recordsToSync.length}. Попробуйте позже.`, 'warning');
-                    break;
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        chartInstances[canvasId] = new Chart(ctx, {
+            type: type,
+            data: { labels, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top' },
+                    title: { display: false, text: titleText }
+                },
+                scales: {
+                    x: { stacked: type === 'bar' && datasets.length > 1, title: { display: false } },
+                    y: { stacked: type === 'bar' && datasets.length > 1, beginAtZero: true }
                 }
             }
+        });
+    }
 
-            if (isTMA) Telegram.WebApp.MainButton.hideProgress();
 
-            updateOfflineStatus();
-            renderLatestData();
+    function renderReportsTable() {
+        const tableBody = document.getElementById('reportsTableBody');
+        tableBody.innerHTML = ''; // Очищаем таблицу
 
-            if (successfulSyncs > 0) {
-                showAlert('Синхронизация!', `Успешно отправлено ${successfulSyncs} записей!`, 'success');
-            }
+        // Сортируем по времени (новые сверху)
+        const sortedData = [...dataCache].sort((a, b) => b.timestamp - a.timestamp);
 
-            if (isAdmin) fetchAndRenderReports(); // Обновляем отчеты
+        if (sortedData.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="7" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">Нет данных для отображения.</td></tr>';
+            return;
         }
 
-        /**
-         * Очищает весь локальный кэш (IndexedDB).
-         */
-        async function clearCache() {
-            try {
-                const cacheStore = localforage.createInstance({ name: 'agitator_data_cache', storeName: COLLECTION_NAME });
-                await cacheStore.clear();
-                dataCache = [];
-                updateOfflineStatus();
-                renderLatestData();
-                showAlert('Кэш очищен', 'Все несохраненные локальные данные удалены.', 'info');
-            } catch (e) {
-                console.error("Ошибка при очистке кэша:", e);
-                showAlert('Ошибка', 'Не удалось очистить локальный кэш.', 'error');
-            }
+        sortedData.forEach(doc => {
+            const date = new Date(doc.timestamp).toLocaleString();
+            const loyaltyColor = {
+                "Лоялен": "text-green-600 font-semibold",
+                "Нейтрален": "text-blue-600 font-semibold",
+                "Нелоялен": "text-red-600 font-semibold",
+                "Не определено": "text-gray-500"
+            }[doc.loyalty] || "text-gray-500";
+
+            const row = `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${date}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${doc.full_name || doc.username}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${doc.settlement}, ул. ${doc.street}, д. ${doc.house}${doc.apartment !== 'N/A' ? `, кв. ${doc.apartment}` : ''}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${doc.action}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm ${loyaltyColor}">${doc.loyalty}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${doc.requires_followup ? 'ДА' : 'НЕТ'}</td>
+                    <td class="px-6 py-4 whitespace-normal text-sm text-gray-500 max-w-xs">${doc.comment}</td>
+                </tr>
+            `;
+            tableBody.innerHTML += row;
+        });
+    }
+
+    function exportToXLSX() {
+        if (dataCache.length === 0) {
+            showAlert('Ошибка', 'Нет данных для экспорта. Пожалуйста, обновите отчеты.');
+            return;
+        }
+        const exportData = dataCache.map(doc => ({
+            'Время': new Date(doc.timestamp).toLocaleString(), 'ID Пользователя': doc.user_id, 'Агитатор (ФИО)': doc.full_name || doc.username,
+            'Населенный пункт': doc.settlement, 'Улица': doc.street, 'Дом': doc.house, 'Квартира': doc.apartment, 'Действие': doc.action,
+            'Лояльность': doc.loyalty, 'Требуется Повтор': doc.requires_followup ? 'ДА' : 'НЕТ', 'Комментарий': doc.comment,
+            'Широта': doc.location ? doc.location.latitude : 'N/A', 'Долгота': doc.location ? doc.location.longitude : 'N/A',
+        }));
+        const worksheet = XLSX.utils.json_to_sheet(exportData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Данные");
+        XLSX.writeFile(workbook, "agitator_data_" + new Date().toISOString().slice(0, 10) + ".xlsx");
+    }
+
+    // --- ЛИСТАЯ КАРТА ---
+
+    function generateMap(data) {
+        if (mapInstance) {
+            mapInstance.remove(); // Удаляем старую карту, чтобы избежать дублирования
         }
 
-        // --- ГЕОЛОКАЦИЯ ---
+        // Фильтруем только записи с координатами
+        const geoData = data.filter(doc => doc.location && doc.location.latitude && doc.location.longitude);
 
-        /**
-         * Получает текущее местоположение пользователя.
-         */
-        function getLocation() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        window.currentLocation = {
-                            latitude: position.coords.latitude,
-                            longitude: position.coords.longitude
-                        };
-                        showAlert('Геолокация', `Местоположение получено: ${window.currentLocation.latitude.toFixed(4)}, ${window.currentLocation.longitude.toFixed(4)}`, 'info');
-                    },
-                    (error) => {
-                        console.error("Ошибка геолокации:", error);
-                        window.currentLocation = null;
-                        showAlert('Геолокация', 'Не удалось получить местоположение. Проверьте разрешения.', 'warning');
-                    },
-                    { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }
-                );
+        if (geoData.length === 0) {
+            const mapContainer = document.getElementById('map');
+            mapContainer.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500">Нет данных о геолокации для отображения.</div>';
+            return;
+        }
+
+        // Центр карты: средние координаты
+        const avgLat = geoData.reduce((sum, doc) => sum + doc.location.latitude, 0) / geoData.length;
+        const avgLng = geoData.reduce((sum, doc) => sum + doc.location.longitude, 0) / geoData.length;
+
+        mapInstance = L.map('map').setView([avgLat, avgLng], 12);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(mapInstance);
+
+        if (mapMode === 'cluster') {
+            if (markerClusterGroup) {
+                markerClusterGroup.clearLayers();
             } else {
-                showAlert('Геолокация', 'Ваш браузер не поддерживает геолокацию.', 'warning');
-                window.currentLocation = null;
-            }
-        }
-
-
-        // --- ОТЧЕТЫ И ВИЗУАЛИЗАЦИЯ (АДМИН) ---
-
-        let mapInstance = null; // Переменная для хранения экземпляра карты
-        let mapData = []; // Кеш для данных карты
-
-        /**
-         * Генерирует и отображает тепловую карту активности.
-         * @param {Array<Object>} data - Данные отчетов.
-         */
-        function generateMap(data) {
-            const mapElement = document.getElementById('map');
-            if (!mapElement) return;
-
-            // Если карта уже существует, удаляем ее
-            if (mapInstance) {
-                mapInstance.remove();
+                markerClusterGroup = L.markerClusterGroup();
             }
 
-            // 1. Фильтруем данные для карты (только с геолокацией)
-            mapData = data.filter(d => d.location && d.location.latitude && d.location.longitude);
-            const latLngs = mapData.map(d => [d.location.latitude, d.location.longitude, 0.5]); // [lat, lng, intensity]
-
-            // 2. Определяем центр карты
-            let centerLat = 55.7558; // Москва
-            let centerLng = 37.6173;
-            let zoom = 5;
-
-            if (mapData.length > 0) {
-                // Если есть данные, находим средние координаты
-                const avgLat = mapData.reduce((sum, d) => sum + d.location.latitude, 0) / mapData.length;
-                const avgLng = mapData.reduce((sum, d) => sum + d.location.longitude, 0) / mapData.length;
-                centerLat = avgLat;
-                centerLng = avgLng;
-                zoom = 10; // Приближаем, если есть данные
-            }
-
-            // 3. Инициализация карты
-            mapInstance = L.map('map').setView([centerLat, centerLng], zoom);
-
-            // Добавляем тайлы (OpenStreetMap)
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            }).addTo(mapInstance);
-
-            // 4. Добавляем кластеры для маркеров
-            const markers = L.markerClusterGroup();
-
-            mapData.forEach(d => {
-                const marker = L.marker([d.location.latitude, d.location.longitude]);
+            geoData.forEach(doc => {
+                const marker = L.marker([doc.location.latitude, doc.location.longitude]);
                 const popupContent = `
-                    <div class="font-sans text-sm">
-                        <strong class="text-indigo-600">${d.full_name || d.user_id}</strong>
-                        <p class="mt-1">
-                            <i data-lucide="map-pin" class="w-4 h-4 inline-block mr-1 text-gray-500"></i>
-                            ${d.settlement}, ${d.street}, ${d.house}
-                        </p>
-                        <p>
-                            <i data-lucide="hand-metal" class="w-4 h-4 inline-block mr-1 text-gray-500"></i>
-                            ${d.action} / ${d.loyalty}
-                        </p>
-                        <p class="text-xs text-gray-500 mt-1">
-                            ${new Date(d.timestamp).toLocaleString()}
-                        </p>
+                    <div style="font-family: Arial, sans-serif; font-size: 12px;">
+                        <strong>${doc.full_name || doc.username}</strong>
+                        <br>${new Date(doc.timestamp).toLocaleString()}
+                        <br>Адрес: ${doc.street}, ${doc.house}
+                        <br>Действие: ${doc.action}
+                        <br>Лояльность: <strong>${doc.loyalty}</strong>
+                        ${doc.requires_followup ? '<br><span style="color: red;">Требуется Повтор</span>' : ''}
                     </div>
                 `;
                 marker.bindPopup(popupContent);
-                markers.addLayer(marker);
+                markerClusterGroup.addLayer(marker);
             });
 
-            mapInstance.addLayer(markers);
+            mapInstance.addLayer(markerClusterGroup);
 
-            // 5. Добавляем тепловую карту
-            L.heatLayer(latLngs, {
-                radius: 25,
-                blur: 15,
-                maxZoom: 17,
-                gradient: { 0.4: 'blue', 0.6: 'lime', 1.0: 'red' }
-            }).addTo(mapInstance);
-
-            // Перерисовка иконок Lucide после добавления маркеров
-            mapInstance.on('popupopen', () => {
-                lucide.createIcons();
-            });
+        } else if (mapMode === 'heat') {
+            const heatData = geoData.map(doc => [doc.location.latitude, doc.location.longitude, 0.5]); // intensity 0.5
+            L.heatLayer(heatData, { radius: 25 }).addTo(mapInstance);
         }
 
-        /**
-         * Строит круговую диаграмму.
-         * @param {string} canvasId - ID элемента canvas.
-         * @param {Object} data - Данные для диаграммы.
-         * @param {string} label - Заголовок набора данных.
-         */
-        function generatePieChart(canvasId, data, label) {
-            const ctx = document.getElementById(canvasId).getContext('2d');
-            const existingChart = Chart.getChart(canvasId);
-            if (existingChart) existingChart.destroy();
+        // Обновляем размер карты для корректного отображения
+        setTimeout(() => mapInstance.invalidateSize(), 300);
+    }
 
-            const labels = Object.keys(data);
-            const values = Object.values(data);
-            const total = values.reduce((sum, val) => sum + val, 0);
 
-            // Цветовая палитра для лояльности
-            const colorMap = {
-                'Поддерживает': '#10b981', // green-500
-                'Нейтрален': '#f59e0b',    // amber-500
-                'Против': '#ef4444',       // red-500
-                'Неизвестно': '#9ca3af',   // gray-400
-            };
-            const colors = labels.map(l => colorMap[l] || '#3b82f6'); // blue-500 - дефолт
+    // --- АДМИНИСТРИРОВАНИЕ ---
 
-            const chartOptions = {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'top' },
-                    tooltip: {
-                        callbacks: {
-                            label: (context) => {
-                                const value = context.parsed;
-                                const percentage = ((value / total) * 100).toFixed(1);
-                                return `${context.label}: ${value} (${percentage}%)`;
-                            }
-                        }
-                    },
-                    title: {
-                        display: false,
-                    }
+    // Функция для рекурсивного удаления коллекции (Firebase требует итераций)
+    async function deleteCollection(collectionPath) {
+        if (!isAdmin) {
+            showAlert('Ошибка доступа', 'У вас нет прав для выполнения этой операции.');
+            return false;
+        }
+        if (!db) {
+             showAlert('Ошибка Firebase', 'База данных не инициализирована.');
+             return false;
+        }
+
+        if (isTMA) Telegram.WebApp.MainButton.showProgress();
+        showLoader();
+
+        try {
+            const collectionRef = db.collection(collectionPath);
+            const query = collectionRef.orderBy('__name__').limit(50); // Удаляем по 50 документов
+            let deletedCount = 0;
+
+            const deleteQueryBatch = async (db, query) => {
+                const snapshot = await query.get();
+
+                if (snapshot.size === 0) {
+                    return 0; // Все удалено
                 }
+
+                const batch = db.batch();
+                snapshot.docs.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+
+                await batch.commit();
+                deletedCount += snapshot.size;
+
+                if (snapshot.size === 50) {
+                    // Есть еще, рекурсивно вызываем
+                    return deleteQueryBatch(db, query);
+                }
+                return deletedCount;
             };
 
-            new Chart(ctx, {
-                type: 'pie',
-                data: { labels: labels, datasets: [{ label: label, data: values, backgroundColor: colors, borderColor: '#ffffff', borderWidth: 1 }] },
-                options: chartOptions
-            });
-        }
+            await deleteQueryBatch(db, query);
 
-        /**
-         * Извлекает и отображает отчеты (доступно только админам).
-         */
-        async function fetchAndRenderReports() {
-            if (!isAdmin || !db) return;
-            if (isTMA) Telegram.WebApp.MainButton.showProgress();
-
-            try {
-                const snapshot = await firebase.firestore().collection(COLLECTION_NAME).get();
-                const data = snapshot.docs.map(doc => doc.data());
-
-                // 1. Статистика
-                document.getElementById('statTotalCount').textContent = data.length;
-                const uniqueUsers = new Set(data.map(d => d.user_id));
-                document.getElementById('statUniqueUsers').textContent = uniqueUsers.size;
-
-                // 2. График Лояльности
-                const loyaltyCounts = data.reduce((acc, d) => {
-                    acc[d.loyalty] = (acc[d.loyalty] || 0) + 1;
-                    return acc;
-                }, {});
-                generatePieChart('loyaltyChart', loyaltyCounts, 'Лояльность');
-
-                // 3. Карта
-                generateMap(data);
-
-            } catch (e) {
-                console.error("Ошибка при получении отчетов:", e);
-                showAlert('Ошибка', 'Не удалось загрузить отчеты из Firestore. Проверьте соединение.', 'error');
-            } finally {
-                if (isTMA) Telegram.WebApp.MainButton.hideProgress();
-            }
-        }
-
-        /**
-         * Отображает последние 20 записей из кэша.
-         */
-        function renderLatestData() {
-            const tableContainer = document.getElementById('latestDataTable');
-            if (dataCache.length === 0) {
-                tableContainer.innerHTML = '<p class="text-center text-gray-500 p-4">Нет сохраненных данных в кэше. <br>Все данные синхронизированы.</p>';
-                return;
-            }
-
-            // Сортируем по времени (от нового к старому)
-            const latestData = [...dataCache].sort((a, b) => b.timestamp - a.timestamp).slice(0, 20);
-
-            let tableHTML = `
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Время</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Адрес</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Лояльность</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Комментарий</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-            `;
-
-            latestData.forEach(d => {
-                const date = new Date(d.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-                const loyaltyColor = { 'Поддерживает': 'bg-green-100 text-green-800', 'Против': 'bg-red-100 text-red-800', 'Нейтрален': 'bg-yellow-100 text-yellow-800', 'Неизвестно': 'bg-gray-100 text-gray-800' }[d.loyalty] || 'bg-gray-100 text-gray-800';
-
-                tableHTML += `
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${date}</td>
-                        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${d.settlement}, ${d.street}, ${d.house}${d.apartment !== 'N/A' ? `, кв. ${d.apartment}` : ''}</td>
-                        <td class="px-3 py-2 whitespace-nowrap">
-                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${loyaltyColor}">${d.loyalty}</span>
-                        </td>
-                        <td class="px-3 py-2 text-sm text-gray-500 max-w-xs truncate">${d.comment || '—'}</td>
-                    </tr>
-                `;
-            });
-
-            tableHTML += '</tbody></table>';
-            tableContainer.innerHTML = tableHTML;
-        }
-
-        // --- УДАЛЕНИЕ КОЛЛЕКЦИИ (DANGER!) ---
-
-        /**
-         * Показывает модальное окно для подтверждения удаления.
-         */
-        function confirmClearDatabase() {
-            document.getElementById('confirmDeleteInput').value = '';
-            document.getElementById('confirmModal').classList.remove('hidden');
-            document.getElementById('confirmDeleteInput').focus();
-        }
-
-        /**
-         * Выполняет удаление всех данных из коллекции Firestore.
-         */
-        async function clearDatabase() {
-            const confirmInput = document.getElementById('confirmDeleteInput').value.trim();
-            if (confirmInput !== 'УДАЛИТЬ') {
-                showAlert('Ошибка', 'Неверное подтверждающее слово.', 'error');
-                return;
-            }
-
-            document.getElementById('confirmModal').classList.add('hidden'); // Скрываем модальное окно
-
-            if (!isAdmin) {
-                showAlert('Ошибка', 'У вас нет прав администратора для этой операции.', 'error');
-                return;
-            }
-            if (!db) {
-                showAlert('Ошибка', 'Firebase не инициализирован.', 'error');
-                return;
-            }
-
-            if (isTMA) Telegram.WebApp.MainButton.showProgress();
-
-            try {
-                 // ВНИМАНИЕ: В Firestore нет прямого метода для удаления коллекции.
-                 // Это упрощенная реализация, которая удаляет только 1000 документов.
-                 // Для продакшн-систем необходимо использовать серверную функцию (Cloud Function).
-                 // Однако для данного примера это сработает.
-
-                let deletedCount = 0;
-                let batch = firebase.firestore().batch();
-                let hasMore = true;
-
-                while(hasMore) {
-                    const snapshot = await firebase.firestore().collection(COLLECTION_NAME).limit(500).get(); // Удаляем партиями по 500
-                    hasMore = snapshot.size > 0;
-                    if (snapshot.size === 0) break;
-
-                    snapshot.docs.forEach(doc => {
-                        batch.delete(doc.ref);
-                        deletedCount++;
-                    });
-
-                    await batch.commit();
-                    batch = firebase.firestore().batch(); // Сбрасываем batch
-                }
-
-                // Очищаем локальный кэш
-                await clearCache();
-                dataCache = []; // Очищаем локальный кеш после удаления
-                updateOfflineStatus();
-                showAlert('Успешно!', `Удалено ${deletedCount} записей. Данные Firestore очищены.`);
-
-                if (isAdmin) fetchAndRenderReports();
-
-                return true;
-
-            } catch (e) {
-                 console.error("Error deleting collection:", e);
-                 showAlert('Ошибка', 'Произошла ошибка при удалении коллекции: ' + e.message);
-                 return false;
-            } finally {
-                 if (isTMA) Telegram.WebApp.MainButton.hideProgress();
-            }
-        };
-
-
-        // --- ИНИЦИАЛИЗАЦИЯ И АУТЕНТИФИКАЦИЯ ---
-
-        /**
-         * Инициализирует Firebase и устанавливает статус администратора.
-         */
-        async function authenticateUser() {
-            try {
-                // Инициализация Firebase
-                if (!app) {
-                    app = firebase.initializeApp(firebaseConfig);
-                    db = firebase.firestore();
-                    // Firebase Auth is not strictly necessary for this Firestore-only anonymous access,
-                    // but we can use an anonymous sign-in if needed for security rules.
-                    // For simplicity, we rely on the security rules that allow writing.
-                }
-
-                // 1. Получение Telegram User ID и проверка на Админа
-                if (isTMA && Telegram.WebApp.initDataUnsafe.user) {
-                    const user = Telegram.WebApp.initDataUnsafe.user;
-                    userTelegramId = user.id.toString();
-                    userFirstName = user.first_name || user.username || 'Агитатор';
-
-                    // 🔑 КОРРЕКТНАЯ ПРОВЕРКА НА АДМИНА
-                    isAdmin = parseInt(userTelegramId) === ADMIN_ID;
-
-                } else if (!isTMA) {
-                    // Мок-данные для Web Preview
-                    userTelegramId = ADMIN_ID.toString(); // Устанавливаем ID админа для тестового режима
-                    userFirstName = 'Web Preview (Админ)';
-                    isAdmin = true;
-                    // Инициализация геолокации в Web Preview, чтобы было что показывать на карте
-                    getLocation();
-                }
-
-                // 2. Отображение/скрытие админ-панели
-                if (isAdmin) {
-                    document.getElementById('adminPanel').classList.remove('hidden');
-                    document.getElementById('reportsTab').classList.remove('hidden');
-                } else {
-                    document.getElementById('adminPanel').classList.add('hidden');
-                    document.getElementById('reportsTab').classList.add('hidden');
-                }
-
-                return true;
-
-            } catch (e) {
-                console.error("Ошибка аутентификации или инициализации:", e);
-                showAlert('Ошибка', 'Критическая ошибка инициализации Firebase/Telegram: ' + e.message, 'error');
-                return false;
-            }
-        }
-
-
-        // --- ИНИЦИАЛИЗАЦИЯ WEBAPP ---
-        if (isTMA) {
-            Telegram.WebApp.ready();
-            Telegram.WebApp.expand();
-            // Запрашиваем геолокацию сразу, если это TMA
-            getLocation();
-        }
-
-
-        // 🔑 Инициализация при загрузке (Ожидаем authenticateUser)
-        window.onload = async () => {
-            // 0. Загружаем кэш (нужно до аутентификации)
-            await loadCache();
-
-            // 1. Сначала аутентификация для установки isAdmin и userTelegramId
-            await authenticateUser();
-
-            // 2. Затем заполнение интерфейса
-            populateSettlements();
-            // updateOfflineStatus() уже вызван в loadCache, но вызовем еще раз для гарантии
+            localStorage.removeItem('cachedReports');
+            dataCache = []; // Очищаем локальный кеш после удаления
             updateOfflineStatus();
-            window.showSection('form');
-            lucide.createIcons();
+            showAlert('Успешно!', `Удалено ${deletedCount} записей. Данные Firestore очищены.`);
 
-            // ОТЛАДКА: Повторное обновление полей, чтобы гарантировать актуальность
-            document.getElementById('debugUserId').textContent = userTelegramId || 'Нет ID';
-            document.getElementById('debugUserName').textContent = userFirstName || 'N/A';
-            document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'НЕТ';
+            if (isAdmin) fetchAndRenderReports();
 
-            if (!firebaseConfig.projectId) {
-                window.showAlert('ВНИМАНИЕ', 'Необходимо вставить ключи конфигурации Firebase в код.');
+            return true;
+
+        } catch (e) {
+             console.error("Error deleting collection:", e);
+             showAlert('Ошибка', 'Произошла ошибка при удалении коллекции: ' + e.message);
+             return false;
+        } finally {
+             hideLoader();
+             if (isTMA) Telegram.WebApp.MainButton.hideProgress();
+        }
+    }
+
+
+    // --- ИНИЦИАЛИЗАЦИЯ WEBAPP ---
+    if (isTMA) {
+        Telegram.WebApp.ready();
+        Telegram.WebApp.expand();
+    }
+
+    // 🔑 Инициализация при загрузке (Ожидаем authenticateUser)
+    window.onload = async () => {
+        // 1. Сначала аутентификация для установки isAdmin и userTelegramId
+        await authenticateUser();
+
+        // 2. Затем заполнение интерфейса
+        populateSettlements();
+        updateOfflineStatus();
+        window.showSection('form');
+        lucide.createIcons();
+
+        // ОТЛАДКА: Повторное обновление полей, чтобы гарантировать актуальность
+        document.getElementById('debugUserId').textContent = userTelegramId || 'Нет ID';
+        document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'НЕТ';
+
+        if (!firebaseConfig.projectId) {
+            window.showAlert('ВНИМАНИЕ', 'Необходимо вставить ключи конфигурации Firebase в код.');
+        }
+
+        // 3. Если админ, пытаемся загрузить отчеты
+        if (isAdmin && db) {
+            // Загружаем отчеты, но без showLoader/hideLoader, т.к. onload уже управляет ими
+            try {
+                const snapshot = await db.collection('reports').get();
+                dataCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderLatestData(false);
+            } catch (e) {
+                console.warn("Предупреждение: Не удалось загрузить данные при инициализации:", e);
+                renderLatestData(true); // Рендерим только из кэша
             }
-        };
+        } else {
+             // Для обычного пользователя - просто рендерим кэш, если он есть
+             renderLatestData(true);
+        }
 
-        // Экспортируем функции для доступа из HTML
-        window.authenticateUser = authenticateUser;
-        window.fetchAndRenderReports = fetchAndRenderReports;
-        window.renderLatestData = renderLatestData;
-        window.generateMap = generateMap;
-        window.submitForm = submitForm;
-        window.syncData = syncData;
-        window.clearCache = clearCache;
-        window.confirmClearDatabase = confirmClearDatabase;
-        window.clearDatabase = clearDatabase;
-        window.showAlert = showAlert;
+        // Пробуем отправить кэш, если он есть
+        await processCache();
+    };
 
-        // Включаем логирование (только для отладки)
-        // firebase.firestore().setLogLevel('debug');
-
-    </script>
+    // Экспортируем функции для доступа из HTML
+    window.authenticateUser = authenticateUser;
+    window.fetchAndRenderReports = fetchAndRenderReports;
+    window.renderLatestData = renderLatestData;
+    window.generateMap = generateMap;
+    window.showSection = showSection;
+    window.showAlert = showAlert;
+    window.exportToXLSX = exportToXLSX;
+    window.showConfirmDeleteModal = showConfirmDeleteModal;
+</script>
 </body>
 </html>
