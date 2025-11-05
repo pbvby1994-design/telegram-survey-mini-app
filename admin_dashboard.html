@@ -57,11 +57,11 @@
                 <button onclick="showSection('form')" class="tab-button active hover:text-indigo-200" id="btn-form">
                     <i data-lucide="notebook-pen" class="w-5 h-5 inline-block mr-1"></i>Форма
                 </button>
-                <button onclick="showSection('reports')" class="tab-button hover:text-indigo-200" id="btn-reports">
+                <button onclick="showSection('reports'); fetchAndRenderReports()" class="tab-button hover:text-indigo-200" id="btn-reports">
                     <i data-lucide="bar-chart-3" class="w-5 h-5 inline-block mr-1"></i>Отчеты
                 </button>
               
-                <button onclick="showSection('map-view')" class="tab-button hover:text-indigo-200" id="btn-map-view">
+                <button onclick="showSection('map-view'); generateMap()" class="tab-button hover:text-indigo-200" id="btn-map-view">
                     <i data-lucide="map" class="w-5 h-5 inline-block mr-1"></i>Карта
                 </button>
             </div>
@@ -162,7 +162,7 @@
         <section id="reports" class="content-section hidden">
              <div class="card p-6">
                 <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Сводные Отчеты</h2>
-                <p class="text-gray-500">Данные отчетов будут загружены после успешной авторизации.</p>
+                <p class="text-gray-500" id="reportsPlaceholder">Данные отчетов будут загружены после успешной авторизации.</p>
             </div>
         </section>
 
@@ -197,7 +197,8 @@
         // ИМПОРТЫ FIREBASE
         // ----------------------------------------------------------------------------------
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // ДОБАВЛЕН ИМПОРТ getDocs, query для загрузки данных
+        import { getFirestore, collection, addDoc, Timestamp, query, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
@@ -252,9 +253,11 @@
         async function uploadPhoto(base64) {
             if (!storage || !userTelegramId) throw new Error("Storage not initialized or user ID missing.");
             
+            // ВАЖНО: Убедитесь, что ваш storageBucket в FIREBASE_CONFIG_JSON корректен
             const filename = `reports/${userTelegramId}/${Date.now()}.jpg`;
             const photoRef = ref(storage, filename);
             
+            // Загрузка
             await uploadString(photoRef, base64, 'data_url');
             return await getDownloadURL(photoRef);
         }
@@ -379,6 +382,7 @@
             // 2. ЗАГРУЗКА ФОТО 
             try {
                 if (photoFile) {
+                    // Проверка размера файла 
                     if (photoFile.size > 5 * 1024 * 1024) {
                         window.showAlert('Ошибка', 'Фото слишком большое (максимум 5 МБ).');
                         document.getElementById('saveButton').disabled = false;
@@ -386,10 +390,12 @@
                         return;
                     }
                     const photoBase64 = await getBase64(photoFile);
-                    photoUrl = await uploadPhoto(photoBase64);
+                    
+                    // ЭТО МЕСТО, ГДЕ ПРОИСХОДИТ ДОЛГАЯ ЗАГРУЗКА/ОШИБКА
+                    photoUrl = await uploadPhoto(photoBase64); 
                 }
             } catch (e) {
-                window.showAlert('Ошибка', `Ошибка загрузки фото: ${e.message}.`);
+                window.showAlert('Ошибка', `Ошибка загрузки фото: ${e.message}. Проверьте правила Firebase Storage.`);
                 document.getElementById('saveButton').disabled = false;
                 saveStatus.textContent = 'Ошибка';
                 return;
@@ -397,7 +403,6 @@
             
             // 3. СБОРКА ДАННЫХ
             const data = {
-                // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Ключ 'reporterId' для соответствия правилам
                 reporterId: userTelegramId, 
                 timestamp: Timestamp.fromDate(new Date()), 
                 
@@ -407,7 +412,6 @@
                 loyalty: document.getElementById('loyalty').value,
                 comment: comment,
                 photo: photoUrl,
-                // ИСПРАВЛЕНО: Используем координаты из глобальных переменных (даже если null)
                 latitude: currentLatitude, 
                 longitude: currentLongitude
             };
@@ -418,7 +422,8 @@
                 window.showAlert('Успех', 'Данные успешно сохранены!');
                 document.getElementById('surveyForm').reset();
                 saveStatus.textContent = '✅ Успешно!';
-                // Сбрасываем координаты после успешной отправки
+                
+                // Сброс геоданных
                 currentLatitude = null;
                 currentLongitude = null;
                 document.getElementById('geolocation').value = 'Нет данных';
@@ -430,7 +435,6 @@
                 setTimeout(() => saveStatus.textContent = 'Готов', 3000);
             } catch (e) {
                 console.error("Error adding document: ", e);
-                // Это должно быть исправлено после фикса в боте, но оставляем для отладки
                 window.showAlert('Ошибка', `Не удалось сохранить данные: ${e.message}. Проверьте правила Firestore.`);
                 saveStatus.textContent = 'Ошибка';
             } finally {
@@ -438,6 +442,98 @@
             }
         }
         
+        // ----------------------------------------------------------------------------------
+        // ФУНКЦИЯ ЗАГРУЗКИ И ОТОБРАЖЕНИЯ ОТЧЕТОВ (НОВОЕ)
+        // ----------------------------------------------------------------------------------
+        async function fetchAndRenderReports() {
+            if (!db || !isAdmin) {
+                document.getElementById('reports').innerHTML = `
+                    <div class="card p-6 text-red-500">
+                        <p>Доступ запрещен. Только администраторы могут просматривать отчеты.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // 1. Показываем индикатор загрузки
+            document.getElementById('reports').innerHTML = `
+                <div class="card p-6 text-center text-gray-500">
+                    <i data-lucide="loader-2" class="w-8 h-8 mx-auto animate-spin"></i>
+                    <p class="mt-2">Загрузка отчетов...</p>
+                </div>
+            `;
+            lucide.createIcons(); // Обновляем иконки
+
+            try {
+                const reportsCol = collection(db, "reports");
+                const q = query(reportsCol); // Загружаем все отчеты
+
+                const reportSnapshot = await getDocs(q);
+                // Преобразуем данные, форматируем Timestamp в строку
+                const reportList = reportSnapshot.docs.map(doc => {
+                    const data = doc.data();
+                    const timestampDate = data.timestamp ? data.timestamp.toDate() : new Date();
+                    return { 
+                        id: doc.id, 
+                        date: timestampDate.toLocaleDateString('ru-RU'),
+                        time: timestampDate.toLocaleTimeString('ru-RU'),
+                        ...data 
+                    };
+                });
+                
+                // 2. Отображаем результат
+                const reportsContainer = document.getElementById('reports');
+                
+                if (reportList.length === 0) {
+                     reportsContainer.innerHTML = `<div class="card p-6 text-gray-500"><p>Отчетов пока нет.</p></div>`;
+                     return;
+                }
+
+                reportsContainer.innerHTML = `
+                    <div class="card p-6">
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Сводные Отчеты (Всего: ${reportList.length})</h2>
+                        
+                        <div class="mt-4 space-y-3 max-h-[70vh] overflow-y-auto">
+                            ${reportList.map(r => 
+                                `<div class="p-4 border rounded-lg shadow-sm bg-gray-50 transition duration-150 hover:shadow-md">
+                                    <div class="flex justify-between items-start mb-1">
+                                        <strong class="text-indigo-600">${r.settlement}</strong>
+                                        <span class="text-xs text-gray-500">${r.date} ${r.time}</span>
+                                    </div>
+                                    <p class="text-sm text-gray-800 mb-1">${r.address}</p>
+                                    <p class="text-xs">
+                                        Лояльность: 
+                                        <span class="font-medium ${r.loyalty === 'strong' ? 'text-green-600' : r.loyalty === 'against' ? 'text-red-600' : 'text-yellow-600'}">
+                                            ${r.loyalty}
+                                        </span> 
+                                        / Действие: <span class="font-medium text-blue-600">${r.action}</span>
+                                    </p>
+                                    ${r.comment ? `<p class="mt-2 text-sm italic text-gray-600 border-t pt-2">Комментарий: ${r.comment}</p>` : ''}
+                                    ${r.photo ? `<a href="${r.photo}" target="_blank" class="mt-2 inline-flex items-center text-xs text-indigo-500 hover:text-indigo-700">
+                                            <i data-lucide="image" class="w-4 h-4 mr-1"></i> Посмотреть фото
+                                        </a>` : ''}
+                                </div>`
+                            ).join('')}
+                        </div>
+                    </div>
+                `;
+                lucide.createIcons(); // Отрисовка новых иконок в отчете
+                
+                // Сохраняем данные для функции карты
+                window.latestReportData = reportList; 
+
+            } catch (e) {
+                console.error("Error fetching reports: ", e);
+                document.getElementById('reports').innerHTML = `<div class="card p-6 text-red-500">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Сводные Отчеты</h2>
+                    <p>Ошибка загрузки данных: ${e.message}</p>
+                    <p class="text-sm mt-2">Проверьте Правила Firestore: нужен <code>allow read: if isAdmin();</code> для коллекции <code>reports</code>.</p>
+                </div>`;
+            }
+        }
+        // ----------------------------------------------------------------------------------
+
+
         function showSection(sectionId) {
             document.querySelectorAll('.content-section').forEach(section => {
                 section.classList.add('hidden');
@@ -448,10 +544,6 @@
                 btn.classList.remove('active', 'text-indigo-600');
             });
             document.getElementById(`btn-${sectionId}`).classList.add('active');
-
-            if (sectionId === 'map-view') {
-                if (window.generateMap) setTimeout(window.generateMap, 100);
-            }
         }
         
         function showAlert(title, message) {
@@ -466,6 +558,38 @@
             document.getElementById('alertModal').classList.add('hidden');
             document.getElementById('alertModal').classList.remove('flex');
         }
+        
+        // Заглушка для карты (можете реализовать позже)
+        function generateMap() {
+            // Если карта не инициализирована, создаем ее
+            if (!window.map) {
+                 window.map = L.map('map').setView([61.0, 73.0], 9); // Центр ХМАО
+                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 18,
+                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                 }).addTo(window.map);
+            }
+            
+            // Если есть данные, добавляем маркеры
+            if (window.latestReportData && window.latestReportData.length > 0) {
+                const markers = L.markerClusterGroup();
+                window.latestReportData.forEach(r => {
+                    if (r.latitude && r.longitude) {
+                        const marker = L.marker([r.latitude, r.longitude]);
+                        marker.bindPopup(`<b>${r.settlement}</b><br>${r.address}<br>Лояльность: ${r.loyalty}`);
+                        markers.addLayer(marker);
+                    }
+                });
+                if (window.currentMarkers) window.currentMarkers.clearLayers();
+                window.currentMarkers = markers;
+                window.map.addLayer(markers);
+                window.map.fitBounds(markers.getBounds());
+            } else {
+                 document.getElementById('map').innerHTML = `<div class="p-6 text-gray-500">Нет данных с геолокацией для отображения на карте.</div>`;
+            }
+            // Гарантируем, что карта правильно обновит свой размер при переходе на вкладку
+            setTimeout(() => window.map.invalidateSize(), 200);
+        }
 
 
         // ----------------------------------------------------------------------------------
@@ -478,8 +602,9 @@
         window.getGeolocation = getGeolocation;
         window.saveSurveyData = saveSurveyData;
         
-        window.fetchAndRenderReports = () => {};
-        window.generateMap = () => { /* Логика карты */ };
+        // Экспортируем реализованные функции
+        window.fetchAndRenderReports = fetchAndRenderReports;
+        window.generateMap = generateMap;
 
         window.onload = async () => {
             populateSettlements();
@@ -488,15 +613,20 @@
             const isAuthenticated = await authenticateUser();
 
             if (isAuthenticated) {
-                 // Запускаем определение геолокации после аутентификации
-                getGeolocation(); 
+                 getGeolocation(); 
                 
                 if (isAdmin) {
+                    // ЕСЛИ АДМИН: Показываем раздел отчетов и ЗАГРУЖАЕМ данные
                     showSection('reports');
+                    fetchAndRenderReports(); 
                 } else {
                     showSection('form');
                 }
-            } 
+            } else {
+                 // Если аутентификация не удалась, показываем ошибку в форме
+                 showSection('form');
+                 document.getElementById('saveButton').disabled = true;
+            }
             
             if (!firebaseConfig.projectId) {
                 window.showAlert('ВНИМАНИЕ', 'Конфигурация Firebase не загружена. Проверьте передачу Base64 параметра.');
