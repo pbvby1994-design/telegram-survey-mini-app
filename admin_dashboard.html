@@ -1,956 +1,224 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Блокнот Агитатора | v2.4 (Фикс Ошибки Подключения)</title>
-
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet-heat/dist/leaflet-heat.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
-    <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-
-    <style>
-        :root {
-            --primary: #0088cc;
-            --secondary: #27a8e0;
-            --background: #f0f2f5;
-        }
-
-        body {
-            font-family: 'Jost', sans-serif;
-            background-color: var(--background);
-            color: #333;
-        }
-
-        .container {
-            max-width: 100%;
-            padding: 0;
-        }
-
-        .header {
-            background-color: var(--primary);
-            color: white;
-        }
-
-        .tab-button.active {
-            border-bottom: 3px solid white;
-            font-weight: 600;
-        }
-
-        .btn-primary {
-            background-color: var(--primary);
-            color: white;
-            transition: background-color 0.2s;
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            background-color: #0077b3;
-        }
-
-        .input-style {
-            border: 1px solid #ccc;
-            padding: 8px 12px;
-            border-radius: 6px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            transition: border-color 0.2s;
-        }
-        .input-style:focus {
-            border-color: var(--primary);
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(0, 136, 204, 0.2);
-        }
-
-        /* Стилизация модального окна */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-
-        .modal-content {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 400px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-        }
-
-        /* Стили для карты */
-        #map-container {
-            height: 80vh; /* Высота для вкладки "Карта" */
-            min-height: 400px;
-        }
-
-        /* Стили для отчетов */
-        .report-card {
-            background-color: white;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Блокнот Агитатора | v2.5</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-heat/dist/leaflet-heat.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+  <style>
+    body {
+      font-family: 'Jost', sans-serif;
+      background: #f0f2f5;
+      color: #333;
+    }
+    .btn-primary {
+      background-color: #0088cc;
+      color: white;
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    .btn-primary:hover {
+      background-color: #0077b3;
+    }
+    #saveStatus span.spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #0088cc;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-right: 8px;
+    }
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
+  <div class="min-h-screen flex flex-col">
+    <header class="bg-[#0088cc] text-white p-4 shadow-md">
+      <h1 class="text-lg font-semibold">Блокнот Агитатора (Админ-панель)</h1>
+      <div id="debugInfo" class="text-xs opacity-80 mt-1 flex space-x-2">
+        <span id="debugUserId">ID: ...</span>
+        <span id="debugAdminStatus">Админ: ...</span>
+      </div>
+    </header>
 
-    <div id="app" class="min-h-screen">
-        <header class="header p-4 shadow-lg sticky top-0 z-10">
-            <h1 class="text-xl font-bold">Блокнот Агитатора (Админ-панель)</h1>
-            <div id="debugInfo" class="text-xs opacity-70 mt-1 flex space-x-2">
-                <span id="debugUserId">ID: ...</span>
-                <span id="debugAdminStatus">Админ: ...</span>
-                <span id="offlineStatus" class="font-medium text-red-300"></span>
-            </div>
-            <div id="authRequired" class="text-xs bg-yellow-400 text-gray-800 p-1 rounded-md mt-1 hidden">
-                Требуется аутентификация!
-            </div>
-        </header>
-
-        <nav class="bg-gray-700 text-white shadow-md sticky top-[72px] z-10">
-            <div class="flex justify-around items-center text-sm">
-                <button onclick="window.showSection('form')" class="tab-button active p-3 hover:bg-gray-600 w-full transition-colors flex justify-center items-center space-x-2">
-                    <i data-lucide="edit-3" class="w-5 h-5"></i>
-                    <span>Форма</span>
-                </button>
-                <button onclick="window.showSection('reports')" class="tab-button p-3 hover:bg-gray-600 w-full transition-colors flex justify-center items-center space-x-2">
-                    <i data-lucide="bar-chart-2" class="w-5 h-5"></i>
-                    <span>Отчеты</span>
-                </button>
-                <button onclick="window.showSection('map')" class="tab-button p-3 hover:bg-gray-600 w-full transition-colors flex justify-center items-center space-x-2">
-                    <i data-lucide="map" class="w-5 h-5"></i>
-                    <span>Карта</span>
-                </button>
-            </div>
-        </nav>
-
-        <main class="p-4 space-y-4">
-            <section id="section-form" class="section">
-                <div class="bg-white p-5 rounded-xl shadow-md space-y-4">
-                    <h2 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">Отправка данных</h2>
-
-                    <div>
-                        <label for="settlementSelect" class="block text-sm font-medium text-gray-700 mb-1">Населенный пункт</label>
-                        <select id="settlementSelect" class="input-style w-full bg-white" required>
-                            </select>
-                    </div>
-
-                    <div>
-                        <label for="addressInput" class="block text-sm font-medium text-gray-700 mb-1">Адрес (улица и дом)</label>
-                        <input type="text" id="addressInput" class="input-style w-full" 
-                        placeholder="пр. Ленина, 10" required>
-                    </div>
-
-                    <div>
-                        <label for="photoFile" class="block text-sm font-medium text-gray-700 mb-1">Фотография (необязательно)</label>
-                        <input type="file" id="photoFile" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-secondary">
-                        <input type="hidden" id="photoBase64">
-                        <div id="photoPreviewContainer" class="mt-2 hidden">
-                            <img id="photoPreview" class="max-w-full h-auto rounded-lg shadow-sm">
-                            <button onclick="clearPhoto()" class="text-red-500 text-sm mt-1 flex items-center space-x-1 hover:text-red-700">
-                                <i data-lucide="x" class="w-4 h-4"></i>
-                                <span>Удалить фото</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label for="commentTextarea" class="block text-sm font-medium text-gray-700 mb-1">Комментарий</label>
-                        <textarea id="commentTextarea" class="input-style w-full h-24" 
-                        placeholder="Введите ваш комментарий"></textarea>
-                    </div>
-
-                    <div class="flex items-center space-x-4">
-                        <button onclick="getGPS()" class="btn-primary flex items-center space-x-2 py-2 px-4 
-                        rounded-lg text-sm font-medium shadow-md">
-                            <i data-lucide="map-pin" class="w-5 h-5"></i>
-                            <span>Получить GPS</span>
-                        </button>
-                        <span id="gpsDisplay" class="text-sm text-gray-600">Широта: НЕТ, Долгота: НЕТ</span>
-                        <input type="hidden" id="latitudeInput">
-                        <input type="hidden" id="longitudeInput">
-                    </div>
-
-                    <button onclick="saveReport()" id="saveButton" class="btn-primary w-full py-3 rounded-xl text-lg font-bold shadow-xl mt-6 disabled:opacity-50" disabled>
-                        Отправить Отчет
-                    </button>
-                    <p id="saveStatus" class="text-center text-sm mt-2 hidden"></p>
-                </div>
-            </section>
-
-            <section id="section-reports" class="section hidden">
-                <h2 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">Сводка и последние отчеты</h2>
-                
-                <div id="latestDataSummary" class="bg-white p-5 rounded-xl shadow-md mb-4 space-y-4">
-                    <h3 class="text-lg font-medium border-b pb-2 mb-3">Общая статистика</h3>
-                    <canvas id="reportsChart" class="w-full h-64"></canvas>
-                    <div id="latestDataList" class="space-y-3">
-                        <p class="text-gray-500">Загрузка сводки...</p>
-                    </div>
-                </div>
-
-                <div class="flex space-x-2 mb-4">
-                    <button onclick="fetchAndRenderReports('today')" id="btnToday" class="btn-primary py-2 px-4 rounded-lg text-sm font-medium w-full">Сегодня</button>
-                    <button onclick="fetchAndRenderReports('last7days')" id="btn7Days" class="btn-primary py-2 px-4 rounded-lg text-sm font-medium w-full">Последние 7 дней</button>
-                    <button onclick="fetchAndRenderReports('all')" id="btnAll" 
-                    class="btn-primary py-2 px-4 rounded-lg text-sm font-medium w-full">Всего</button>
-                </div>
-
-                <div id="reportsList" class="space-y-3">
-                    <p class="text-center text-gray-500">Выберите период для отображения отчетов.</p>
-                </div>
-            </section>
-
-            <section id="section-map" class="section hidden">
-                <h2 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">Тепловая карта и Маркеры</h2>
-                <div id="map-container" class="bg-white rounded-xl shadow-md">
-                    </div>
-            </section>
-        </main>
-    </div>
-
-    <div id="customModal" class="modal-overlay">
-        <div class="modal-content text-center">
-            <h3 id="modalTitle" class="text-xl font-bold mb-3 text-gray-800">Заголовок</h3>
-            <p id="modalMessage" class="text-gray-600 mb-4"></p>
-            <div id="modalButtons" class="flex justify-center space-x-3">
-                <button id="modalConfirmBtn" class="btn-primary py-2 px-4 rounded-lg font-medium hidden">Подтвердить</button>
-                <button id="modalCloseBtn" class="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors">Закрыть</button>
-            </div>
+    <main class="flex-1 p-4 space-y-4">
+      <section id="form-section" class="bg-white rounded-xl shadow p-5 space-y-3">
+        <h2 class="text-xl font-semibold mb-2">Отправка данных</h2>
+        <div>
+          <label class="block text-sm mb-1">Населённый пункт</label>
+          <input id="settlement" class="border p-2 w-full rounded-md" placeholder="Введите населённый пункт" />
         </div>
-    </div>
+        <div>
+          <label class="block text-sm mb-1">Адрес</label>
+          <input id="address" class="border p-2 w-full rounded-md" placeholder="ул. Примерная, 5" />
+        </div>
+        <div>
+          <label class="block text-sm mb-1">Комментарий</label>
+          <textarea id="comment" class="border p-2 w-full rounded-md h-24"></textarea>
+        </div>
+        <div>
+          <button id="sendBtn" class="btn-primary w-full">Отправить отчёт</button>
+          <p id="saveStatus" class="text-sm text-center mt-2 hidden">
+            <span class="spinner"></span>Отправка...
+          </p>
+        </div>
+      </section>
 
+      <section id="reports-section" class="bg-white rounded-xl shadow p-5 space-y-3">
+        <h2 class="text-xl font-semibold mb-2">Последние отчёты</h2>
+        <div id="reportsList" class="text-sm text-gray-700">
+          Загрузка...
+        </div>
+      </section>
+    </main>
+  </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, limit, orderBy, getDocs, writeBatch, startAfter, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // Включаем логирование для отладки Firestore
-        setLogLevel('debug');
-        // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И КОНФИГУРАЦИЯ ---
-        const isTMA = typeof Telegram !== 'undefined' && Telegram.WebApp;
-        // 🚨 ВАЖНО: Эти переменные устанавливаются внешней средой.
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ?
-        __initial_auth_token : '';
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInWithCustomToken, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs, orderBy, query, serverTimestamp, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+    // ---------- URL PARAM READER ----------
+    function getUrlParams() {
+      const params = {};
+      const qs = window.location.search.substring(1);
+      qs.split("&").forEach((p) => {
+        const [k, v] = p.split("=");
+        if (k) params[decodeURIComponent(k)] = decodeURIComponent(v || "");
+      });
+      return params;
+    }
+    const params = getUrlParams();
 
-        let app, db, auth;
-        let userTelegramId = null;
-        let isAdmin = false;
-        let chartInstance = null;
-        let mapInstance = null;
-        let reportsData = []; // Кэш данных отчетов
+    const firebaseConfig = params.__firebase_config
+      ? JSON.parse(atob(params.__firebase_config))
+      : {};
+    const initialAuthToken = params.__initial_auth_token || "";
+    const appId = params.__app_id || "default-app-id";
 
-        const SETTLEMENTS = [
-            'Населенный пункт 1',
-            'Населенный пункт 2',
-            'Населенный пункт 3',
-            'Другое'
-        ];
-        // --- УТИЛИТЫ ---
+    // ---------- FIREBASE INIT ----------
+    let app, db, auth;
+    try {
+      if (!firebaseConfig.projectId) {
+        console.warn("Firebase config missing or empty");
+      }
+      app = initializeApp(firebaseConfig);
+      db = getFirestore(app);
+      auth = getAuth(app);
+      console.log("Firebase initialized");
+    } catch (e) {
+      console.error("Firebase init error", e);
+    }
 
-        // Генерация пути для Firestore.
-        // Public data: /artifacts/{appId}/public/data/{collectionName}
-        // Private user data: /artifacts/{appId}/users/{userId}/{collectionName}
-        function getCollectionPath(collectionName, isPublic = true) {
-            if (isPublic) {
-                return `artifacts/${appId}/public/data/${collectionName}`;
-            }
-            if (!userTelegramId) {
-                console.error("Попытка доступа к приватному пути без userTelegramId.");
-                return null;
-            }
-            return `artifacts/${appId}/users/${userTelegramId}/${collectionName}`;
-        }
-
-        function getPrivatePath(collectionAndDoc) {
-             if (!userTelegramId) {
-                console.error("Попытка доступа к приватному пути без userTelegramId.");
-                return null;
-            }
-            return `artifacts/${appId}/users/${userTelegramId}/${collectionAndDoc}`;
-        }
-
-
-        // Кастомное модальное окно вместо alert/confirm
-        window.showAlert = (title, message) => {
-            const modal = document.getElementById('customModal');
-            document.getElementById('modalTitle').textContent = title;
-            document.getElementById('modalMessage').textContent = message;
-            document.getElementById('modalConfirmBtn').classList.add('hidden');
-            
-            const closeBtn = document.getElementById('modalCloseBtn');
-            closeBtn.textContent = 'Закрыть';
-            closeBtn.onclick = () => {
-                modal.style.display = 'none';
-            };
-            modal.style.display = 'flex';
-        };
-
-        window.showConfirm = (title, message) => {
-            return new Promise(resolve => {
-                const modal = document.getElementById('customModal');
-                document.getElementById('modalTitle').textContent = title;
-                document.getElementById('modalMessage').textContent = message;
-                
-                const confirmBtn = document.getElementById('modalConfirmBtn');
-                confirmBtn.textContent = 'Да';
-                confirmBtn.classList.remove('hidden');
-
-                const closeBtn = document.getElementById('modalCloseBtn');
-                closeBtn.textContent = 'Отмена';
-
-                confirmBtn.onclick = () => {
-                    modal.style.display = 'none';
-                    resolve(true);
-                };
-                closeBtn.onclick = () => {
-                    modal.style.display = 'none';
-                    resolve(false);
-                };
-                modal.style.display = 'flex';
-            });
-        };
-
-        // Переключение вкладок
-        window.showSection = (sectionId) => {
-            document.querySelectorAll('.section').forEach(section => {
-                section.classList.add('hidden');
-            });
-            document.getElementById(`section-${sectionId}`).classList.remove('hidden');
-            
-            document.querySelectorAll('.tab-button').forEach(button => {
-                button.classList.remove('active');
-            });
-            document.querySelector(`[onclick="window.showSection('${sectionId}')"]`).classList.add('active');
-
-            // Специальная инициализация для карты
-            if (sectionId === 'map') {
-                setTimeout(() => generateMap(), 100); // Небольшая задержка, чтобы карта успела отобразиться
-            }
-        };
-        // --- ИНИЦИАЛИЗАЦИЯ FIREBASE ---
-        if (firebaseConfig.projectId) {
-            try {
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                console.log("Firebase initialized successfully.");
-            } catch (e) {
-                console.error("Firebase initialization failed:", e);
-                window.showAlert('ОШИБКА FIREBASE', 'Не удалось инициализировать Firebase. Проверьте конфигурацию.');
-            }
+    // ---------- AUTH ----------
+    async function authenticate() {
+      try {
+        if (initialAuthToken) {
+          await signInWithCustomToken(auth, initialAuthToken);
         } else {
-            console.warn("Firebase config is empty. Database operations will not work.");
+          await signInAnonymously(auth);
         }
+      } catch (e) {
+        console.error("Auth error", e);
+        alert("Ошибка авторизации Firebase: " + e.message);
+      }
+    }
 
+    onAuthStateChanged(getAuth(), (user) => {
+      if (user) {
+        document.getElementById("debugUserId").textContent = "ID: " + user.uid;
+        document.getElementById("debugAdminStatus").textContent = params.__firebase_config ? "Админ: возможно" : "Админ: ?";
+        loadReports();
+      }
+    });
 
-        // 🔑 ФУНКЦИЯ АУТЕНТИФИКАЦИИ (Установка userTelegramId и isAdmin)
-        async function authenticateUser() {
-            if (!app) {
-                window.showAlert('ОШИБКА', 'Firebase не инициализирован. Проверьте ключи.');
-                return false;
-            }
-            
-            try {
-                // Инициализация Auth
-                const auth = getAuth(app);
-                // --- 1. Попытка аутентификации ---
-                if (initialAuthToken) {
-                    // Вход с кастомным токеном
-                    console.log('Попытка входа с Custom Token...');
-                    await signInWithCustomToken(auth, initialAuthToken);
-                    console.log('Успешный вход с Custom Token.');
-                } else {
-                    // Анонимный вход
-                    console.log('Custom Token отсутствует. Попытка анонимного входа...');
-                    await signInAnonymously(auth);
-                    console.log('Успешный анонимный вход.');
-                }
+    await authenticate();
 
-                const user = auth.currentUser;
-                if (!user) throw new Error("Аутентификация не вернула пользователя.");
+    // ---------- SAVE REPORT ----------
+    async function saveReport() {
+      const settlement = document.getElementById("settlement").value.trim();
+      const address = document.getElementById("address").value.trim();
+      const comment = document.getElementById("comment").value.trim();
+      const saveStatus = document.getElementById("saveStatus");
+      const sendBtn = document.getElementById("sendBtn");
 
-                userTelegramId = user.uid; // ID пользователя (для анонимного - UID, для токена - Telegram ID)
+      if (!settlement || !address) {
+        alert("Введите населённый пункт и адрес");
+        return;
+      }
+      sendBtn.disabled = true;
+      saveStatus.classList.remove("hidden");
 
-                // --- 2. Проверка админ-статуса ---
-                // Админ-список хранится в публичной коллекции /artifacts/{appId}/public/data/config, документ 'admin'
-                const adminDocRef = doc(db, getCollectionPath('config', true), 'admin');
-                const adminDocSnap = await getDoc(adminDocRef);
+      try {
+        const reportsCol = collection(db, "reports");
+        await addDoc(reportsCol, {
+          settlement,
+          address,
+          comment,
+          reporterId: auth.currentUser.uid,
+          timestamp: serverTimestamp()
+        });
+        alert("✅ Отчёт успешно отправлен!");
+        document.getElementById("settlement").value = "";
+        document.getElementById("address").value = "";
+        document.getElementById("comment").value = "";
+        await loadReports();
+      } catch (e) {
+        console.error("Error saving report", e);
+        alert("Ошибка при сохранении отчёта: " + e.message);
+      } finally {
+        sendBtn.disabled = false;
+        saveStatus.classList.add("hidden");
+      }
+    }
+    document.getElementById("sendBtn").onclick = saveReport;
 
-                if (adminDocSnap.exists()) {
-                    // user.uid используется как идентификатор в Firestore
-                    const adminList = adminDocSnap.data().list ||
-                    [];
-                    isAdmin = adminList.includes(userTelegramId);
-                } else {
-                    // Если документ с админами отсутствует, никто не админ
-                    isAdmin = false;
-                }
-
-                // --- 3. Обновление отладочной информации и UI ---
-                document.getElementById('debugUserId').textContent = userTelegramId ||
-                'Нет ID';
-                document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'НЕТ';
-                document.getElementById('saveButton').disabled = false; // Разрешаем отправку данных
-
-                return true;
-            } catch (e) {
-                console.error('КРИТИЧЕСКАЯ ОШИБКА АУТЕНТИФИКАЦИИ FIREBASE:', e);
-                // Специализированные сообщения об ошибках
-                let errorTitle = 'ОШИБКА ВХОДА';
-                let errorMessage = `Не удалось выполнить вход в Firebase. Проверьте консоль для деталей.`;
-                if (e.code === 'auth/invalid-custom-token') {
-                    errorTitle = 'ОШИБКА ТОКЕНА';
-                    errorMessage = 'Недействительный кастомный токен. Проверьте логику генерации токена в боте.';
-                } else if (e.code === 'auth/network-request-failed') {
-                    errorTitle = 'ОШИБКА СЕТИ';
-                    errorMessage = 'Проблема с подключением к Firebase. Проверьте ваше интернет-соединение.';
-                } else {
-                    errorMessage += `\nСообщение: ${e.message}`;
-                }
-
-                window.showAlert(errorTitle, errorMessage);
-                // Детальная отладочная информация в консоль
-                console.log('--- ДЕТАЛИ ОШИБКИ АУТЕНТИФИКАЦИИ ---');
-                console.log(`Initial Auth Token (exists): ${!!initialAuthToken}`);
-                if (initialAuthToken) console.log(`Initial Auth Token (first 10 chars): ${initialAuthToken.substring(0, 10)}...`);
-                console.log(`Firebase App ID: ${firebaseConfig.projectId || 'НЕТ'}`);
-                console.log('------------------------------------');
-                
-                document.getElementById('authRequired').classList.remove('hidden');
-                document.getElementById('saveButton').disabled = true; // Запрещаем отправку данных
-                
-                return false;
-            }
+    // ---------- LOAD REPORTS ----------
+    async function loadReports() {
+      const listEl = document.getElementById("reportsList");
+      listEl.textContent = "Загрузка...";
+      try {
+        const reportsCol = collection(db, "reports");
+        const q = query(reportsCol, orderBy("timestamp", "desc"), limit(200));
+        const snap = await getDocs(q);
+        listEl.innerHTML = "";
+        if (snap.empty) {
+          listEl.textContent = "Нет данных.";
+          return;
         }
-
-
-        // --- ЛОГИКА ФОРМЫ ---
-
-        function populateSettlements() {
-            const select = document.getElementById('settlementSelect');
-            select.innerHTML = '';
-            SETTLEMENTS.forEach(settlement => {
-                const option = document.createElement('option');
-                option.value = settlement;
-                option.textContent = settlement;
-                select.appendChild(option);
-            });
-            // Добавляем обработчик на изменение, чтобы сразу включать кнопку
-            select.addEventListener('change', checkFormValidity);
-            document.getElementById('addressInput').addEventListener('input', checkFormValidity);
-        }
-
-        function checkFormValidity() {
-            const settlement = document.getElementById('settlementSelect').value;
-            const address = document.getElementById('addressInput').value.trim();
-            const saveButton = document.getElementById('saveButton');
-            
-            const isValid = settlement && address;
-            saveButton.disabled = !isValid;
-        }
-
-        async function getGPS() {
-            if (isTMA) {
-                if (Telegram.WebApp.isVersionAtLeast('6.1')) {
-                    try {
-                        const location = await new Promise((resolve, reject) => {
-    
-                            Telegram.WebApp.sendData(JSON.stringify({command: 'request_location'}));
-                            
-                            // Создаем временный обработчик для ответа от бота
-            
-                            const handler = (event) => {
-                                const data = JSON.parse(event.data);
-                                if (data.command === 'receive_location') {
-        
-                                    Telegram.WebApp.offEvent('locationReceived', handler);
-                                    resolve(data.location);
-                                } else if 
-                                (data.command === 'location_error') {
-                                    Telegram.WebApp.offEvent('locationReceived', handler);
-                                    reject(new Error(data.message));
-                                }
-                            };
-                            // Предполагаем, что бот отправляет данные через webApp.sendData, и они обрабатываются
-                            // на стороне бота и возвращаются через webApp.sendData.
-                            // В реальной TMA это обычно работает через requestLocation().
-                            // Для Canvas, имитируем, что запрос идет к боту.
-                            // Но т.к. requestLocation() не работает напрямую в Canvas,
-                            // используем нативный Geolocation API как запасной вариант.
-                        });
-                        
-                        document.getElementById('latitudeInput').value = location.latitude;
-                        document.getElementById('longitudeInput').value = location.longitude;
-                        document.getElementById('gpsDisplay').textContent = `Широта: ${location.latitude.toFixed(4)}, Долгота: ${location.longitude.toFixed(4)}`;
-                    } catch (e) {
-                         // Если TMA не смогло, пробуем нативный
-                        console.error("TMA location request failed. Falling back to native.", e);
-                        useNativeGeolocation();
-                    }
-                } else {
-                    window.showAlert('ВНИМАНИЕ', 'Ваша версия Telegram не поддерживает прямой запрос GPS. Используйте нативный GPS.');
-                    useNativeGeolocation();
-                }
-            } else {
-                useNativeGeolocation();
-            }
-        }
-
-        function useNativeGeolocation() {
-             if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(position => {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-   
-                    document.getElementById('latitudeInput').value = lat;
-                    document.getElementById('longitudeInput').value = lon;
-                    document.getElementById('gpsDisplay').textContent = `Широта: ${lat.toFixed(4)}, Долгота: ${lon.toFixed(4)}`;
-                }, error => {
-               
-                    console.error("Native Geolocation error:", error);
-                    window.showAlert('ОШИБКА GPS', 'Не удалось получить GPS-координаты. Проверьте разрешения браузера.');
-                    document.getElementById('gpsDisplay').textContent = 'GPS: ОШИБКА';
-                }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
-            } else {
-                window.showAlert('ОШИБКА GPS', 'Геолокация не поддерживается вашим браузером/устройством.');
-            }
-        }
-
-
-        // Обработка загрузки фото
-        document.getElementById('photoFile').onchange = function(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const base64 = e.target.result;
-                    document.getElementById('photoBase64').value = base64;
-                    
-                    const preview = document.getElementById('photoPreview');
-                    preview.src = base64;
-                    
-                    document.getElementById('photoPreviewContainer').classList.remove('hidden');
-                };
-                reader.onerror = function(e) {
-                    console.error("File reading error:", e);
-                    window.showAlert('ОШИБКА ФАЙЛА', 'Не удалось прочитать файл изображения.');
-                };
-                reader.readAsDataURL(file);
-            }
-        };
-        function clearPhoto() {
-            document.getElementById('photoFile').value = '';
-            document.getElementById('photoBase64').value = '';
-            document.getElementById('photoPreviewContainer').classList.add('hidden');
-            document.getElementById('photoPreview').src = '';
-        }
-
-        async function saveReport() {
-            if (!userTelegramId) {
-                 window.showAlert('ОШИБКА', 'Пользователь не аутентифицирован. Пожалуйста, перезагрузите приложение.');
-                return;
-            }
-            if (!db) {
-                window.showAlert('ОШИБКА', 'База данных не инициализирована.');
-                return;
-            }
-
-            const settlement = document.getElementById('settlementSelect').value;
-            const address = document.getElementById('addressInput').value.trim();
-            const comment = document.getElementById('commentTextarea').value.trim();
-            const photoBase64 = document.getElementById('photoBase64').value;
-            const lat = document.getElementById('latitudeInput').value;
-            const lon = document.getElementById('longitudeInput').value;
-            if (!settlement || !address) {
-                window.showAlert('ВНИМАНИЕ', 'Необходимо заполнить населенный пункт и адрес.');
-                return;
-            }
-
-            const reportData = {
-                settlement: settlement,
-                address: address,
-                comment: comment,
-                photo: photoBase64,
-                
-                latitude: lat ? parseFloat(lat) : null,
-                longitude: lon ?
-                parseFloat(lon) : null,
-                reporterId: userTelegramId,
-                timestamp: serverTimestamp()
-            };
-            const saveButton = document.getElementById('saveButton');
-            const saveStatus = document.getElementById('saveStatus');
-
-            saveButton.disabled = true;
-            saveStatus.textContent = 'Отправка...';
-            saveStatus.classList.remove('hidden');
-            try {
-                // Сохраняем в публичную коллекцию 'reports'
-                const reportsCol = collection(db, getCollectionPath('reports', true));
-                await addDoc(reportsCol, reportData);
-
-                window.showAlert('УСПЕХ', 'Отчет успешно отправлен!');
-                
-                // Очистка формы
-                document.getElementById('addressInput').value = '';
-                document.getElementById('commentTextarea').value = '';
-                document.getElementById('latitudeInput').value = '';
-                document.getElementById('longitudeInput').value = '';
-                document.getElementById('gpsDisplay').textContent = 'Широта: НЕТ, Долгота: НЕТ';
-                clearPhoto();
-                // Обновление отчетов
-                renderLatestData(); 
-                fetchAndRenderReports('today');
-            } catch (e) {
-                console.error("Ошибка при сохранении отчета:", e);
-                window.showAlert('ОШИБКА СОХРАНЕНИЯ', `Не удалось сохранить отчет. ${e.message}`);
-            } finally {
-                saveButton.disabled = false;
-                saveStatus.classList.add('hidden');
-            }
-        }
-
-
-        // --- ЛОГИКА ОТЧЕТОВ И СВОДКИ ---
-
-        function updateOfflineStatus() {
-            const isOnline = navigator.onLine;
-            const statusElement = document.getElementById('offlineStatus');
-            if (isOnline) {
-                statusElement.classList.add('hidden');
-            } else {
-                statusElement.textContent = 'ОФФЛАЙН';
-                statusElement.classList.remove('hidden');
-            }
-        }
-
-        // Обновление статуса сети при изменении
-        window.addEventListener('online', updateOfflineStatus);
-        window.addEventListener('offline', updateOfflineStatus);
-
-
-        // Рендер последней сводки и статистики
-        async function renderLatestData() {
-            if (!db) return;
-            const listContainer = document.getElementById('latestDataList');
-            listContainer.innerHTML = '<p class="text-gray-500">Загрузка сводки...</p>';
-
-            try {
-                // 1. Статистика по населенным пунктам
-                const reportsCol = collection(db, getCollectionPath('reports', true));
-                
-                // !!! ИСПРАВЛЕНИЕ: Добавляем orderBy для обхода потенциальных проблем с 'list' в Правилах Firestore.
-                const q = query(reportsCol, orderBy('timestamp', 'desc')); 
-                const allReportsSnapshot = await getDocs(q);
-                // ВАРИАНТ ДО ИСПРАВЛЕНИЯ: const allReportsSnapshot = await getDocs(reportsCol); 
-
-                const data = allReportsSnapshot.docs.map(doc => doc.data());
-                const settlementCounts = data.reduce((acc, report) => {
-                    acc[report.settlement] = (acc[report.settlement] || 0) + 1;
-                    return acc;
-                }, {});
-                // 2. Рендер статистики
-                listContainer.innerHTML = '';
-                const totalCount = allReportsSnapshot.size;
-                listContainer.innerHTML += `<p class="font-bold text-gray-800">Всего отчетов в базе: ${totalCount}</p>`;
-
-                const statsDiv = document.createElement('div');
-                statsDiv.className = 'grid grid-cols-2 gap-3 text-sm';
-                
-                Object.entries(settlementCounts)
-                    .sort(([, a], [, b]) => b - a) // Сортируем по убыванию количества
-                    .forEach(([settlement, count]) => {
-                    statsDiv.innerHTML += `
-                        <p class="font-medium truncate">${settlement}:</p>
-                        <p class="text-right text-primary">${count} шт.</p>
-                    `;
-                });
-                listContainer.appendChild(statsDiv);
-
-
-                // 3. Обновление графика
-                updateChart(settlementCounts, totalCount);
-            } catch (e) {
-                console.error("Ошибка при загрузке сводки:", e);
-                listContainer.innerHTML = '<p class="text-red-500">Ошибка загрузки сводки. Проверьте консоль.</p>';
-            }
-        }
-
-        function updateChart(counts, total) {
-            const ctx = document.getElementById('reportsChart').getContext('2d');
-            // Если график уже существует, уничтожаем его
-            if (chartInstance) {
-                chartInstance.destroy();
-            }
-
-            const labels = Object.keys(counts);
-            const data = Object.values(counts);
-            const backgroundColors = [
-                'rgba(0, 136, 204, 0.7)',
-                'rgba(39, 168, 224, 0.7)',
-                'rgba(110, 194, 235, 0.7)',
-                'rgba(255, 189, 46, 0.7)',
-            ].slice(0, labels.length);
-            chartInstance = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                    
-                        label: 'Количество отчетов',
-                        data: data,
-                        backgroundColor: backgroundColors,
-                        hoverOffset: 10
-                   
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-   
-                        legend: {
-                            position: 'top',
-                            labels: {
-                    
-                                font: {
-                                    family: 'Jost'
-                                }
-                  
-                            }
-                        },
-                        title: {
-                            display: true,
-            
-                            text: `Всего отчетов: ${total}`,
-                            font: {
-                                size: 16,
-                   
-                                family: 'Jost'
-                            }
-                        }
-                    }
-              
-                }
-            });
-        }
-
-        // Загрузка и рендер отчетов по фильтру
-        async function fetchAndRenderReports(filter) {
-             if (!db) return;
-            const reportsCol = collection(db, getCollectionPath('reports', true));
-            let q;
-            let title = 'Все отчеты';
-            // Сброс активной кнопки
-            document.querySelectorAll('#section-reports button').forEach(btn => btn.classList.remove('bg-gray-700', 'text-white'));
-            document.getElementById(`btn${filter.charAt(0).toUpperCase() + filter.slice(1).replace('7days', '7Days')}`).classList.add('bg-gray-700', 'text-white');
-
-            try {
-                if (filter === 'today') {
-                    title = 'Отчеты за сегодня';
-                    const startOfToday = new Date();
-                    startOfToday.setHours(0, 0, 0, 0);
-                    // Важно: Timestamp.fromDate() используется для корректной работы с Firestore
-                    q = query(reportsCol, where('timestamp', '>=', Timestamp.fromDate(startOfToday)), orderBy('timestamp', 'desc'));
-                } else if (filter === 'last7days') {
-                    title = 'Отчеты за последние 7 дней';
-                    const sevenDaysAgo = new Date();
-                    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-                    q = query(reportsCol, where('timestamp', '>=', Timestamp.fromDate(sevenDaysAgo)), orderBy('timestamp', 'desc'));
-                } else { // 'all'
-                    // Этот запрос уже содержит orderBy и limit, что обходит проблему 'list'
-                    q = query(reportsCol, orderBy('timestamp', 'desc'), limit(100));
-                }
-
-                const snapshot = await getDocs(q);
-                reportsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-                const listContainer = document.getElementById('reportsList');
-                listContainer.innerHTML = `<h3 class="text-lg font-medium border-b pb-2 mb-3">${title} (${reportsData.length})</h3>`;
-                
-                if (reportsData.length === 0) {
-                    listContainer.innerHTML += '<p class="text-center text-gray-500">Отчеты не найдены.</p>';
-                    return;
-                }
-
-                reportsData.forEach(report => {
-                    const date = report.timestamp?.toDate ? report.timestamp.toDate().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : 'Н/Д';
-                    
-                    const card = document.createElement('div');
-     
-                    card.className = 'report-card';
-                    card.innerHTML = `
-                        <div class="flex justify-between items-start mb-2">
-                            <h4 class="font-bold text-primary">${report.settlement} - ${report.address}</h4>
- 
-                            <span class="text-xs text-gray-500">${date}</span>
-                        </div>
-                        <p class="text-sm text-gray-700 mb-2">${report.comment || 'Без комментария'}</p>
-                 
-                        ${report.latitude && report.longitude ? 
-                            `<p class="text-xs text-gray-500">Координаты: ${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}</p>` : 
-                            '<p class="text-xs text-gray-500">Координаты: Н/Д</p>'}
-                        
-                        ${report.photo ? 
-                            `<div class="mt-3"><img src="${report.photo}" class="w-full max-h-40 object-cover rounded-lg shadow-sm cursor-pointer" onclick="window.showImageModal('${report.photo}')"></div>` : 
-                            ''}
-                        <p class="text-xs mt-2 text-gray-400">ID: ${report.reporterId}</p>
-                    `;
-                    listContainer.appendChild(card);
-                });
-
-            } catch (e) {
-                console.error("Ошибка при получении отчетов:", e);
-                document.getElementById('reportsList').innerHTML = '<p class="text-red-500">Ошибка при загрузке отчетов. Проверьте консоль.</p>';
-            }
-        }
-
-        window.showImageModal = (base64Data) => {
-            const modal = document.getElementById('customModal');
-            document.getElementById('modalTitle').textContent = 'Просмотр Фотографии';
-            document.getElementById('modalMessage').innerHTML = `<img src="${base64Data}" class="w-full h-auto rounded-lg shadow-md">`;
-            document.getElementById('modalConfirmBtn').classList.add('hidden');
-            
-            const closeBtn = document.getElementById('modalCloseBtn');
-            closeBtn.textContent = 'Закрыть';
-            closeBtn.onclick = () => {
-                modal.style.display = 'none';
-                document.getElementById('modalMessage').textContent = ''; // Очистка img
-            };
-            modal.style.display = 'flex';
-        }
-
-
-        // --- ЛОГИКА КАРТЫ (Leaflet) ---
-
-        function generateMap() {
-            const container = document.getElementById('map-container');
-            if (mapInstance) {
-                mapInstance.remove();
-                // Удаляем старую карту, чтобы избежать дублирования
-            }
-
-            // Инициализация карты (центр по умолчанию или по первой точке)
-            const defaultCenter = [55.7558, 37.6173]; // Москва
-            const defaultZoom = 10;
-            mapInstance = L.map(container, {
-                center: defaultCenter,
-                zoom: defaultZoom
-            });
-            // Добавление слоя тайлов (OpenStreetMap)
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(mapInstance);
-            // Создание групп для разных слоев
-            const markers = L.markerClusterGroup();
-            const heatData = [];
-
-            // Добавление маркеров и данных для тепловой карты
-            let validPointsCount = 0;
-            reportsData.forEach(report => {
-                if (report.latitude && report.longitude) {
-                    const lat = report.latitude;
-                    const lon = report.longitude;
-                    validPointsCount++;
-
-            
-                    // Маркеры
-                    const marker = L.marker([lat, lon]);
-                    const date = report.timestamp?.toDate ? report.timestamp.toDate().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : 'Н/Д';
-                    marker.bindPopup(`<b>${report.settlement}, ${report.address}</b><br>${report.comment || 'Без комментария'}<br><small>${date}</small>`);
-          
-                    markers.addLayer(marker);
-
-                    // Данные для тепловой карты (lat, lon, intensity)
-                    heatData.push([lat, lon, 1]); // Интенсивность = 1
-                }
-            });
-            // Добавление маркеров на карту
-            mapInstance.addLayer(markers);
-            // Добавление тепловой карты (если есть данные)
-            if (heatData.length > 0) {
-                const heat = L.heatLayer(heatData, {
-                    radius: 25,
-                    blur: 15,
-                
-                    maxZoom: 17,
-                    gradient: {0.4: 'blue', 0.65: 'lime', 1: 'red'}
-                }).addTo(mapInstance);
-            }
-
-            // Установка границ карты по маркерам
-            if (validPointsCount > 0) {
-                const bounds = markers.getBounds();
-                mapInstance.fitBounds(bounds, {padding: [50, 50]}); // Центрирование и небольшой отступ
-            }
-            
-            console.log(`Карта сгенерирована. Точек с GPS: ${validPointsCount}`);
-        }
-
-        // --- ИНИЦИАЛИЗАЦИЯ WEBAPP ---
-        if (isTMA) {
-            Telegram.WebApp.ready();
-            Telegram.WebApp.expand();
-        }
-
-        // 🔑 Инициализация при загрузке (Ожидаем authenticateUser) - ИСПРАВЛЕНО
-        window.onload = async () => {
-            // 1. Сначала аутентификация для установки isAdmin и userTelegramId
-            const isAuthenticated = await authenticateUser();
-            // 2. Затем заполнение интерфейса
-            populateSettlements();
-            updateOfflineStatus();
-            window.showSection('form');
-            lucide.createIcons();
-            // ОТЛАДКА: Повторное обновление полей, чтобы гарантировать актуальность
-            document.getElementById('debugUserId').textContent = userTelegramId ||
-            'Нет ID';
-            document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'НЕТ';
-
-            if (isAuthenticated) {
-                // Загружаем данные только если аутентификация прошла успешно
-                renderLatestData();
-                fetchAndRenderReports('today'); 
-            } else {
-                 // Если аутентификация не удалась, показываем статус "Не подключено"
-                 document.getElementById('saveButton').disabled = true;
-            }
-
-            if (!firebaseConfig.projectId) {
-                window.showAlert('ВНИМАНИЕ', 'Необходимо вставить ключи конфигурации Firebase в код.');
-            }
-        };
-
-        // Экспортируем функции для доступа из HTML
-        window.authenticateUser = authenticateUser;
-        window.fetchAndRenderReports = fetchAndRenderReports;
-        window.renderLatestData = renderLatestData;
-        window.generateMap = generateMap;
-
-    </script>
+        snap.forEach((doc) => {
+          const r = doc.data();
+          const d = document.createElement("div");
+          const date = r.timestamp?.toDate?.().toLocaleString("ru-RU") || "";
+          d.className = "border-b py-1";
+          d.innerHTML = `<b>${r.settlement}</b>, ${r.address} <br/><small>${date}</small>`;
+          listEl.appendChild(d);
+        });
+      } catch (e) {
+        console.error("Load reports error", e);
+        listEl.textContent = "Ошибка загрузки: " + e.message;
+      }
+    }
+  </script>
 </body>
 </html>
