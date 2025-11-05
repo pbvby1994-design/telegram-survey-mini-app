@@ -1,224 +1,438 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Блокнот Агитатора | v2.5</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap"
-    rel="stylesheet"
-  />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet-heat/dist/leaflet-heat.js"></script>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
-  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-  <style>
-    body {
-      font-family: 'Jost', sans-serif;
-      background: #f0f2f5;
-      color: #333;
-    }
-    .btn-primary {
-      background-color: #0088cc;
-      color: white;
-      border-radius: 8px;
-      padding: 0.6rem 1rem;
-      font-weight: 500;
-      transition: background 0.2s;
-    }
-    .btn-primary:hover {
-      background-color: #0077b3;
-    }
-    #saveStatus span.spinner {
-      display: inline-block;
-      width: 16px;
-      height: 16px;
-      border: 2px solid #0088cc;
-      border-top-color: transparent;
-      border-radius: 50%;
-      animation: spin 0.6s linear infinite;
-      margin-right: 8px;
-    }
-    @keyframes spin {
-      100% { transform: rotate(360deg); }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Блокнот Агитатора | Панель</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-heat/dist/leaflet-heat.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+    <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+
+    <style>
+        body { 
+            font-family: 'Jost', sans-serif;
+            background-color: #f4f6f9;
+        }
+        .card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            padding: 20px;
+        }
+        .tab-button {
+            transition: all 0.2s;
+            border-bottom: 3px solid transparent;
+        }
+        .tab-button.active {
+            border-bottom-color: #4f46e5;
+            color: #4f46e5;
+            font-weight: 600;
+        }
+        #map { height: 400px; border-radius: 8px;
+        }
+        .content-section { animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px);
+        } to { opacity: 1; transform: translateY(0); } }
+    </style>
 </head>
-<body>
-  <div class="min-h-screen flex flex-col">
-    <header class="bg-[#0088cc] text-white p-4 shadow-md">
-      <h1 class="text-lg font-semibold">Блокнот Агитатора (Админ-панель)</h1>
-      <div id="debugInfo" class="text-xs opacity-80 mt-1 flex space-x-2">
-        <span id="debugUserId">ID: ...</span>
-        <span id="debugAdminStatus">Админ: ...</span>
-      </div>
+<body class="min-h-screen">
+
+    <header class="bg-indigo-600 shadow-md p-4 text-white">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold">Блокнот Агитатора</h1>
+            <div class="flex space-x-4">
+                <button onclick="showSection('form')" class="tab-button active hover:text-indigo-200" id="btn-form">
+                    <i data-lucide="notebook-pen" class="w-5 h-5 inline-block mr-1"></i>Форма
+                </button>
+                <button onclick="showSection('reports')" class="tab-button hover:text-indigo-200" id="btn-reports">
+                    <i data-lucide="bar-chart-3" class="w-5 h-5 inline-block mr-1"></i>Отчеты
+                </button>
+              
+                <button onclick="showSection('map-view')" class="tab-button hover:text-indigo-200" id="btn-map-view">
+                    <i data-lucide="map" class="w-5 h-5 inline-block mr-1"></i>Карта
+                </button>
+            </div>
+        </div>
     </header>
 
-    <main class="flex-1 p-4 space-y-4">
-      <section id="form-section" class="bg-white rounded-xl shadow p-5 space-y-3">
-        <h2 class="text-xl font-semibold mb-2">Отправка данных</h2>
-        <div>
-          <label class="block text-sm mb-1">Населённый пункт</label>
-          <input id="settlement" class="border p-2 w-full rounded-md" placeholder="Введите населённый пункт" />
-        </div>
-        <div>
-          <label class="block text-sm mb-1">Адрес</label>
-          <input id="address" class="border p-2 w-full rounded-md" placeholder="ул. Примерная, 5" />
-        </div>
-        <div>
-          <label class="block text-sm mb-1">Комментарий</label>
-          <textarea id="comment" class="border p-2 w-full rounded-md h-24"></textarea>
-        </div>
-        <div>
-          <button id="sendBtn" class="btn-primary w-full">Отправить отчёт</button>
-          <p id="saveStatus" class="text-sm text-center mt-2 hidden">
-            <span class="spinner"></span>Отправка...
-          </p>
-        </div>
-      </section>
+    <main class="container mx-auto p-4 md:p-8">
 
-      <section id="reports-section" class="bg-white rounded-xl shadow p-5 space-y-3">
-        <h2 class="text-xl font-semibold mb-2">Последние отчёты</h2>
-        <div id="reportsList" class="text-sm text-gray-700">
-          Загрузка...
-        </div>
-      </section>
+        <section id="form" class="content-section">
+           
+            <div class="card p-6">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-6 border-b pb-2">Запись Опроса</h2>
+                <form id="surveyForm" onsubmit="saveSurveyData(event)">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        
+        
+                        <div class="space-y-2">
+                            <label for="settlement" class="block text-sm font-medium text-gray-700">Населенный пункт</label>
+                            <select id="settlement" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"></select>
+            
+                        </div>
+                        
+                        <div class="space-y-2">
+                            <label for="street" class="block text-sm font-medium text-gray-700">Улица</label>
+      
+                            <input type="text" id="street" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
+                        </div>
+                        
+                    
+                        <div class="space-y-2">
+                            <label for="house" class="block text-sm font-medium text-gray-700">Номер дома</label>
+                            <input type="text" id="house" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
+                       
+                        </div>
+                        
+                        <div class="space-y-2">
+                            <label for="loyalty" class="block text-sm font-medium text-gray-700">Лояльность кандидата</label>
+                
+                            <select id="loyalty" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
+                                <option value="" disabled selected>Выберите уровень</option>
+                                <option value="strong">Сильная (ДА)</option>
+         
+                                <option value="moderate">Умеренная (СКОРЕЕ ДА)</option>
+                                <option value="neutral">Нейтрально (НЕ ЗНАЮ)</option>
+                                <option value="against">Против (НЕТ)</option>
+     
+                            </select>
+                        </div>
+                        
+                        <div class="space-y-2 col-span-full md:col-span-1">
+  
+                            <label for="action" class="block text-sm font-medium text-gray-700">Целевое действие</label>
+                            <select id="action" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
+                               
+                                <option value="" disabled selected>Выберите действие</option>
+                                <option value="Опрос">Опрос</option>
+                                <option value="Агитация">Агитация</option>
+                             
+                                <option value="Жалоба">Жалоба/Запрос</option>
+                            </select>
+                        </div>
+                        
+                    
+                        <div class="space-y-2 col-span-full">
+                            <label for="comment" class="block text-sm font-medium text-gray-700">Комментарий / Запрос (дополнительно)</label>
+                            <textarea id="comment" rows="3" class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"></textarea>
+                     
+                        </div>
+                        
+                        <div class="space-y-2 col-span-full">
+                            <label for="geolocation" class="block text-sm font-medium text-gray-700">
+              
+                                Геолокация 
+                                <span id="geoStatus" class="ml-2 text-xs text-gray-500">
+                                    (Нажмите кнопку ниже)
+       
+                                </span>
+                            </label>
+                            <div class="flex space-x-2">
+                 
+                                <input type="text" id="geolocation" placeholder="Широта, Долгота" readonly class="w-full bg-gray-50 border-gray-300 rounded-md shadow-sm p-2">
+                                <button type="button" onclick="getGeolocation()" class="flex-shrink-0 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition-colors">
+                               
+                                    <i data-lucide="locate" class="w-5 h-5 inline-block mr-1"></i>
+                                    Определить
+                                </button>
+                      
+                            </div>
+                        </div>
+
+                    </div>
+                    
+                    <div class="mt-8">
+         
+                        <button type="submit" id="saveButton" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-colors disabled:opacity-50" disabled>
+                            <i data-lucide="save" class="w-5 h-5 inline-block mr-2"></i>
+                            Сохранить Запись
+         
+                        </button>
+                    </div>
+                </form>
+                
+                <div class="mt-4 text-xs text-gray-500 border-t pt-4">
+            
+                        <p>Статус: <span id="debugAdminStatus" class="font-bold text-red-500">НЕ ПОДКЛЮЧЕНО</span></p>
+                    <p>Telegram ID: <span id="debugUserId">Загрузка...</span></p>
+                </div>
+            </div>
+        </section>
+
+        <section id="reports" class="content-section hidden">
+             <div class="card p-6">
+  
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Сводные Отчеты</h2>
+                <p class="text-gray-500">Данные отчетов будут загружены после успешной авторизации.</p>
+            </div>
+        </section>
+
+        <section id="map-view" class="content-section hidden">
+            <div class="card p-6">
+           
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Карта Активности</h2>
+                <div id="map"></div>
+                <p class="mt-4 text-sm text-gray-600">На карте отображаются точки опросов.</p>
+            </div>
+        </section>
+
     </main>
-  </div>
+    
+    <div id="alertModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden items-center justify-center z-[1000]">
+       
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center">
+            <h3 id="alertTitle" class="text-xl font-bold text-gray-900 mb-3">ВНИМАНИЕ</h3>
+            <p id="alertMessage" class="text-gray-700 mb-6">Сообщение.</p>
+            <div id="alertButtons" class="flex justify-center space-x-4">
+                <button id="alertOkBtn" onclick="window.closeAlert()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-lg transition-colors">
+                  
+                    ОК
+                </button>
+            </div>
+        </div>
+    </div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInWithCustomToken, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, collection, addDoc, getDocs, orderBy, query, serverTimestamp, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // ---------- URL PARAM READER ----------
-    function getUrlParams() {
-      const params = {};
-      const qs = window.location.search.substring(1);
-      qs.split("&").forEach((p) => {
-        const [k, v] = p.split("=");
-        if (k) params[decodeURIComponent(k)] = decodeURIComponent(v || "");
-      });
-      return params;
-    }
-    const params = getUrlParams();
+    <script type="module">
+        // ----------------------------------------------------------------------------------
+        // ИМПОРТЫ FIREBASE
+        // ----------------------------------------------------------------------------------
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        // Используем коллекцию 'reports' как указано в правилах Firestore
+        import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-    const firebaseConfig = params.__firebase_config
-      ? JSON.parse(atob(params.__firebase_config))
-      : {};
-    const initialAuthToken = params.__initial_auth_token || "";
-    const appId = params.__app_id || "default-app-id";
 
-    // ---------- FIREBASE INIT ----------
-    let app, db, auth;
-    try {
-      if (!firebaseConfig.projectId) {
-        console.warn("Firebase config missing or empty");
-      }
-      app = initializeApp(firebaseConfig);
-      db = getFirestore(app);
-      auth = getAuth(app);
-      console.log("Firebase initialized");
-    } catch (e) {
-      console.error("Firebase init error", e);
-    }
+        // ----------------------------------------------------------------------------------
+        // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И КОНФИГУРАЦИЯ
+        // ----------------------------------------------------------------------------------
+        
+        function getUrlParameter(name) {
+            name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+            var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+            var results = regex.exec(location.search);
+            return results === null ?
+                '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        };
 
-    // ---------- AUTH ----------
-    async function authenticate() {
-      try {
-        if (initialAuthToken) {
-          await signInWithCustomToken(auth, initialAuthToken);
-        } else {
-          await signInAnonymously(auth);
+        const firebaseConfigStrB64 = getUrlParameter('firebaseConfigB64');
+        const initialAuthToken = getUrlParameter('initialAuthToken');
+        const urlUserTelegramId = getUrlParameter('telegramUserId');
+        let firebaseConfig = {};
+        if (firebaseConfigStrB64) {
+            try {
+                const firebaseConfigJson = atob(firebaseConfigStrB64);
+                firebaseConfig = JSON.parse(firebaseConfigJson);
+            } catch (e) {
+                console.error("Failed to decode or parse firebaseConfig from URL:", e);
+                window.showAlert('Ошибка Конфигурации', 'Не удалось декодировать ключи Firebase.');
+            }
         }
-      } catch (e) {
-        console.error("Auth error", e);
-        alert("Ошибка авторизации Firebase: " + e.message);
-      }
-    }
+        
+        const app = firebaseConfig.projectId ?
+            initializeApp(firebaseConfig) : null;
+        const db = app ? getFirestore(app) : null;
+        const auth = app ? getAuth(app) : null;
+        // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
+        let userTelegramId = urlUserTelegramId || null;
+        let isAdmin = false; 
+        const ADMIN_IDS_LIST = [541459471]; // Ваш Telegram ID (вставьте свои)
+        
+        // ВАШ СПИСОК НАСЕЛЕННЫХ ПУНКТОВ (ОБНОВЛЕНО)
+        const SETTLEMENTS = [
+            'г.п. Лянтор',
+            'с.п. Русскинская',
+            'г.п. Федоровский',
+            'г.п. Барсово',
+            'г.п. Белый Яр',
+            'с.п. Лямина',
+            'с.п. Сытомино',
+            'с.п. Угут',
+            'с.п. Ульт-Ягун',
+            'с.п. Солнечный',
+            'с.п. Нижнесортымский',
+            'с.п. Тундрино',
+            'с.п. Локосово'
+        ];
 
-    onAuthStateChanged(getAuth(), (user) => {
-      if (user) {
-        document.getElementById("debugUserId").textContent = "ID: " + user.uid;
-        document.getElementById("debugAdminStatus").textContent = params.__firebase_config ? "Админ: возможно" : "Админ: ?";
-        loadReports();
-      }
-    });
-
-    await authenticate();
-
-    // ---------- SAVE REPORT ----------
-    async function saveReport() {
-      const settlement = document.getElementById("settlement").value.trim();
-      const address = document.getElementById("address").value.trim();
-      const comment = document.getElementById("comment").value.trim();
-      const saveStatus = document.getElementById("saveStatus");
-      const sendBtn = document.getElementById("sendBtn");
-
-      if (!settlement || !address) {
-        alert("Введите населённый пункт и адрес");
-        return;
-      }
-      sendBtn.disabled = true;
-      saveStatus.classList.remove("hidden");
-
-      try {
-        const reportsCol = collection(db, "reports");
-        await addDoc(reportsCol, {
-          settlement,
-          address,
-          comment,
-          reporterId: auth.currentUser.uid,
-          timestamp: serverTimestamp()
-        });
-        alert("✅ Отчёт успешно отправлен!");
-        document.getElementById("settlement").value = "";
-        document.getElementById("address").value = "";
-        document.getElementById("comment").value = "";
-        await loadReports();
-      } catch (e) {
-        console.error("Error saving report", e);
-        alert("Ошибка при сохранении отчёта: " + e.message);
-      } finally {
-        sendBtn.disabled = false;
-        saveStatus.classList.add("hidden");
-      }
-    }
-    document.getElementById("sendBtn").onclick = saveReport;
-
-    // ---------- LOAD REPORTS ----------
-    async function loadReports() {
-      const listEl = document.getElementById("reportsList");
-      listEl.textContent = "Загрузка...";
-      try {
-        const reportsCol = collection(db, "reports");
-        const q = query(reportsCol, orderBy("timestamp", "desc"), limit(200));
-        const snap = await getDocs(q);
-        listEl.innerHTML = "";
-        if (snap.empty) {
-          listEl.textContent = "Нет данных.";
-          return;
+        // ----------------------------------------------------------------------------------
+        // ФУНКЦИИ АУТЕНТИФИКАЦИИ И СОХРАНЕНИЯ
+        // ----------------------------------------------------------------------------------
+        
+        function populateSettlements() {
+            const select = document.getElementById('settlement');
+            select.innerHTML = '<option value="" disabled selected>Выберите населенный пункт</option>';
+            SETTLEMENTS.forEach(settlement => {
+                const option = document.createElement('option');
+                option.value = settlement;
+                option.textContent = settlement;
+                select.appendChild(option);
+            });
         }
-        snap.forEach((doc) => {
-          const r = doc.data();
-          const d = document.createElement("div");
-          const date = r.timestamp?.toDate?.().toLocaleString("ru-RU") || "";
-          d.className = "border-b py-1";
-          d.innerHTML = `<b>${r.settlement}</b>, ${r.address} <br/><small>${date}</small>`;
-          listEl.appendChild(d);
-        });
-      } catch (e) {
-        console.error("Load reports error", e);
-        listEl.textContent = "Ошибка загрузки: " + e.message;
-      }
-    }
-  </script>
+        
+        async function authenticateUser() {
+            const adminStatus = document.getElementById('debugAdminStatus');
+            adminStatus.textContent = 'Подключение...';
+            adminStatus.classList.remove('text-red-500');
+            adminStatus.classList.add('text-yellow-500');
+
+            if (!auth || !initialAuthToken) {
+                console.error("Firebase Auth not initialized or Token missing.");
+                adminStatus.textContent = 'ОШИБКА';
+                return false;
+            }
+            
+            try {
+                const userCredential = await signInWithCustomToken(auth, initialAuthToken);
+                // Пользователь успешно вошел. Получаем актуальный токен и проверяем Claims.
+                const tokenResult = await userCredential.user.getIdTokenResult();
+                
+                userTelegramId = tokenResult.claims.telegram_id || userCredential.user.uid;
+                // ИСПРАВЛЕНО: Проверка клейма admin как СТРОКИ ('true'/'false')
+                isAdmin = tokenResult.claims.admin === 'true'; // <--- КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ
+                document.getElementById('debugUserId').textContent = userTelegramId;
+                document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'ПОЛЬЗОВАТЕЛЬ';
+                document.getElementById('debugAdminStatus').classList.remove('text-yellow-500', 'text-red-500');
+                document.getElementById('debugAdminStatus').classList.add(isAdmin ? 'text-green-600' : 'text-green-500');
+                
+                document.getElementById('saveButton').disabled = false;
+                return true;
+            } catch (error) {
+                console.error("Firebase Authentication Error:", error);
+                document.getElementById('debugAdminStatus').textContent = 'ОШИБКА: ' + error.code;
+                document.getElementById('debugAdminStatus').classList.remove('text-yellow-500');
+                document.getElementById('debugAdminStatus').classList.add('text-red-500');
+                window.showAlert('Ошибка Аутентификации', `Не удалось войти: ${error.code}. Проверьте ключи и Custom Claims.`, false, null);
+                return false;
+            }
+        }
+
+        function getGeolocation() {
+            // ... (Ваша логика геолокации) ...
+        }
+
+        async function saveSurveyData(event) {
+            event.preventDefault();
+            if (!db || !userTelegramId) {
+                window.showAlert('Ошибка', 'Приложение не подключено к базе данных или пользователь не авторизован.');
+                return;
+            }
+
+            // ПОЛЯ АДАПТИРОВАНЫ ПОД ПРАВИЛА FIRESTORE
+            const data = {
+                // КРИТИЧЕСКИ ВАЖНО: user_id должен совпадать с полем в правилах
+                user_id: userTelegramId, 
+                timestamp: new Date(), 
+     
+                settlement: document.getElementById('settlement').value,
+                street: document.getElementById('street').value,
+                house: document.getElementById('house').value, // Новое поле
+                action: document.getElementById('action').value, // Новое поле
+                loyalty: document.getElementById('loyalty').value, // Изменено с support на loyalty
+        
+                comment: document.getElementById('comment').value ||
+                    "" // Необязательное поле
+            };
+            
+            document.getElementById('saveButton').disabled = true;
+            document.getElementById('saveButton').textContent = 'Сохранение...';
+
+            try {
+                // Используем коллекцию 'reports' как указано в правилах
+                await addDoc(collection(db, "reports"), data);
+                window.showAlert('Успех', 'Данные успешно сохранены!');
+                document.getElementById('surveyForm').reset();
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                window.showAlert('Ошибка', `Не удалось сохранить данные: ${e.message}. Проверьте правила Firestore.`);
+            } finally {
+                document.getElementById('saveButton').disabled = false;
+                document.getElementById('saveButton').textContent = 'Сохранить Запись';
+            }
+        }
+
+        // ----------------------------------------------------------------------------------
+        // ФУНКЦИИ ИНТЕРФЕЙСА (ДЛЯ ДИЗАЙНА)
+        // ----------------------------------------------------------------------------------
+        function showSection(sectionId) {
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.classList.add('hidden');
+            });
+            document.getElementById(sectionId).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active', 'text-indigo-600');
+            });
+            document.getElementById(`btn-${sectionId}`).classList.add('active');
+
+            if (sectionId === 'map-view') {
+                if (window.generateMap) setTimeout(window.generateMap, 100);
+            }
+        }
+        
+        function showAlert(title, message) {
+            document.getElementById('alertTitle').textContent = title;
+            document.getElementById('alertMessage').textContent = message;
+            
+            document.getElementById('alertModal').classList.remove('hidden');
+            document.getElementById('alertModal').classList.add('flex');
+        }
+
+        function closeAlert() {
+            document.getElementById('alertModal').classList.add('hidden');
+            document.getElementById('alertModal').classList.remove('flex');
+        }
+
+
+        // ----------------------------------------------------------------------------------
+        // ГЛАВНЫЙ БЛОК ЗАПУСКА
+        // ----------------------------------------------------------------------------------
+
+        // Экспорт функций в глобальный скоуп
+        window.showAlert = showAlert;
+        window.closeAlert = closeAlert;
+        window.showSection = showSection;
+        window.getGeolocation = getGeolocation;
+        window.saveSurveyData = saveSurveyData;
+        // Заглушки для функций отчетов
+        window.fetchAndRenderReports = () => {};
+        window.generateMap = () => { /* Логика карты */ };
+        window.onload = async () => {
+            // 1. Заполнение интерфейса
+            populateSettlements();
+            lucide.createIcons();
+            
+            // 2. Аутентификация
+            const isAuthenticated = await authenticateUser();
+            if (isAuthenticated) {
+                if (isAdmin) {
+                    showSection('reports');
+                    // window.fetchAndRenderReports('today'); // Загрузка админ-данных
+                } else {
+                    showSection('form');
+                }
+            } 
+            
+            if (!firebaseConfig.projectId) {
+                window.showAlert('ВНИМАНИЕ', 'Конфигурация Firebase не загружена. Проверьте передачу Base64 параметра.');
+            }
+        };
+
+        // Запуск первой секции по умолчанию
+        showSection('form');
+    </script>
 </body>
 </html>
