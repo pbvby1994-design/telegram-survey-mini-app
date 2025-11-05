@@ -197,7 +197,6 @@
         // ИМПОРТЫ FIREBASE
         // ----------------------------------------------------------------------------------
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // ВАЖНО: Добавлены getStorage и функции Storage
         import { getFirestore, collection, addDoc, query, orderBy, limit, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
@@ -225,7 +224,6 @@
                 firebaseConfig = JSON.parse(firebaseConfigJson);
             } catch (e) {
                 console.error("Failed to decode or parse firebaseConfig from URL:", e);
-                window.showAlert('Ошибка Конфигурации', 'Не удалось декодировать ключи Firebase.');
             }
         }
         
@@ -233,12 +231,13 @@
             initializeApp(firebaseConfig) : null;
         const db = app ? getFirestore(app) : null;
         const auth = app ? getAuth(app) : null;
-        const storage = app ? getStorage(app) : null; // Инициализация Storage
+        const storage = app ? getStorage(app) : null;
 
         // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
         let userTelegramId = urlUserTelegramId || null;
         let isAdmin = false; 
-        let reportsData = []; // Для хранения загруженных отчетов (для карты/таблицы)
+        let currentLatitude = null;
+        let currentLongitude = null; // ИСПРАВЛЕНО: Глобальные переменные для координат
         
         // ВАШ СПИСОК НАСЕЛЕННЫХ ПУНКТОВ
         const SETTLEMENTS = [
@@ -251,18 +250,12 @@
         // ----------------------------------------------------------------------------------
         // ФУНКЦИИ FIREBASE STORAGE
         // ----------------------------------------------------------------------------------
-        /**
-         * Загружает Base64 строку изображения в Firebase Storage.
-         * @param {string} base64 - Base64 строка (например, 'data:image/jpeg;base64,...').
-         * @returns {Promise<string>} - URL загруженного файла.
-         */
         async function uploadPhoto(base64) {
             if (!storage || !userTelegramId) throw new Error("Storage not initialized or user ID missing.");
             
             const filename = `reports/${userTelegramId}/${Date.now()}.jpg`;
             const photoRef = ref(storage, filename);
             
-            // uploadString использует 'data_url' для Base64 строк с префиксом
             await uploadString(photoRef, base64, 'data_url');
             return await getDownloadURL(photoRef);
         }
@@ -283,26 +276,26 @@
         }
         
         async function authenticateUser() {
-            // ... (Ваша логика аутентификации без изменений) ...
             const adminStatus = document.getElementById('debugAdminStatus');
             adminStatus.textContent = 'Подключение...';
             adminStatus.classList.remove('text-red-500');
             adminStatus.classList.add('text-yellow-500');
 
             if (!auth || !initialAuthToken) {
-                console.error("Firebase Auth not initialized or Token missing.");
-                adminStatus.textContent = 'ОШИБКА';
+                adminStatus.textContent = 'ОШИБКА ТОКЕНА';
                 return false;
             }
             
             try {
                 const userCredential = await signInWithCustomToken(auth, initialAuthToken);
-                
                 const tokenResult = await userCredential.user.getIdTokenResult();
                 
                 userTelegramId = tokenResult.claims.telegram_id || userCredential.user.uid;
-                // Проверка клейма admin как СТРОКИ ('true'/'false')
-                isAdmin = tokenResult.claims.admin === 'true'; 
+                
+                // ИСПРАВЛЕНИЕ: Универсальная проверка админа (bool ИЛИ string 'true')
+                const adminClaim = tokenResult.claims.admin;
+                isAdmin = (adminClaim === true) || (adminClaim === 'true'); 
+                
                 document.getElementById('debugUserId').textContent = userTelegramId;
                 document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'ПОЛЬЗОВАТЕЛЬ';
                 document.getElementById('debugAdminStatus').classList.remove('text-yellow-500', 'text-red-500');
@@ -311,20 +304,45 @@
                 document.getElementById('saveButton').disabled = false;
                 return true;
             } catch (error) {
-                console.error("Firebase Authentication Error:", error);
                 document.getElementById('debugAdminStatus').textContent = 'ОШИБКА: ' + error.code;
                 document.getElementById('debugAdminStatus').classList.remove('text-yellow-500');
                 document.getElementById('debugAdminStatus').classList.add('text-red-500');
-                window.showAlert('Ошибка Аутентификации', `Не удалось войти: ${error.code}. Проверьте ключи и Custom Claims.`, false, null);
+                window.showAlert('Ошибка Аутентификации', `Не удалось войти: ${error.code}.`, false, null);
                 return false;
             }
         }
 
         function getGeolocation() {
-            // ... (Ваша логика геолокации) ...
+            const geoStatus = document.getElementById('geoStatus');
+            geoStatus.textContent = 'Определение...';
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        // ИСПРАВЛЕНО: Сохраняем координаты в глобальные переменные
+                        currentLatitude = position.coords.latitude; 
+                        currentLongitude = position.coords.longitude;
+                        document.getElementById('geolocation').value = `${currentLatitude.toFixed(6)}, ${currentLongitude.toFixed(6)}`;
+                        geoStatus.textContent = 'Успешно!';
+                        geoStatus.classList.remove('text-gray-500');
+                        geoStatus.classList.add('text-green-600');
+                    },
+                    (error) => {
+                        currentLatitude = null;
+                        currentLongitude = null; // Сбрасываем при ошибке
+                        document.getElementById('geolocation').value = 'Нет данных';
+                        geoStatus.textContent = 'Ошибка доступа';
+                        geoStatus.classList.remove('text-gray-500', 'text-green-600');
+                        geoStatus.classList.add('text-red-500');
+                    },
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+                );
+            } else {
+                geoStatus.textContent = 'Не поддерживается';
+                window.showAlert('Ошибка', 'Геолокация не поддерживается вашим устройством/браузером.');
+            }
         }
         
-        // --- ФУНКЦИИ ВАЛИДАЦИИ ФОРМЫ ---
         function getBase64(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -337,29 +355,31 @@
         async function saveSurveyData(event) {
             event.preventDefault();
             const saveStatus = document.getElementById('saveStatus');
-
-            if (!db || !userTelegramId) {
-                window.showAlert('Ошибка', 'Приложение не подключено к базе данных или пользователь не авторизован.');
-                return;
-            }
-
-            const comment = document.getElementById('comment').value || "";
-            const photoFile = document.getElementById('photoFile').files[0];
-            let photoUrl = '';
-            
-            // 1. ВАЛИДАЦИЯ КОММЕНТАРИЯ
-            if (comment.length > 500) {
-                window.showAlert('Ошибка', 'Комментарий слишком длинный (максимум 500 символов).');
-                return;
-            }
-            
             document.getElementById('saveButton').disabled = true;
             saveStatus.textContent = '⏳ Отправка...';
 
-            // 2. ЗАГРУЗКА ФОТО (если есть)
+            if (!db || !userTelegramId) {
+                window.showAlert('Ошибка', 'Приложение не подключено к базе данных или пользователь не авторизован.');
+                document.getElementById('saveButton').disabled = false;
+                saveStatus.textContent = 'Ошибка';
+                return;
+            }
+            
+            const comment = document.getElementById('comment').value || "";
+            const photoFile = document.getElementById('photoFile').files[0];
+            let photoUrl = null;
+            
+            // 1. ВАЛИДАЦИЯ
+            if (comment.length > 500) {
+                window.showAlert('Ошибка', 'Комментарий слишком длинный (максимум 500 символов).');
+                document.getElementById('saveButton').disabled = false;
+                saveStatus.textContent = 'Готов';
+                return;
+            }
+
+            // 2. ЗАГРУЗКА ФОТО 
             try {
                 if (photoFile) {
-                    // Валидация размера фото (5 МБ)
                     if (photoFile.size > 5 * 1024 * 1024) {
                         window.showAlert('Ошибка', 'Фото слишком большое (максимум 5 МБ).');
                         document.getElementById('saveButton').disabled = false;
@@ -367,7 +387,7 @@
                         return;
                     }
                     const photoBase64 = await getBase64(photoFile);
-                    photoUrl = await uploadPhoto(photoBase64); // Загрузка в Storage
+                    photoUrl = await uploadPhoto(photoBase64);
                 }
             } catch (e) {
                 window.showAlert('Ошибка', `Ошибка загрузки фото: ${e.message}.`);
@@ -377,9 +397,8 @@
             }
             
             // 3. СБОРКА ДАННЫХ
-            const geo = document.getElementById('geolocation').value.split(',').map(s => s.trim());
             const data = {
-                // КРИТИЧЕСКИЙ ФИКС: Ключ должен быть 'reporterId' для соответствия правилам
+                // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Ключ 'reporterId' для соответствия правилам
                 reporterId: userTelegramId, 
                 timestamp: Timestamp.fromDate(new Date()), 
                 
@@ -388,9 +407,10 @@
                 action: document.getElementById('action').value, 
                 loyalty: document.getElementById('loyalty').value,
                 comment: comment,
-                photo: photoUrl || null, // URL фото
-                latitude: geo.length === 2 && geo[0] ? parseFloat(geo[0]) : null,
-                longitude: geo.length === 2 && geo[1] ? parseFloat(geo[1]) : null
+                photo: photoUrl,
+                // ИСПРАВЛЕНО: Используем координаты из глобальных переменных (даже если null)
+                latitude: currentLatitude, 
+                longitude: currentLongitude
             };
             
             // 4. СОХРАНЕНИЕ В FIRESTORE
@@ -409,7 +429,6 @@
             }
         }
         
-        // ... (остальные функции showSection, showAlert, closeAlert без изменений) ...
         function showSection(sectionId) {
             document.querySelectorAll('.content-section').forEach(section => {
                 section.classList.add('hidden');
@@ -444,29 +463,28 @@
         // ГЛАВНЫЙ БЛОК ЗАПУСКА
         // ----------------------------------------------------------------------------------
 
-        // Экспорт функций в глобальный скоуп
         window.showAlert = showAlert;
         window.closeAlert = closeAlert;
         window.showSection = showSection;
         window.getGeolocation = getGeolocation;
         window.saveSurveyData = saveSurveyData;
         
-        // Заглушки для функций отчетов
+        // Заглушки для функций отчетов/карты (пока не реализованы, но используются)
         window.fetchAndRenderReports = () => {};
-        window.generateMap = () => { /* Логика карты */ };
+        window.generateMap = () => { /* Реализация карты */ };
 
         window.onload = async () => {
-            // 1. Заполнение интерфейса
             populateSettlements();
             lucide.createIcons();
             
-            // 2. Аутентификация
             const isAuthenticated = await authenticateUser();
 
             if (isAuthenticated) {
+                 // Запускаем определение геолокации после аутентификации
+                getGeolocation(); 
+                
                 if (isAdmin) {
                     showSection('reports');
-                    // window.fetchAndRenderReports('today'); // Загрузка админ-данных
                 } else {
                     showSection('form');
                 }
