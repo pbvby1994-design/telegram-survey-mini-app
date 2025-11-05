@@ -85,29 +85,20 @@
                         </div>
                         
                         <div class="space-y-2">
-                            <label for="street" class="block text-sm font-medium text-gray-700">Улица</label>
-      
-                            <input type="text" id="street" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
+                            <label for="address" class="block text-sm font-medium text-gray-700">Адрес (Улица и Дом)</label>
+                            <input type="text" id="address" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2" placeholder="Улица, Дом">
                         </div>
                         
                     
-                        <div class="space-y-2">
-                            <label for="house" class="block text-sm font-medium text-gray-700">Номер дома</label>
-                            <input type="text" id="house" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
-                       
-                        </div>
-                        
                         <div class="space-y-2">
                             <label for="loyalty" class="block text-sm font-medium text-gray-700">Лояльность кандидата</label>
                 
                             <select id="loyalty" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
                                 <option value="" disabled selected>Выберите уровень</option>
                                 <option value="strong">Сильная (ДА)</option>
-         
                                 <option value="moderate">Умеренная (СКОРЕЕ ДА)</option>
                                 <option value="neutral">Нейтрально (НЕ ЗНАЮ)</option>
                                 <option value="against">Против (НЕТ)</option>
-     
                             </select>
                         </div>
                         
@@ -119,62 +110,57 @@
                                 <option value="" disabled selected>Выберите действие</option>
                                 <option value="Опрос">Опрос</option>
                                 <option value="Агитация">Агитация</option>
-                             
                                 <option value="Жалоба">Жалоба/Запрос</option>
                             </select>
                         </div>
                         
-                    
+                        <div class="space-y-2 col-span-full">
+                            <label for="photoFile" class="block text-sm font-medium text-gray-700">Фото (дополнительно)</label>
+                            <input type="file" id="photoFile" accept="image/*" class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                        </div>
+
                         <div class="space-y-2 col-span-full">
                             <label for="comment" class="block text-sm font-medium text-gray-700">Комментарий / Запрос (дополнительно)</label>
                             <textarea id="comment" rows="3" class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"></textarea>
-                     
                         </div>
                         
                         <div class="space-y-2 col-span-full">
                             <label for="geolocation" class="block text-sm font-medium text-gray-700">
-              
                                 Геолокация 
                                 <span id="geoStatus" class="ml-2 text-xs text-gray-500">
                                     (Нажмите кнопку ниже)
-       
                                 </span>
                             </label>
                             <div class="flex space-x-2">
                  
                                 <input type="text" id="geolocation" placeholder="Широта, Долгота" readonly class="w-full bg-gray-50 border-gray-300 rounded-md shadow-sm p-2">
                                 <button type="button" onclick="getGeolocation()" class="flex-shrink-0 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition-colors">
-                               
                                     <i data-lucide="locate" class="w-5 h-5 inline-block mr-1"></i>
                                     Определить
                                 </button>
-                      
                             </div>
                         </div>
 
                     </div>
                     
                     <div class="mt-8">
-         
                         <button type="submit" id="saveButton" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-colors disabled:opacity-50" disabled>
                             <i data-lucide="save" class="w-5 h-5 inline-block mr-2"></i>
                             Сохранить Запись
-         
                         </button>
                     </div>
                 </form>
                 
                 <div class="mt-4 text-xs text-gray-500 border-t pt-4">
-            
-                        <p>Статус: <span id="debugAdminStatus" class="font-bold text-red-500">НЕ ПОДКЛЮЧЕНО</span></p>
-                    <p>Telegram ID: <span id="debugUserId">Загрузка...</span></p>
+                        <p>Статус Админа: <span id="debugAdminStatus" class="font-bold text-red-500">НЕ ПОДКЛЮЧЕНО</span></p>
+                    <p>Telegram ID (Auth UID): <span id="debugUserId">Загрузка...</span></p>
+                    <p>Статус сохранения: <span id="saveStatus" class="font-bold">Готов</span></p>
                 </div>
             </div>
         </section>
 
         <section id="reports" class="content-section hidden">
              <div class="card p-6">
-  
                 <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Сводные Отчеты</h2>
                 <p class="text-gray-500">Данные отчетов будут загружены после успешной авторизации.</p>
             </div>
@@ -211,9 +197,10 @@
         // ИМПОРТЫ FIREBASE
         // ----------------------------------------------------------------------------------
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // Используем коллекцию 'reports' как указано в правилах Firestore
-        import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // ВАЖНО: Добавлены getStorage и функции Storage
+        import { getFirestore, collection, addDoc, query, orderBy, limit, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
 
         // ----------------------------------------------------------------------------------
@@ -246,27 +233,39 @@
             initializeApp(firebaseConfig) : null;
         const db = app ? getFirestore(app) : null;
         const auth = app ? getAuth(app) : null;
+        const storage = app ? getStorage(app) : null; // Инициализация Storage
+
         // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
         let userTelegramId = urlUserTelegramId || null;
         let isAdmin = false; 
-        const ADMIN_IDS_LIST = [541459471]; // Ваш Telegram ID (вставьте свои)
+        let reportsData = []; // Для хранения загруженных отчетов (для карты/таблицы)
         
-        // ВАШ СПИСОК НАСЕЛЕННЫХ ПУНКТОВ (ОБНОВЛЕНО)
+        // ВАШ СПИСОК НАСЕЛЕННЫХ ПУНКТОВ
         const SETTLEMENTS = [
-            'г.п. Лянтор',
-            'с.п. Русскинская',
-            'г.п. Федоровский',
-            'г.п. Барсово',
-            'г.п. Белый Яр',
-            'с.п. Лямина',
-            'с.п. Сытомино',
-            'с.п. Угут',
-            'с.п. Ульт-Ягун',
-            'с.п. Солнечный',
-            'с.п. Нижнесортымский',
-            'с.п. Тундрино',
-            'с.п. Локосово'
+            'г.п. Лянтор', 'с.п. Русскинская', 'г.п. Федоровский', 'г.п. Барсово', 
+            'г.п. Белый Яр', 'с.п. Лямина', 'с.п. Сытомино', 'с.п. Угут', 
+            'с.п. Ульт-Ягун', 'с.п. Солнечный', 'с.п. Нижнесортымский', 
+            'с.п. Тундрино', 'с.п. Локосово'
         ];
+
+        // ----------------------------------------------------------------------------------
+        // ФУНКЦИИ FIREBASE STORAGE
+        // ----------------------------------------------------------------------------------
+        /**
+         * Загружает Base64 строку изображения в Firebase Storage.
+         * @param {string} base64 - Base64 строка (например, 'data:image/jpeg;base64,...').
+         * @returns {Promise<string>} - URL загруженного файла.
+         */
+        async function uploadPhoto(base64) {
+            if (!storage || !userTelegramId) throw new Error("Storage not initialized or user ID missing.");
+            
+            const filename = `reports/${userTelegramId}/${Date.now()}.jpg`;
+            const photoRef = ref(storage, filename);
+            
+            // uploadString использует 'data_url' для Base64 строк с префиксом
+            await uploadString(photoRef, base64, 'data_url');
+            return await getDownloadURL(photoRef);
+        }
 
         // ----------------------------------------------------------------------------------
         // ФУНКЦИИ АУТЕНТИФИКАЦИИ И СОХРАНЕНИЯ
@@ -284,6 +283,7 @@
         }
         
         async function authenticateUser() {
+            // ... (Ваша логика аутентификации без изменений) ...
             const adminStatus = document.getElementById('debugAdminStatus');
             adminStatus.textContent = 'Подключение...';
             adminStatus.classList.remove('text-red-500');
@@ -297,12 +297,12 @@
             
             try {
                 const userCredential = await signInWithCustomToken(auth, initialAuthToken);
-                // Пользователь успешно вошел. Получаем актуальный токен и проверяем Claims.
+                
                 const tokenResult = await userCredential.user.getIdTokenResult();
                 
                 userTelegramId = tokenResult.claims.telegram_id || userCredential.user.uid;
-                // ИСПРАВЛЕНО: Проверка клейма admin как СТРОКИ ('true'/'false')
-                isAdmin = tokenResult.claims.admin === 'true'; // <--- КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ
+                // Проверка клейма admin как СТРОКИ ('true'/'false')
+                isAdmin = tokenResult.claims.admin === 'true'; 
                 document.getElementById('debugUserId').textContent = userTelegramId;
                 document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'ПОЛЬЗОВАТЕЛЬ';
                 document.getElementById('debugAdminStatus').classList.remove('text-yellow-500', 'text-red-500');
@@ -323,50 +323,93 @@
         function getGeolocation() {
             // ... (Ваша логика геолокации) ...
         }
+        
+        // --- ФУНКЦИИ ВАЛИДАЦИИ ФОРМЫ ---
+        function getBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
 
         async function saveSurveyData(event) {
             event.preventDefault();
+            const saveStatus = document.getElementById('saveStatus');
+
             if (!db || !userTelegramId) {
                 window.showAlert('Ошибка', 'Приложение не подключено к базе данных или пользователь не авторизован.');
                 return;
             }
 
-            // ПОЛЯ АДАПТИРОВАНЫ ПОД ПРАВИЛА FIRESTORE
-            const data = {
-                // КРИТИЧЕСКИ ВАЖНО: user_id должен совпадать с полем в правилах
-                user_id: userTelegramId, 
-                timestamp: new Date(), 
-     
-                settlement: document.getElementById('settlement').value,
-                street: document.getElementById('street').value,
-                house: document.getElementById('house').value, // Новое поле
-                action: document.getElementById('action').value, // Новое поле
-                loyalty: document.getElementById('loyalty').value, // Изменено с support на loyalty
-        
-                comment: document.getElementById('comment').value ||
-                    "" // Необязательное поле
-            };
+            const comment = document.getElementById('comment').value || "";
+            const photoFile = document.getElementById('photoFile').files[0];
+            let photoUrl = '';
+            
+            // 1. ВАЛИДАЦИЯ КОММЕНТАРИЯ
+            if (comment.length > 500) {
+                window.showAlert('Ошибка', 'Комментарий слишком длинный (максимум 500 символов).');
+                return;
+            }
             
             document.getElementById('saveButton').disabled = true;
-            document.getElementById('saveButton').textContent = 'Сохранение...';
+            saveStatus.textContent = '⏳ Отправка...';
 
+            // 2. ЗАГРУЗКА ФОТО (если есть)
             try {
-                // Используем коллекцию 'reports' как указано в правилах
+                if (photoFile) {
+                    // Валидация размера фото (5 МБ)
+                    if (photoFile.size > 5 * 1024 * 1024) {
+                        window.showAlert('Ошибка', 'Фото слишком большое (максимум 5 МБ).');
+                        document.getElementById('saveButton').disabled = false;
+                        saveStatus.textContent = 'Готов';
+                        return;
+                    }
+                    const photoBase64 = await getBase64(photoFile);
+                    photoUrl = await uploadPhoto(photoBase64); // Загрузка в Storage
+                }
+            } catch (e) {
+                window.showAlert('Ошибка', `Ошибка загрузки фото: ${e.message}.`);
+                document.getElementById('saveButton').disabled = false;
+                saveStatus.textContent = 'Ошибка';
+                return;
+            }
+            
+            // 3. СБОРКА ДАННЫХ
+            const geo = document.getElementById('geolocation').value.split(',').map(s => s.trim());
+            const data = {
+                // КРИТИЧЕСКИЙ ФИКС: Ключ должен быть 'reporterId' для соответствия правилам
+                reporterId: userTelegramId, 
+                timestamp: Timestamp.fromDate(new Date()), 
+                
+                settlement: document.getElementById('settlement').value,
+                address: document.getElementById('address').value,
+                action: document.getElementById('action').value, 
+                loyalty: document.getElementById('loyalty').value,
+                comment: comment,
+                photo: photoUrl || null, // URL фото
+                latitude: geo.length === 2 && geo[0] ? parseFloat(geo[0]) : null,
+                longitude: geo.length === 2 && geo[1] ? parseFloat(geo[1]) : null
+            };
+            
+            // 4. СОХРАНЕНИЕ В FIRESTORE
+            try {
                 await addDoc(collection(db, "reports"), data);
                 window.showAlert('Успех', 'Данные успешно сохранены!');
                 document.getElementById('surveyForm').reset();
+                saveStatus.textContent = '✅ Успешно!';
+                setTimeout(() => saveStatus.textContent = 'Готов', 3000);
             } catch (e) {
                 console.error("Error adding document: ", e);
                 window.showAlert('Ошибка', `Не удалось сохранить данные: ${e.message}. Проверьте правила Firestore.`);
+                saveStatus.textContent = 'Ошибка';
             } finally {
                 document.getElementById('saveButton').disabled = false;
-                document.getElementById('saveButton').textContent = 'Сохранить Запись';
             }
         }
-
-        // ----------------------------------------------------------------------------------
-        // ФУНКЦИИ ИНТЕРФЕЙСА (ДЛЯ ДИЗАЙНА)
-        // ----------------------------------------------------------------------------------
+        
+        // ... (остальные функции showSection, showAlert, closeAlert без изменений) ...
         function showSection(sectionId) {
             document.querySelectorAll('.content-section').forEach(section => {
                 section.classList.add('hidden');
@@ -407,9 +450,11 @@
         window.showSection = showSection;
         window.getGeolocation = getGeolocation;
         window.saveSurveyData = saveSurveyData;
+        
         // Заглушки для функций отчетов
         window.fetchAndRenderReports = () => {};
         window.generateMap = () => { /* Логика карты */ };
+
         window.onload = async () => {
             // 1. Заполнение интерфейса
             populateSettlements();
@@ -417,6 +462,7 @@
             
             // 2. Аутентификация
             const isAuthenticated = await authenticateUser();
+
             if (isAuthenticated) {
                 if (isAdmin) {
                     showSection('reports');
@@ -433,6 +479,7 @@
 
         // Запуск первой секции по умолчанию
         showSection('form');
+
     </script>
 </body>
 </html>
