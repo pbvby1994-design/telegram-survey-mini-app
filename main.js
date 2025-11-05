@@ -2,18 +2,11 @@
 
 // Импортируем из других модулей
 import { initializeFirebase, authenticateUser, userTelegramId, isAdmin, db, collection, addDoc, Timestamp } from './firebase-auth.js';
-import { fetchAndRenderReports, generateMap } from './reports.js';
+import { fetchAndRenderReports, generateMap, filterAndRenderReports, exportReportsToCSV, SETTLEMENTS } from './reports.js'; // ДОБАВЛЕН exportReportsToCSV
 
 // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И КОНСТАНТЫ ---
 let currentLatitude = null;
-let currentLongitude = null;
-
-const SETTLEMENTS = [
-    'г.п. Лянтор', 'с.п. Русскинская', 'г.п. Федоровский', 'г.п. Барсово',
-    'г.п. Белый Яр', 'с.п. Лямина', 'с.п. Сытомино', 'с.п. Угут',
-    'с.п. Ульт-Ягун', 'с.п. Солнечный', 'с.п. Нижнесортымский',
-    'с.п. Тундрино', 'с.п. Локосово'
-];
+let currentLongitude = null; 
 
 // ----------------------------------------------------------------------------------
 // ФУНКЦИИ ИНТЕРФЕЙСА (Modal, Tabs, Selects)
@@ -48,7 +41,7 @@ function showSection(sectionId) {
 function showAlert(title, message) {
     document.getElementById('alertTitle').textContent = title;
     document.getElementById('alertMessage').textContent = message;
-
+    
     document.getElementById('alertModal').classList.remove('hidden');
     document.getElementById('alertModal').classList.add('flex');
 }
@@ -62,14 +55,15 @@ function closeAlert() {
 // ФУНКЦИИ ГЕОЛОКАЦИИ И ФОРМЫ
 // ----------------------------------------------------------------------------------
 
+// Геолокация теперь вызывается ТОЛЬКО по клику на кнопку
 function getGeolocation() {
     const geoStatus = document.getElementById('geoStatus');
     geoStatus.textContent = 'Определение...';
-
+    
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (position) => {
-                currentLatitude = position.coords.latitude;
+                currentLatitude = position.coords.latitude; 
                 currentLongitude = position.coords.longitude;
                 document.getElementById('geolocation').value = `${currentLatitude.toFixed(6)}, ${currentLongitude.toFixed(6)}`;
                 geoStatus.textContent = 'Успешно!';
@@ -98,50 +92,47 @@ async function saveSurveyData(event) {
     document.getElementById('saveButton').disabled = true;
     saveStatus.textContent = '⏳ Отправка...';
 
-    // Используем импортированные переменные
     if (!db || !userTelegramId) {
         showAlert('Ошибка', 'Приложение не подключено к базе данных или пользователь не авторизован.');
         document.getElementById('saveButton').disabled = false;
         saveStatus.textContent = 'Ошибка';
         return;
     }
-
+    
     const comment = document.getElementById('comment').value || "";
-
+    
     if (comment.length > 500) {
         showAlert('Ошибка', 'Комментарий слишком длинный (максимум 500 символов).');
         document.getElementById('saveButton').disabled = false;
         saveStatus.textContent = 'Готов';
         return;
     }
-
-    // СБОРКА ДАННЫХ
+    
     const data = {
-        reporterId: userTelegramId,
-        timestamp: Timestamp.fromDate(new Date()),
-
+        reporterId: userTelegramId, 
+        timestamp: Timestamp.fromDate(new Date()), 
+        
         settlement: document.getElementById('settlement').value,
         address: document.getElementById('address').value,
-        action: document.getElementById('action').value,
+        action: document.getElementById('action').value, 
         loyalty: document.getElementById('loyalty').value,
         comment: comment,
-        photo: null, // УДАЛЕННОЕ ПОЛЕ, ОСТАВЛЯЕМ null ДЛЯ СХЕМЫ
-        latitude: currentLatitude,
+        photo: null, 
+        latitude: currentLatitude, 
         longitude: currentLongitude
     };
-
-    // СОХРАНЕНИЕ В FIRESTORE
+    
     try {
         await addDoc(collection(db, "reports"), data);
         showAlert('Успех', 'Данные успешно сохранены!');
         document.getElementById('surveyForm').reset();
         saveStatus.textContent = '✅ Успешно!';
-
+        
         // Сброс геоданных
         currentLatitude = null;
         currentLongitude = null;
-        document.getElementById('geolocation').value = 'Нет данных';
-        document.getElementById('geoStatus').textContent = '(Нажмите кнопку ниже)';
+        document.getElementById('geolocation').value = '';
+        document.getElementById('geoStatus').textContent = '(Нажмите кнопку ниже, если нужно)';
         document.getElementById('geoStatus').classList.remove('text-green-600', 'text-red-500');
         document.getElementById('geoStatus').classList.add('text-gray-500');
 
@@ -166,38 +157,45 @@ window.onload = async () => {
     window.showSection = showSection;
     window.getGeolocation = getGeolocation;
     window.saveSurveyData = saveSurveyData;
+    
     // Экспортированные функции из reports.js
     window.fetchAndRenderReports = fetchAndRenderReports;
     window.generateMap = generateMap;
+    window.filterAndRenderReports = filterAndRenderReports;
+    window.exportReportsToCSV = exportReportsToCSV; // НОВАЯ ГЛОБАЛЬНАЯ ФУНКЦИЯ
 
 
     populateSettlements();
     lucide.createIcons();
-
+    
     // 1. Инициализация Firebase и получение токена
     const initialAuthToken = initializeFirebase();
-
+    
     // 2. Аутентификация
     const isAuthenticated = await authenticateUser(initialAuthToken);
-
+    
+    // 3. Управление видимостью админ-панели и начальной секцией
+    
     if (isAuthenticated) {
-         getGeolocation();
-
-        if (isAdmin) {
-            // Если админ, загружаем отчеты и показываем соответствующий раздел
-            showSection('reports');
-            // Примечание: fetchAndRenderReports() запускается при нажатии на вкладку "Отчеты", но мы можем запустить ее сразу, если хотим
-            fetchAndRenderReports();
-        } else {
-            // Если обычный пользователь, показываем форму
+        // Управление видимостью табов
+        const reportBtn = document.getElementById('btn-reports');
+        const mapBtn = document.getElementById('btn-map-view');
+        
+        if (!isAdmin) {
+             // Скрываем табы отчетов и карты для обычных пользователей
+            if (reportBtn) reportBtn.style.display = 'none';
+            if (mapBtn) mapBtn.style.display = 'none';
             showSection('form');
+        } else {
+            // Если админ, показываем все табы и переходим в Отчеты
+            if (reportBtn) reportBtn.style.display = '';
+            if (mapBtn) mapBtn.style.display = '';
+            showSection('reports');
+            fetchAndRenderReports(); 
         }
     } else {
          // Если аутентификация не удалась, показываем форму и блокируем сохранение
          showSection('form');
          document.getElementById('saveButton').disabled = true;
     }
-
-    // Убедимся, что начальная секция показана правильно, даже если аутентификация медленная
-    showSection(isAdmin ? 'reports' : 'form');
 };
