@@ -21,7 +21,7 @@
     <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
 
     <style>
-        body {
+        body { 
             font-family: 'Jost', sans-serif;
             background-color: #f4f6f9;
         }
@@ -60,7 +60,7 @@
                 <button onclick="showSection('reports'); fetchAndRenderReports()" class="tab-button hover:text-indigo-200" id="btn-reports">
                     <i data-lucide="bar-chart-3" class="w-5 h-5 inline-block mr-1"></i>Отчеты
                 </button>
-
+              
                 <button onclick="showSection('map-view'); generateMap()" class="tab-button hover:text-indigo-200" id="btn-map-view">
                     <i data-lucide="map" class="w-5 h-5 inline-block mr-1"></i>Карта
                 </button>
@@ -71,28 +71,24 @@
     <main class="container mx-auto p-4 md:p-8">
 
         <section id="form" class="content-section">
-
+           
             <div class="card p-6">
                 <h2 class="text-2xl font-semibold text-gray-800 mb-6 border-b pb-2">Запись Опроса</h2>
                 <form id="surveyForm" onsubmit="saveSurveyData(event)">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-
+                        
                         <div class="space-y-2">
                             <label for="settlement" class="block text-sm font-medium text-gray-700">Населенный пункт</label>
                             <select id="settlement" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"></select>
-
                         </div>
-
+                        
                         <div class="space-y-2">
                             <label for="address" class="block text-sm font-medium text-gray-700">Адрес (Улица и Дом)</label>
                             <input type="text" id="address" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2" placeholder="Улица, Дом">
                         </div>
-
-
+                        
                         <div class="space-y-2">
                             <label for="loyalty" class="block text-sm font-medium text-gray-700">Лояльность кандидата</label>
-
                             <select id="loyalty" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
                                 <option value="" disabled selected>Выберите уровень</option>
                                 <option value="strong">Сильная (ДА)</option>
@@ -101,33 +97,30 @@
                                 <option value="against">Против (НЕТ)</option>
                             </select>
                         </div>
-
+                        
                         <div class="space-y-2 col-span-full md:col-span-1">
-
                             <label for="action" class="block text-sm font-medium text-gray-700">Целевое действие</label>
                             <select id="action" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
-
                                 <option value="" disabled selected>Выберите действие</option>
                                 <option value="Опрос">Опрос</option>
                                 <option value="Агитация">Агитация</option>
                                 <option value="Жалоба">Жалоба/Запрос</option>
                             </select>
                         </div>
-
+                        
                         <div class="space-y-2 col-span-full">
                             <label for="comment" class="block text-sm font-medium text-gray-700">Комментарий / Запрос (дополнительно)</label>
                             <textarea id="comment" rows="3" class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"></textarea>
                         </div>
-
+                        
                         <div class="space-y-2 col-span-full">
                             <label for="geolocation" class="block text-sm font-medium text-gray-700">
-                                Геолокация
+                                Геолокация 
                                 <span id="geoStatus" class="ml-2 text-xs text-gray-500">
-                                    (Нажмите кнопку ниже)
+                                    (Нажмите кнопку ниже, если нужно)
                                 </span>
                             </label>
                             <div class="flex space-x-2">
-
                                 <input type="text" id="geolocation" placeholder="Широта, Долгота" readonly class="w-full bg-gray-50 border-gray-300 rounded-md shadow-sm p-2">
                                 <button type="button" onclick="getGeolocation()" class="flex-shrink-0 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition-colors">
                                     <i data-lucide="locate" class="w-5 h-5 inline-block mr-1"></i>
@@ -137,7 +130,7 @@
                         </div>
 
                     </div>
-
+                    
                     <div class="mt-8">
                         <button type="submit" id="saveButton" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-colors disabled:opacity-50" disabled>
                             <i data-lucide="save" class="w-5 h-5 inline-block mr-2"></i>
@@ -145,7 +138,7 @@
                         </button>
                     </div>
                 </form>
-
+                
                 <div class="mt-4 text-xs text-gray-500 border-t pt-4">
                         <p>Статус Админа: <span id="debugAdminStatus" class="font-bold text-red-500">НЕ ПОДКЛЮЧЕНО</span></p>
                     <p>Telegram ID (Auth UID): <span id="debugUserId">Загрузка...</span></p>
@@ -157,7 +150,20 @@
         <section id="reports" class="content-section hidden">
              <div class="card p-6">
                 <h2 class="text-2xl font-semibold text-gray-800 mb-6 border-b pb-2">Сводная Аналитика</h2>
-
+                
+                <div class="mb-6 flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0">
+                    <div class="flex items-center space-x-4">
+                        <label for="reportSettlementFilter" class="block text-sm font-medium text-gray-700">Фильтр по НП:</label>
+                        <select id="reportSettlementFilter" onchange="filterAndRenderReports()" class="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
+                            <option value="all">Все населенные пункты</option>
+                            </select>
+                    </div>
+                    <button onclick="exportReportsToCSV()" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center">
+                        <i data-lucide="download" class="w-5 h-5 inline-block mr-2"></i>
+                        Экспорт CSV
+                    </button>
+                </div>
+                
                 <div id="chartsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                      <div class="card p-4">
                         <h3 class="text-lg font-semibold mb-3">Лояльность избирателей</h3>
@@ -165,7 +171,7 @@
                             <canvas id="loyaltyChart"></canvas>
                         </div>
                     </div>
-
+                    
                     <div class="card p-4">
                         <h3 class="text-lg font-semibold mb-3">Активность по действиям</h3>
                         <div class="h-64 flex justify-center items-center">
@@ -182,7 +188,7 @@
 
         <section id="map-view" class="content-section hidden">
             <div class="card p-6">
-
+           
                 <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Карта Активности</h2>
                 <div id="map"></div>
                 <p class="mt-4 text-sm text-gray-600">На карте отображаются точки опросов.</p>
@@ -190,15 +196,15 @@
         </section>
 
     </main>
-
+    
     <div id="alertModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden items-center justify-center z-[1000]">
-
+       
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center">
             <h3 id="alertTitle" class="text-xl font-bold text-gray-900 mb-3">ВНИМАНИЕ</h3>
             <p id="alertMessage" class="text-gray-700 mb-6">Сообщение.</p>
             <div id="alertButtons" class="flex justify-center space-x-4">
                 <button id="alertOkBtn" onclick="window.closeAlert()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-lg transition-colors">
-
+                  
                     ОК
                 </button>
             </div>
