@@ -36,6 +36,16 @@ function showSection(sectionId) {
     if (sectionButton) {
         sectionButton.classList.add('active');
     }
+
+    // --- КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ ДЛЯ КАРТЫ: Перерисовка Leaflet ---
+    if (sectionId === 'map-view' && window.map) {
+        // Заставляем Leaflet пересчитать размер после того, как контейнер стал видимым
+        setTimeout(() => {
+            window.map.invalidateSize();
+            generateMap(); // Перезапускаем генерацию маркеров, чтобы карта отобразилась правильно
+        }, 200);
+    }
+    // -------------------------------------------------------------
 }
 
 function showAlert(title, message) {
@@ -191,7 +201,10 @@ window.onload = async () => {
             if (reportBtn) reportBtn.style.display = '';
             if (mapBtn) mapBtn.style.display = '';
             showSection('reports');
-            fetchAndRenderReports(); 
+            
+            // Загрузка данных и инициализация карты
+            await fetchAndRenderReports(); 
+            generateMap(); // Инициализируем карту при загрузке страницы, но она будет скрыта
         }
     } else {
          // Если аутентификация не удалась, показываем форму и блокируем сохранение
