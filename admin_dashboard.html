@@ -20,6 +20,8 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
     <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
 
+    <link rel="manifest" href="/manifest.json">
+
     <style>
         body { 
             font-family: 'Jost', sans-serif;
@@ -40,7 +42,7 @@
             color: #4f46e5;
             font-weight: 600;
         }
-        #map { height: 400px; border-radius: 8px;
+        #map { height: 60vh; border-radius: 8px; 
         }
         .content-section { animation: fadeIn 0.3s ease-in-out;
         }
@@ -57,11 +59,10 @@
                 <button onclick="showSection('form')" class="tab-button active hover:text-indigo-200" id="btn-form">
                     <i data-lucide="notebook-pen" class="w-5 h-5 inline-block mr-1"></i>Форма
                 </button>
-                <button onclick="showSection('reports'); fetchAndRenderReports()" class="tab-button hover:text-indigo-200" id="btn-reports">
+                <button onclick="showSection('reports')" class="tab-button hover:text-indigo-200" id="btn-reports">
                     <i data-lucide="bar-chart-3" class="w-5 h-5 inline-block mr-1"></i>Отчеты
                 </button>
-              
-                <button onclick="showSection('map-view'); generateMap()" class="tab-button hover:text-indigo-200" id="btn-map-view">
+                <button onclick="showSection('map-view')" class="tab-button hover:text-indigo-200" id="btn-map-view">
                     <i data-lucide="map" class="w-5 h-5 inline-block mr-1"></i>Карта
                 </button>
             </div>
@@ -69,9 +70,8 @@
     </header>
 
     <main class="container mx-auto p-4 md:p-8">
-
+       
         <section id="form" class="content-section">
-           
             <div class="card p-6">
                 <h2 class="text-2xl font-semibold text-gray-800 mb-6 border-b pb-2">Запись Опроса</h2>
                 <form id="surveyForm" onsubmit="saveSurveyData(event)">
@@ -97,7 +97,7 @@
                                 <option value="against">Против (НЕТ)</option>
                             </select>
                         </div>
-                        
+            
                         <div class="space-y-2 col-span-full md:col-span-1">
                             <label for="action" class="block text-sm font-medium text-gray-700">Целевое действие</label>
                             <select id="action" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
@@ -117,14 +117,14 @@
                             <label for="geolocation" class="block text-sm font-medium text-gray-700">
                                 Геолокация 
                                 <span id="geoStatus" class="ml-2 text-xs text-gray-500">
-                                    (Нажмите кнопку ниже, если нужно)
+                                    (Нажмите кнопку ниже)
                                 </span>
                             </label>
                             <div class="flex space-x-2">
                                 <input type="text" id="geolocation" placeholder="Широта, Долгота" readonly class="w-full bg-gray-50 border-gray-300 rounded-md shadow-sm p-2">
                                 <button type="button" onclick="getGeolocation()" class="flex-shrink-0 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition-colors">
                                     <i data-lucide="locate" class="w-5 h-5 inline-block mr-1"></i>
-                                    Определить
+                                    Определить & Адрес
                                 </button>
                             </div>
                         </div>
@@ -140,7 +140,7 @@
                 </form>
                 
                 <div class="mt-4 text-xs text-gray-500 border-t pt-4">
-                        <p>Статус Админа: <span id="debugAdminStatus" class="font-bold text-red-500">НЕ ПОДКЛЮЧЕНО</span></p>
+                    <p>Статус Админа: <span id="debugAdminStatus" class="font-bold text-red-500">НЕ ПОДКЛЮЧЕНО</span></p>
                     <p>Telegram ID (Auth UID): <span id="debugUserId">Загрузка...</span></p>
                     <p>Статус сохранения: <span id="saveStatus" class="font-bold">Готов</span></p>
                 </div>
@@ -148,73 +148,724 @@
         </section>
 
         <section id="reports" class="content-section hidden">
-             <div class="card p-6">
-                <h2 class="text-2xl font-semibold text-gray-800 mb-6 border-b pb-2">Сводная Аналитика</h2>
+            <div class="card p-6">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Сводные Отчеты</h2>
                 
-                <div class="mb-6 flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0">
-                    <div class="flex items-center space-x-4">
-                        <label for="reportSettlementFilter" class="block text-sm font-medium text-gray-700">Фильтр по НП:</label>
-                        <select id="reportSettlementFilter" onchange="filterAndRenderReports()" class="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
-                            <option value="all">Все населенные пункты</option>
-                            </select>
-                    </div>
-                    <button onclick="exportReportsToCSV()" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center">
-                        <i data-lucide="download" class="w-5 h-5 inline-block mr-2"></i>
-                        Экспорт CSV
-                    </button>
+                <div id="kpiSummary" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-blue-50 p-4 rounded-lg"><p class="text-sm text-blue-600">Всего отчетов</p><p class="text-2xl font-bold text-gray-800" id="kpiTotalReports">0</p></div>
+                    <div class="bg-green-50 p-4 rounded-lg"><p class="text-sm text-green-600">Сильная лояльность</p><p class="text-2xl font-bold text-gray-800" id="kpiStrongLoyalty">0%</p></div>
+                    <div class="bg-red-50 p-4 rounded-lg"><p class="text-sm text-red-600">Против лояльность</p><p class="text-2xl font-bold text-gray-800" id="kpiAgainstLoyalty">0%</p></div>
+                    <div class="bg-yellow-50 p-4 rounded-lg"><p class="text-sm text-yellow-600">С геоданными</p><p class="text-2xl font-bold text-gray-800" id="kpiGeoPercent">0%</p></div>
                 </div>
-                
-                <div id="chartsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                     <div class="card p-4">
-                        <h3 class="text-lg font-semibold mb-3">Лояльность избирателей</h3>
-                        <div class="h-64 flex justify-center items-center">
-                            <canvas id="loyaltyChart"></canvas>
-                        </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                    <div class="space-y-1">
+                        <label for="reportSettlementFilter" class="text-sm font-medium text-gray-700">Поселение</label>
+                        <select id="reportSettlementFilter" onchange="filterAndRenderReports()" class="w-full border-gray-300 rounded-md shadow-sm p-2"></select>
+                    </div>
+
+                    <div class="space-y-1">
+                        <label for="reportLoyaltyFilter" class="text-sm font-medium text-gray-700">Лояльность</label>
+                        <select id="reportLoyaltyFilter" onchange="filterAndRenderReports()" class="w-full border-gray-300 rounded-md shadow-sm p-2">
+                             <option value="all">Все уровни</option>
+                             <option value="strong">Сильная (ДА)</option>
+                             <option value="moderate">Умеренная</option>
+                             <option value="neutral">Нейтрально</option>
+                             <option value="against">Против (НЕТ)</option>
+                        </select>
                     </div>
                     
-                    <div class="card p-4">
-                        <h3 class="text-lg font-semibold mb-3">Активность по действиям</h3>
-                        <div class="h-64 flex justify-center items-center">
-                            <canvas id="actionChart"></canvas>
-                        </div>
+                    <div class="space-y-1">
+                        <label for="reportActionFilter" class="text-sm font-medium text-gray-700">Действие</label>
+                        <select id="reportActionFilter" onchange="filterAndRenderReports()" class="w-full border-gray-300 rounded-md shadow-sm p-2">
+                            <option value="all">Все действия</option>
+                            <option value="Опрос">Опрос</option>
+                            <option value="Агитация">Агитация</option>
+                            <option value="Жалоба">Жалоба/Запрос</option>
+                        </select>
+                    </div>
+
+                     <div class="space-y-1">
+                        <label for="reportReporterFilter" class="text-sm font-medium text-gray-700">Агитатор (10)</label>
+                        <select id="reportReporterFilter" onchange="filterAndRenderReports()" class="w-full border-gray-300 rounded-md shadow-sm p-2"></select>
+                    </div>
+
+                    <div class="space-y-1">
+                        <label for="reportDateRange" class="text-sm font-medium text-gray-700">Период (2)</label>
+                        <select id="reportDateRange" onchange="filterAndRenderReports()" class="w-full border-gray-300 rounded-md shadow-sm p-2">
+                             <option value="all">Весь период</option>
+                             <option value="today">Сегодня</option>
+                             <option value="yesterday">Вчера</option>
+                             <option value="last7">Последние 7 дней</option>
+                             <option value="last30">Последние 30 дней</option>
+                        </select>
                     </div>
                 </div>
 
-                <div id="reportsListContainer">
-                    <p class="text-gray-500" id="reportsPlaceholder">Данные отчетов будут загружены после успешной авторизации.</p>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                    <div class="card p-4"><h3 class="font-semibold mb-2">Лояльность</h3><div class="h-64"><canvas id="loyaltyChart"></canvas></div></div>
+                    <div class="card p-4"><h3 class="font-semibold mb-2">Целевые действия</h3><div class="h-64"><canvas id="actionChart"></canvas></div></div>
                 </div>
+
+                <div class="mt-6 flex justify-end">
+                    <button onclick="exportReportsToCSV()" class="bg-indigo-500 hover:bg-indigo-600 text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center">
+                        <i data-lucide="download" class="w-4 h-4 inline-block mr-1"></i>
+                        Экспорт CSV
+                    </button>
+                </div>
+
+                <div id="reportsListContainer">
+                    </div>
             </div>
         </section>
 
         <section id="map-view" class="content-section hidden">
             <div class="card p-6">
-           
-                <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Карта Активности</h2>
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Карта Активности (Heatmap)</h2>
                 <div id="map"></div>
-                <p class="mt-4 text-sm text-gray-600">На карте отображаются точки опросов.</p>
+                <p class="mt-4 text-sm text-gray-600">На карте отображается тепловая карта активности. Чем ярче точка, тем больше отрицательной лояльности в этой области.</p>
             </div>
         </section>
 
     </main>
     
     <div id="alertModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden items-center justify-center z-[1000]">
-       
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center">
             <h3 id="alertTitle" class="text-xl font-bold text-gray-900 mb-3">ВНИМАНИЕ</h3>
             <p id="alertMessage" class="text-gray-700 mb-6">Сообщение.</p>
             <div id="alertButtons" class="flex justify-center space-x-4">
                 <button id="alertOkBtn" onclick="window.closeAlert()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-lg transition-colors">
-                  
                     ОК
                 </button>
             </div>
         </div>
     </div>
 
-<script type="module" src="./main.js"></script>
 
+    <script type="module">
+        // ----------------------------------------------------------------------------------
+        // ИМПОРТЫ FIREBASE (CDN)
+        // ----------------------------------------------------------------------------------
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, query, getDocs, orderBy, where, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInWithCustomToken, getIdTokenResult } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // Firebase Storage больше не импортируется
+
+        // ----------------------------------------------------------------------------------
+        // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И КОНФИГУРАЦИЯ
+        // ----------------------------------------------------------------------------------
+        
+        function getUrlParameter(name) {
+            let value = null;
+            const urlParamsSearch = new URLSearchParams(window.location.search);
+            value = urlParamsSearch.get(name);
+            if (!value && window.location.hash) {
+                const hashParams = new URLSearchParams(window.location.hash.substring(1));
+                value = hashParams.get(name);
+            }
+            return value;
+        }
+
+        const configBase64 = getUrlParameter('firebase_config');
+        const initialAuthToken = getUrlParameter('token'); 
+        const urlUserTelegramId = getUrlParameter('user_id'); 
+        
+        let app = null;
+        let db = null;
+        let auth = null;
+        let userTelegramId = urlUserTelegramId || null;
+        let isAdmin = false; 
+        
+        let allReportsData = []; 
+        let latestReportData = []; 
+        let loyaltyChartInstance = null; 
+        let actionChartInstance = null; 
+
+        const SETTLEMENTS = [
+            'г.п. Лянтор', 'с.п. Русскинская', 'г.п. Федоровский', 'г.п. Барсово', 
+            'г.п. Белый Яр', 'с.п. Лямина', 'с.п. Сытомино', 'с.п. Угут', 
+            'с.п. Ульт-Ягун', 'с.п. Солнечный', 'с.п. Нижнесортымский', 
+            'с.п. Тундрино', 'с.п. Локосово'
+        ];
+        
+        // ----------------------------------------------------------------------------------
+        // ФУНКЦИИ FIREBASE INIT & AUTH
+        // ----------------------------------------------------------------------------------
+        
+        function initializeFirebase() {
+            if (!configBase64) {
+                console.error("Firebase config not found in URL parameters. Initialization failed.");
+                window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Не удалось найти конфигурацию Firebase в URL.');
+                document.getElementById('debugAdminStatus').textContent = "ОШИБКА URL";
+                return false;
+            }
+
+            try {
+                const cleanedBase64 = configBase64.replace(/\s/g, ''); 
+                const decodedConfig = atob(cleanedBase64);
+                const firebaseConfig = JSON.parse(decodedConfig);
+                
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                return true; 
+            } catch (e) {
+                console.error("Failed to decode or initialize Firebase:", e);
+                window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось инициализировать Firebase: ${e.message}`);
+                document.getElementById('debugAdminStatus').textContent = "ОШИБКА INIT";
+                return false;
+            }
+        }
+
+        async function authenticateUser() {
+            const adminStatus = document.getElementById('debugAdminStatus');
+            if (!auth || !initialAuthToken) {
+                adminStatus.textContent = 'ОШИБКА';
+                return false;
+            }
+            
+            try {
+                const userCredential = await signInWithCustomToken(auth, initialAuthToken);
+                const idTokenResult = await getIdTokenResult(userCredential.user);
+                
+                isAdmin = (idTokenResult.claims && (idTokenResult.claims.admin === true || idTokenResult.claims.admin === 'true'));
+                userTelegramId = idTokenResult.claims.telegram_id || userCredential.user.uid;
+
+                document.getElementById('debugUserId').textContent = userTelegramId;
+                document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'ПОЛЬЗОВАТЕЛЬ';
+                document.getElementById('debugAdminStatus').classList.add(isAdmin ? 'text-green-600' : 'text-green-500');
+                
+                document.getElementById('saveButton').disabled = false;
+                return true;
+            } catch (error) {
+                console.error("Firebase Authentication Error:", error);
+                document.getElementById('debugAdminStatus').textContent = 'ОШИБКА';
+                window.showAlert('Ошибка Аутентификации', `Не удалось войти: ${error.code}`);
+                return false;
+            }
+        }
+
+        // ----------------------------------------------------------------------------------
+        // ФУНКЦИИ ФОРМЫ И ГЕОКОДИРОВАНИЕ (Улучшение 6)
+        // ----------------------------------------------------------------------------------
+
+        function populateSettlements() {
+            const select = document.getElementById('settlement');
+            select.innerHTML = '<option value="" disabled selected>Выберите населенный пункт</option>';
+            SETTLEMENTS.forEach(settlement => {
+                const option = document.createElement('option');
+                option.value = settlement;
+                option.textContent = settlement;
+                select.appendChild(option);
+            });
+        }
+
+        async function reverseGeocode(lat, lon) {
+            const NOMINATIM_URL = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
+            
+            try {
+                const response = await fetch(NOMINATIM_URL, {
+                    headers: {
+                         // Рекомендация Nominatim: указать User-Agent для идентификации запроса
+                        'User-Agent': 'AgitatorApp/1.0 (Telegram Mini App)'
+                    }
+                });
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                
+                // Формирование читаемого адреса
+                const address = data.address;
+                let fullAddress = data.display_name;
+                
+                if (address) {
+                    // Пытаемся собрать более точный адрес
+                    const parts = [
+                        address.road,
+                        address.house_number,
+                        address.postcode,
+                        address.city || address.town || address.village
+                    ].filter(Boolean); // Удаляем null/undefined
+                    
+                    fullAddress = parts.join(', ');
+                    if (fullAddress.length < 10) {
+                        // Если короткий, берем более длинный вариант
+                        fullAddress = data.display_name;
+                    }
+                }
+                
+                return fullAddress;
+            } catch (error) {
+                console.error("Geocoding failed:", error);
+                return "Не удалось определить адрес. Введите вручную.";
+            }
+        }
+
+        function getGeolocation() {
+            const geoStatus = document.getElementById('geoStatus');
+            geoStatus.textContent = 'Определение...';
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        currentLatitude = position.coords.latitude; 
+                        currentLongitude = position.coords.longitude;
+                        document.getElementById('geolocation').value = `${currentLatitude.toFixed(6)}, ${currentLongitude.toFixed(6)}`;
+                        geoStatus.textContent = 'Успешно! Ищем адрес...';
+                        
+                        // Улучшение 6: Геокодирование
+                        const addressInput = document.getElementById('address');
+                        const address = await reverseGeocode(currentLatitude, currentLongitude);
+                        addressInput.value = address;
+
+                        geoStatus.textContent = 'Успешно!';
+                        geoStatus.classList.remove('text-gray-500', 'text-red-500');
+                        geoStatus.classList.add('text-green-600');
+                    },
+                    (error) => {
+                        currentLatitude = null;
+                        currentLongitude = null;
+                        document.getElementById('geolocation').value = 'Нет данных';
+                        document.getElementById('address').value = '';
+                        geoStatus.textContent = 'Ошибка доступа';
+                        geoStatus.classList.remove('text-gray-500', 'text-green-600');
+                        geoStatus.classList.add('text-red-500');
+                    },
+                    { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
+                );
+            } else {
+                geoStatus.textContent = 'Не поддерживается';
+                showAlert('Ошибка', 'Геолокация не поддерживается вашим устройством/браузером.');
+            }
+        }
+        
+        async function saveSurveyData(event) {
+            event.preventDefault();
+            const saveStatus = document.getElementById('saveStatus');
+
+            if (!db || !userTelegramId) {
+                showAlert('Ошибка', 'Приложение не подключено к базе данных или пользователь не авторизован.');
+                return;
+            }
+            
+            const comment = document.getElementById('comment').value || "";
+            
+            if (comment.length > 500) {
+                showAlert('Ошибка', 'Комментарий слишком длинный (максимум 500 символов).');
+                return;
+            }
+            
+            document.getElementById('saveButton').disabled = true;
+            saveStatus.textContent = '⏳ Отправка...';
+
+            // Разбор геоданных
+            const geo = document.getElementById('geolocation').value.split(',').map(s => s.trim());
+            
+            const data = {
+                reporterId: userTelegramId, 
+                timestamp: Timestamp.fromDate(new Date()), 
+                
+                settlement: document.getElementById('settlement').value,
+                address: document.getElementById('address').value,
+                action: document.getElementById('action').value, 
+                loyalty: document.getElementById('loyalty').value,
+                comment: comment,
+                photo: null, // УДАЛЕНО: photo теперь всегда null
+                latitude: geo.length === 2 && geo[0] ? parseFloat(geo[0]) : null,
+                longitude: geo.length === 2 && geo[1] ? parseFloat(geo[1]) : null
+            };
+            
+            try {
+                await addDoc(collection(db, "reports"), data);
+                showAlert('Успех', 'Данные успешно сохранены!');
+                document.getElementById('surveyForm').reset();
+                saveStatus.textContent = '✅ Успешно!';
+                
+                // Сброс геоданных и статуса
+                document.getElementById('geolocation').value = '';
+                document.getElementById('geoStatus').textContent = '(Нажмите кнопку ниже, если нужно)';
+                document.getElementById('geoStatus').classList.remove('text-green-600', 'text-red-500');
+                document.getElementById('geoStatus').classList.add('text-gray-500');
+
+                setTimeout(() => saveStatus.textContent = 'Готов', 3000);
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                showAlert('Ошибка', `Не удалось сохранить данные: ${e.message}. Проверьте правила Firestore.`);
+                saveStatus.textContent = 'Ошибка';
+            } finally {
+                document.getElementById('saveButton').disabled = false;
+            }
+        }
+        
+        // ----------------------------------------------------------------------------------
+        // ФУНКЦИИ ОТЧЕТОВ, KPI, КАРТА (Улучшения 1, 2, 3, 10)
+        // ----------------------------------------------------------------------------------
+        
+        function populateReportFilters() {
+            // ... (фильтр поселений)
+            const sSelect = document.getElementById('reportSettlementFilter');
+            sSelect.innerHTML = '<option value="all">Все населенные пункты</option>';
+            SETTLEMENTS.forEach(s => { sSelect.innerHTML += `<option value="${s}">${s}</option>`; });
+
+            // Улучшение 10: Фильтр Агитаторов
+            const rSelect = document.getElementById('reportReporterFilter');
+            rSelect.innerHTML = '<option value="all">Все агитаторы</option>';
+            const uniqueReporters = [...new Set(allReportsData.map(r => r.reporterId))].filter(Boolean);
+            uniqueReporters.forEach(id => { rSelect.innerHTML += `<option value="${id}">${id}</option>`; });
+        }
+
+        function renderKPIs(reports) {
+            const total = reports.length;
+            const strong = reports.filter(r => r.loyalty === 'strong').length;
+            const against = reports.filter(r => r.loyalty === 'against').length;
+            const geoCount = reports.filter(r => r.latitude && r.longitude).length;
+
+            document.getElementById('kpiTotalReports').textContent = total;
+            document.getElementById('kpiStrongLoyalty').textContent = total > 0 ? `${((strong / total) * 100).toFixed(1)}%` : '0%';
+            document.getElementById('kpiAgainstLoyalty').textContent = total > 0 ? `${((against / total) * 100).toFixed(1)}%` : '0%';
+            document.getElementById('kpiGeoPercent').textContent = total > 0 ? `${((geoCount / total) * 100).toFixed(1)}%` : '0%';
+        }
+        
+        function filterAndRenderReports() {
+            const settlementFilter = document.getElementById('reportSettlementFilter').value;
+            const loyaltyFilter = document.getElementById('reportLoyaltyFilter').value;
+            const actionFilter = document.getElementById('reportActionFilter').value;
+            const reporterFilter = document.getElementById('reportReporterFilter').value; 
+            const dateRangeFilter = document.getElementById('reportDateRange').value; 
+
+            let filteredReports = allReportsData;
+            const now = new Date();
+            let startDate = null;
+
+            // Логика фильтрации по дате (Улучшение 2)
+            if (dateRangeFilter !== 'all') {
+                startDate = new Date(now);
+                if (dateRangeFilter === 'today') startDate.setHours(0, 0, 0, 0);
+                else if (dateRangeFilter === 'yesterday') { startDate.setDate(now.getDate() - 1); startDate.setHours(0, 0, 0, 0); }
+                else if (dateRangeFilter === 'last7') startDate.setDate(now.getDate() - 7);
+                else if (dateRangeFilter === 'last30') startDate.setDate(now.getDate() - 30);
+                
+                filteredReports = filteredReports.filter(report => report.timestamp.toDate() >= startDate);
+            }
+
+            // Остальные фильтры
+            if (settlementFilter !== 'all') { filteredReports = filteredReports.filter(r => r.settlement === settlementFilter); }
+            if (loyaltyFilter !== 'all') { filteredReports = filteredReports.filter(r => r.loyalty === loyaltyFilter); }
+            if (actionFilter !== 'all') { filteredReports = filteredReports.filter(r => r.action === actionFilter); }
+            if (reporterFilter !== 'all') { filteredReports = filteredReports.filter(r => r.reporterId === reporterFilter); }
+            
+            latestReportData = filteredReports; 
+            
+            renderKPIs(latestReportData);
+            renderLoyaltyChart(latestReportData); 
+            renderActionChart(latestReportData);
+            renderReportsList(latestReportData);
+        }
+
+        async function fetchAndRenderReports() {
+            if (!db || !isAdmin) {
+                 document.getElementById('reportsListContainer').innerHTML = `<div class="card p-6 text-red-500"><p>Доступ запрещен. Вам нужно быть авторизованным админом.</p></div>`;
+                return;
+            }
+            
+            const reportsListContainer = document.getElementById('reportsListContainer');
+            reportsListContainer.innerHTML = `
+                <div class="card p-6 text-center text-gray-500">
+                    <i data-lucide="loader-2" class="w-8 h-8 mx-auto animate-spin"></i>
+                    <p class="mt-2">Загрузка всех отчетов...</p>
+                </div>
+            `;
+            lucide.createIcons();
+
+            try {
+                const reportsCol = collection(db, "reports");
+                const q = query(reportsCol, orderBy("timestamp", "desc")); 
+
+                const reportSnapshot = await getDocs(q);
+                allReportsData = reportSnapshot.docs.map(doc => { 
+                    const data = doc.data();
+                    const timestampDate = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate() : new Date();
+                    return { 
+                        id: doc.id, 
+                        date: timestampDate.toLocaleDateString('ru-RU'),
+                        time: timestampDate.toLocaleTimeString('ru-RU'),
+                        ...data 
+                    };
+                });
+                
+                populateReportFilters();
+                filterAndRenderReports(); 
+
+            } catch (e) {
+                console.error("Error fetching reports: ", e);
+                window.showAlert('Ошибка', `Не удалось загрузить отчеты. Проверьте правила безопасности Firestore: ${e.message}`);
+                reportsListContainer.innerHTML = `<div class="card p-6 text-red-500">
+                    <p>Ошибка загрузки данных. Проверьте права доступа в Firebase (Security Rules).</p>
+                </div>`;
+            }
+        }
+
+        function renderLoyaltyChart(reportList) {
+            if (loyaltyChartInstance) loyaltyChartInstance.destroy();
+            const loyaltyCounts = { strong: 0, moderate: 0, neutral: 0, against: 0 };
+            reportList.forEach(report => {
+                if (loyaltyCounts.hasOwnProperty(report.loyalty)) loyaltyCounts[report.loyalty]++;
+            });
+            const labels = ['Сильная', 'Умеренная', 'Нейтрально', 'Против'];
+            const data = [loyaltyCounts.strong, loyaltyCounts.moderate, loyaltyCounts.neutral, loyaltyCounts.against];
+            const backgroundColors = ['#10b981', '#fcd34d', '#9ca3af', '#ef4444'];
+            const ctx = document.getElementById('loyaltyChart').getContext('2d');
+            loyaltyChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: { labels: labels, datasets: [{ data: data, backgroundColor: backgroundColors, hoverOffset: 4 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { padding: 10 } }, title: { display: false } } }
+            });
+        }
+
+        function renderActionChart(reportList) {
+            if (actionChartInstance) actionChartInstance.destroy();
+            const actionCounts = {};
+            reportList.forEach(report => {
+                const action = report.action || 'Не указано';
+                actionCounts[action] = (actionCounts[action] || 0) + 1;
+            });
+            const labels = Object.keys(actionCounts);
+            const data = Object.values(actionCounts);
+            const backgroundColors = labels.map(label => {
+                if (label === 'Опрос') return '#22c55e';
+                if (label === 'Агитация') return '#3b82f6';
+                if (label === 'Жалоба') return '#f97316';
+                return '#9ca3af';
+            });
+            const ctx = document.getElementById('actionChart').getContext('2d');
+            actionChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: labels, datasets: [{ label: 'Количество действий', data: data, backgroundColor: backgroundColors, borderWidth: 1 }] },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false }, title: { display: false } } }
+            });
+        }
+
+        function renderReportsList(reportList) {
+            const reportsListContainer = document.getElementById('reportsListContainer');
+            const totalCount = reportList.length;
+
+            if (totalCount === 0) {
+                reportsListContainer.innerHTML = `<div class="card p-6 text-gray-500"><p>Отчетов пока нет, или они не соответствуют выбранному фильтру.</p></div>`;
+                return;
+            }
+
+            reportsListContainer.innerHTML = `
+                <div class="card p-6 mt-4">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Детализация (${totalCount} записей)</h3>
+                    
+                    <div class="mt-4 space-y-3 max-h-[60vh] overflow-y-auto">
+                        ${reportList.map(r => 
+                            `<div class="p-4 border rounded-lg shadow-sm bg-gray-50 transition duration-150 hover:shadow-md">
+                                <div class="flex justify-between items-start mb-1">
+                                    <strong class="text-indigo-600">${r.settlement}</strong>
+                                    <span class="text-xs text-gray-500">${r.date} ${r.time}</span>
+                                </div>
+                                <p class="text-sm text-gray-800 mb-1">${r.address}</p>
+                                <p class="text-xs">
+                                    Лояльность: 
+                                    <span class="font-medium ${r.loyalty === 'strong' ? 'text-green-600' : r.loyalty === 'against' ? 'text-red-600' : 'text-yellow-600'}">
+                                        ${r.loyalty}
+                                    </span> 
+                                    / Действие: <span class="font-medium text-blue-600">${r.action}</span>
+                                </p>
+                                ${r.comment ? `<p class="mt-2 text-sm italic text-gray-600 border-t pt-2">Комментарий: ${r.comment}</p>` : ''}
+                            </div>`
+                        ).join('')}
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+        
+        function exportReportsToCSV() {
+            if (!latestReportData || latestReportData.length === 0) {
+                window.showAlert('Ошибка', 'Нет данных для экспорта. Загрузите отчеты.');
+                return;
+            }
+
+            const reportList = latestReportData;
+            const headers = [
+                'ID Агитатора', 'Дата/Время', 'Населенный пункт', 'Адрес', 
+                'Действие', 'Лояльность', 'Комментарий', 'Широта', 'Долгота'
+            ].join(';');
+            
+            const csvRows = reportList.map(report => {
+                return [
+                    `"${report.reporterId}"`,
+                    `"${report.date} ${report.time}"`,
+                    `"${report.settlement}"`,
+                    `"${report.address}"`,
+                    `"${report.action}"`,
+                    `"${report.loyalty}"`,
+                    `"${report.comment ? report.comment.replace(/"/g, '""') : ''}"`,
+                    report.latitude || '',
+                    report.longitude || ''
+                ].join(';');
+            });
+
+            const csvContent = headers + '\n' + csvRows.join('\n');
+            const blob = new Blob([ '\ufeff', csvContent ], { type: 'text/csv;charset=utf-8;' });
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Отчет_Агитатор_${new Date().toISOString().slice(0, 10)}.csv`;
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            window.showAlert('Успех', `Экспортировано ${reportList.length} записей в файл CSV.`);
+        }
+
+        let mapInstance = null;
+        let currentHeatmap = null;
+
+        function generateMap() {
+            const mapContainer = document.getElementById('map');
+            
+            if (!mapInstance) {
+                 mapInstance = L.map('map').setView([61.0, 73.0], 9); 
+                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 18,
+                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                 }).addTo(mapInstance);
+            }
+            
+            if (currentHeatmap) currentHeatmap.remove();
+            
+            const heatPoints = [];
+            let hasGeoData = false;
+            
+            latestReportData.forEach(r => {
+                if (r.latitude && r.longitude) {
+                    hasGeoData = true;
+                    let weight = 0.5;
+                    // Чем больше "против" (against), тем выше вес (более яркое пятно)
+                    if (r.loyalty === 'against') weight = 2.0; 
+                    else if (r.loyalty === 'strong') weight = 0.1; 
+                    else if (r.loyalty === 'neutral') weight = 1.0; 
+                    
+                    heatPoints.push([r.latitude, r.longitude, weight]);
+                }
+            });
+            
+            if (hasGeoData) {
+                currentHeatmap = L.heatLayer(heatPoints, {
+                    radius: 25,
+                    blur: 15,
+                    maxZoom: 17,
+                    max: 2.0, 
+                }).addTo(mapInstance);
+                
+                try {
+                    const latLngs = heatPoints.map(p => [p[0], p[1]]);
+                    mapInstance.fitBounds(L.latLngBounds(latLngs));
+                } catch (e) { /* ignore error with one point */ }
+               
+            } else {
+                 mapContainer.innerHTML = `<div class="p-6 text-gray-500">Нет данных с геолокацией для отображения на карте.</div>`;
+            }
+
+            mapInstance.invalidateSize();
+        }
+
+        // ----------------------------------------------------------------------------------
+        // ФУНКЦИИ ИНТЕРФЕЙСА И ГЛАВНЫЙ БЛОК
+        // ----------------------------------------------------------------------------------
+        
+        let currentLatitude = null;
+        let currentLongitude = null;
+
+        function showSection(sectionId) {
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.classList.add('hidden');
+            });
+            document.getElementById(sectionId).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active', 'text-indigo-600');
+            });
+            const sectionButton = document.getElementById(`btn-${sectionId}`);
+            if (sectionButton) {
+                sectionButton.classList.add('active');
+            }
+
+            if (sectionId === 'map-view' && mapInstance) {
+                setTimeout(() => {
+                    generateMap(); 
+                }, 200);
+            }
+        }
+
+        function showAlert(title, message) {
+            document.getElementById('alertTitle').textContent = title;
+            document.getElementById('alertMessage').textContent = message;
+            
+            document.getElementById('alertModal').classList.remove('hidden');
+            document.getElementById('alertModal').classList.add('flex');
+        }
+
+        function closeAlert() {
+            document.getElementById('alertModal').classList.add('hidden');
+            document.getElementById('alertModal').classList.remove('flex');
+        }
+
+        window.onload = async () => {
+            // 0. Назначаем глобальные функции
+            window.showAlert = showAlert;
+            window.closeAlert = closeAlert;
+            window.showSection = showSection;
+            window.getGeolocation = getGeolocation;
+            window.saveSurveyData = saveSurveyData;
+            window.fetchAndRenderReports = fetchAndRenderReports;
+            window.generateMap = generateMap;
+            window.filterAndRenderReports = filterAndRenderReports;
+            window.exportReportsToCSV = exportReportsToCSV; 
+
+            // Улучшение 9: PWA Service Worker Registration
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').then(function(registration) {
+                    console.log('Service Worker registered with scope:', registration.scope);
+                }).catch(function(error) {
+                    console.error('Service Worker registration failed:', error);
+                });
+            }
+
+            populateSettlements();
+            lucide.createIcons();
+
+            if (!initializeFirebase()) {
+                 showSection('form');
+                 return;
+            }
+
+            const isAuthenticated = await authenticateUser();
+            
+            if (isAuthenticated) {
+                const reportBtn = document.getElementById('btn-reports');
+                const mapBtn = document.getElementById('btn-map-view');
+                
+                if (!isAdmin) {
+                    if (reportBtn) reportBtn.style.display = 'none';
+                    if (mapBtn) mapBtn.style.display = 'none';
+                    showSection('form');
+                } else {
+                    if (reportBtn) reportBtn.style.display = '';
+                    if (mapBtn) mapBtn.style.display = '';
+                    showSection('reports');
+                    await fetchAndRenderReports(); 
+                    generateMap(); 
+                }
+            } else {
+                 showSection('form');
+                 document.getElementById('saveButton').disabled = true;
+            }
+        };
+    </script>
 </body>
 </html>
-
-
-
