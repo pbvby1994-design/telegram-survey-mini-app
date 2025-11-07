@@ -1,7 +1,7 @@
 // reports.js
 
-// Импортируем orderBy для сортировки
-import { db, isAdmin, getDocs, collection, query, orderBy } from './firebase-auth.js'; 
+// Импортируем orderBy и другие функции/константы из firebase-auth.js
+import { db, isAdmin, getDocs, collection, query, orderBy, where } from './firebase-auth.js'; 
 
 // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
 let loyaltyChartInstance = null; 
@@ -16,7 +16,7 @@ export const SETTLEMENTS = [
 window.latestReportData = []; 
 
 // ----------------------------------------------------------------------------------
-// ФУНКЦИИ ГРАФИКОВ (Без изменений)
+// ФУНКЦИИ ГРАФИКОВ 
 // ----------------------------------------------------------------------------------
 
 function renderLoyaltyChart(reportList) {
@@ -119,7 +119,7 @@ function renderReportsList(reportList) {
 
 
 // ----------------------------------------------------------------------------------
-// ОСНОВНАЯ ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ (СОРТИРОВКА ДОБАВЛЕНА)
+// ОСНОВНАЯ ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ 
 // ----------------------------------------------------------------------------------
 
 export async function fetchAndRenderReports() {
@@ -139,7 +139,7 @@ export async function fetchAndRenderReports() {
 
     try {
         const reportsCol = collection(db, "reports");
-        // ДОБАВЛЕНА СОРТИРОВКА по timestamp, от новых к старым (требует индекса в Firestore)
+        // СОРТИРОВКА по timestamp, от новых к старым
         const q = query(reportsCol, orderBy("timestamp", "desc")); 
 
         const reportSnapshot = await getDocs(q);
@@ -202,7 +202,7 @@ export function filterAndRenderReports() {
     renderReportsList(filteredReports);
 }
 
-// НОВАЯ ФУНКЦИЯ: ЭКСПОРТ В CSV
+// ФУНКЦИЯ: ЭКСПОРТ В CSV
 export function exportReportsToCSV() {
     if (!window.latestReportData || window.latestReportData.length === 0) {
         window.showAlert('Ошибка', 'Нет данных для экспорта. Загрузите отчеты.');
@@ -254,7 +254,7 @@ export function exportReportsToCSV() {
 }
 
 // ----------------------------------------------------------------------------------
-// ФУНКЦИЯ КАРТЫ (остается без изменений)
+// ФУНКЦИЯ КАРТЫ
 // ----------------------------------------------------------------------------------
 
 export function generateMap() {
