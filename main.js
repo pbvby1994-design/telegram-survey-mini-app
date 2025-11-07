@@ -2,7 +2,7 @@
 
 // Импортируем из других модулей
 import { initializeFirebase, authenticateUser, userTelegramId, isAdmin, db, collection, addDoc, Timestamp } from './firebase-auth.js';
-import { fetchAndRenderReports, generateMap, filterAndRenderReports, exportReportsToCSV, SETTLEMENTS } from './reports.js'; // ДОБАВЛЕН exportReportsToCSV
+import { fetchAndRenderReports, generateMap, filterAndRenderReports, exportReportsToCSV, SETTLEMENTS } from './reports.js'; 
 
 // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И КОНСТАНТЫ ---
 let currentLatitude = null;
@@ -162,7 +162,7 @@ window.onload = async () => {
     window.fetchAndRenderReports = fetchAndRenderReports;
     window.generateMap = generateMap;
     window.filterAndRenderReports = filterAndRenderReports;
-    window.exportReportsToCSV = exportReportsToCSV; // НОВАЯ ГЛОБАЛЬНАЯ ФУНКЦИЯ
+    window.exportReportsToCSV = exportReportsToCSV; 
 
 
     populateSettlements();
