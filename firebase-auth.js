@@ -1,8 +1,9 @@
 // firebase-auth.js
+// ИСПОЛЬЗУЕМ ПОЛНЫЕ URL ДЛЯ ИМПОРТА МОДУЛЕЙ FIREBASE (Решение №2)
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, addDoc, Timestamp, query, getDocs, orderBy, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getAuth, signInWithCustomToken, getIdTokenResult } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, Timestamp, query, getDocs, orderBy, where } from 'firebase/firestore';
-import { getAuth, signInWithCustomToken, getIdTokenResult } from 'firebase/auth';
 
 // --- Глобальные переменные и экспорты ---
 let app = null;
@@ -61,10 +62,10 @@ export function initializeFirebase() {
     }
 
     try {
-        // FIX: Убираем пробелы и переносы строки, если они есть, для корректного atob()
+        // Очищаем Base64 от невидимых символов перед atob()
         const cleanedBase64 = configBase64.replace(/\s/g, ''); 
         
-        // Декодирование Base64 (здесь возникает InvalidCharacterError, если Base64 некорректен)
+        // Декодирование Base64
         const decodedConfig = atob(cleanedBase64);
         const firebaseConfig = JSON.parse(decodedConfig);
         
