@@ -1,10 +1,10 @@
-// main.js (ГЛОБАЛЬНАЯ ВЕРСИЯ)
+// main.js (ГЛОБАЛЬНАЯ ВЕРСИЯ - БЕЗ ИМПОРТОВ)
 
 // --- Глобальные переменные ---
-window.mapInstance = null; // Экземпляр карты Yandex
-let currentLatitude = null; // Координаты с живого GPS
+window.mapInstance = null; 
+let currentLatitude = null; 
 let currentLongitude = null;
-let dadataCoords = null;    // Координаты, полученные от Dadata
+let dadataCoords = null;    
 
 // --- КОНФИГУРАЦИЯ DADATA ---
 const DADATA_API_KEY = '29c85666d57139f459e452d1290dd73c23708472'; 
@@ -18,23 +18,16 @@ const SETTLEMENTS = [
 ];
 
 // ----------------------------------------------------------------------
-// 1. ИНТЕГРАЦИЯ DADATA (Использует глобальный JQuery $)
+// 1. ИНТЕГРАЦИЯ DADATA 
 // ----------------------------------------------------------------------
 
 function initDadata() {
-    // Проверка наличия глобальных объектов, чтобы избежать ошибок
-    if (typeof $ === 'undefined' || typeof $.fn.suggestions === 'undefined') {
-        console.warn("Dadata Suggestions или jQuery не загружены. Подсказки не работают.");
-        return;
-    }
-    
+    // Эта функция вызывается внутри $(document).ready(), поэтому $ должен быть доступен.
     $("#address").suggestions({
         token: DADATA_API_KEY,
         type: "ADDRESS",
-        // Ограничиваем поиск Сургутским районом
         bounds: { "city_area": "Сургутский район" }, 
         onSelect: function(suggestion) {
-            // Dadata возвращает широту и долготу в поля geo_lat и geo_lon
             if (suggestion.data.geo_lat && suggestion.data.geo_lon) {
                 dadataCoords = {
                     latitude: parseFloat(suggestion.data.geo_lat),
@@ -47,9 +40,6 @@ function initDadata() {
     });
 }
 
-/**
- * Заполняет выпадающий список поселений.
- */
 function populateSettlements() {
     const select = document.getElementById('settlement');
     select.innerHTML = '<option value="" disabled selected>Выберите населенный пункт</option>';
@@ -61,14 +51,10 @@ function populateSettlements() {
     });
 }
 
-/**
- * Получает текущее местоположение пользователя.
- */
 window.getGeolocation = function() {
     const geoStatus = document.getElementById('geoStatus');
     const geoInput = document.getElementById('geolocation');
     
-    // Сброс координат Dadata, если пользователь нажимает GPS
     dadataCoords = null; 
     
     geoStatus.textContent = 'Определение...';
@@ -91,7 +77,7 @@ window.getGeolocation = function() {
                 geoInput.value = 'Нет данных';
                 geoStatus.textContent = '❌ Ошибка GPS';
                 geoStatus.classList.add('text-red-500');
-                document.getElementById('saveButton').disabled = false; // Разрешаем сохранение
+                document.getElementById('saveButton').disabled = false; 
                 window.showAlert('Ошибка GPS', 'Не удалось получить местоположение. Введите адрес через Dadata.');
             },
             { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
@@ -103,14 +89,10 @@ window.getGeolocation = function() {
     }
 }
 
-/**
- * Сохранение данных формы в Firestore (v8 Syntax).
- */
 window.saveSurveyData = async function(event) {
     event.preventDefault();
     const saveStatus = document.getElementById('saveStatus');
 
-    // Проверка глобальных переменных
     if (typeof db === 'undefined' || typeof userTelegramId === 'undefined') {
         window.showAlert('Ошибка', 'Приложение не подключено к базе данных или пользователь не авторизован.');
         return;
@@ -119,11 +101,9 @@ window.saveSurveyData = async function(event) {
     document.getElementById('saveButton').disabled = true;
     saveStatus.textContent = '⏳ Отправка...';
 
-    // --- ЛОГИКА ОПРЕДЕЛЕНИЯ КООРДИНАТ ---
     let finalLatitude = currentLatitude;
     let finalLongitude = currentLongitude;
     
-    // Если живой GPS не получен, используем координаты из Dadata
     if (!finalLatitude && dadataCoords) {
         finalLatitude = dadataCoords.latitude;
         finalLongitude = dadataCoords.longitude;
@@ -140,7 +120,6 @@ window.saveSurveyData = async function(event) {
         action: document.getElementById('action').value, 
         comment: document.getElementById('comment').value || "",
         
-        // Сохраняем итоговые координаты
         latitude: finalLatitude,
         longitude: finalLongitude
     };
@@ -154,7 +133,6 @@ window.saveSurveyData = async function(event) {
         await db.collection("reports").add(data);
         window.showAlert('Успех', 'Данные успешно сохранены! Спасибо за работу.');
         
-        // Сброс формы и переменных
         document.getElementById('surveyForm').reset();
         currentLatitude = null;
         currentLongitude = null;
@@ -175,17 +153,16 @@ window.saveSurveyData = async function(event) {
 }
 
 // ----------------------------------------------------------------------
-// 3. ЛОГИКА КАРТЫ (Админ) (Использует глобальный isAdmin и db)
+// 3. ЛОГИКА КАРТЫ (Админ) 
 // ----------------------------------------------------------------------
 
 window.initMap = async function() {
     if (typeof ymaps === 'undefined') {
-        console.error("Яндекс API не определен.");
         document.getElementById('map-loading-status').textContent = 'Ошибка загрузки API Яндекс Карт.';
         return;
     }
     
-    if (window.mapInstance) return;
+    if (window.mapInstance) return; 
     
     window.mapInstance = new ymaps.Map("map-container", {
         center: [61.25, 73.4], 
@@ -207,7 +184,6 @@ async function fetchAndLoadReportsToMap() {
     if (typeof db === 'undefined' || !window.mapInstance) return;
     
     try {
-        // Убедимся, что ObjectManager пуст перед загрузкой
         if (window.objectManager) {
             window.objectManager.removeAll();
         } else {
@@ -266,6 +242,7 @@ async function fetchAndLoadReportsToMap() {
         });
 
         window.objectManager.add(features);
+        document.getElementById('map-loading-status').style.display = 'none';
         
         if (features.length > 0) {
             window.mapInstance.setBounds(window.objectManager.getBounds(), { checkZoom: true, zoomMargin: 30 });
@@ -274,20 +251,21 @@ async function fetchAndLoadReportsToMap() {
     } catch (e) {
         console.error("Ошибка загрузки отчетов:", e);
         window.showAlert('Ошибка', `Не удалось загрузить отчеты для карты: ${e.message}`);
+        document.getElementById('map-loading-status').textContent = 'Ошибка загрузки данных.';
+        document.getElementById('map-loading-status').style.display = 'block';
     }
 }
 
 
 // ----------------------------------------------------------------------
-// 4. ГЛАВНЫЙ БЛОК
+// 4. ГЛАВНЫЙ БЛОК (Запуск после загрузки DOM и JQuery)
 // ----------------------------------------------------------------------
 
-window.onload = async () => {
-    // Вспомогательные функции уже доступны глобально
+$(document).ready(async function() { // Используем JQUERY для гарантированной загрузки $
     
-    // Инициализация
+    // Инициализация Dadata и списка поселений
     populateSettlements();
-    initDadata(); // <--- Теперь Dadata будет работать
+    initDadata(); // <--- Теперь безопасно
     lucide.createIcons();
     document.getElementById('saveButton').disabled = true;
 
@@ -321,7 +299,6 @@ window.onload = async () => {
          window.showSection(startSection);
          document.getElementById('saveButton').disabled = false;
          
-         // Повторная инициализация карты, если это начальная секция
          if (startSection === 'map-view' && window.isAdmin && typeof ymaps !== 'undefined') {
              window.initMap();
          }
@@ -331,4 +308,4 @@ window.onload = async () => {
          document.getElementById('saveButton').disabled = true;
          document.getElementById('geoStatus').textContent = 'Нет доступа.';
     }
-};
+});
