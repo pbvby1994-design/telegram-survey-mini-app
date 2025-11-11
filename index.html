@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Блокнот Агитатора | Выбор роли</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Jost', sans-serif;
+            background-color: #f4f6f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .card {
+            background-color: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+        .btn-role {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 15px 20px;
+            margin-top: 20px;
+            font-size: 1.125rem;
+            font-weight: 600;
+            border-radius: 10px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 flex items-center justify-center">
+            <i data-lucide="notebook-pen" class="w-8 h-8 text-indigo-600 mr-3"></i>
+            Блокнот Агитатора
+        </h1>
+        <p class="text-gray-600 mb-8">Выберите вашу роль для продолжения работы с приложением:</p>
+
+        <button onclick="selectRole('user')" class="btn-role bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg">
+            <i data-lucide="user-check" class="w-6 h-6 mr-3"></i>
+            Я — Агитатор (Ввод данных)
+        </button>
+
+        <button onclick="selectRole('admin')" class="btn-role bg-gray-200 hover:bg-gray-300 text-gray-800 shadow-md">
+            <i data-lucide="shield-check" class="w-6 h-6 mr-3"></i>
+            Я — Админ (Отчеты/Карта)
+        </button>
+
+        <div class="mt-8 pt-4 border-t text-sm text-gray-500">
+             <p id="telegramAuthInfo">Загрузка информации...</p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, getIdTokenResult } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // Вспомогательная функция для получения параметров URL
+        function getUrlParameter(name) {
+            let value = null;
+            const urlParamsSearch = new URLSearchParams(window.location.search);
+            value = urlParamsSearch.get(name);
+            if (!value && window.location.hash) {
+                const hashParams = new URLSearchParams(window.location.hash.substring(1));
+                value = hashParams.get(name);
+            }
+            return value;
+        }
+
+        const configBase64 = getUrlParameter('firebase_config');
+        const initialAuthToken = getUrlParameter('token');
+        const urlUserTelegramId = getUrlParameter('user_id');
+
+        let app = null;
+        let auth = null;
+        let isAdmin = false;
+
+        function initializeFirebase() {
+             if (!configBase64) return false;
+            try {
+                const cleanedBase64 = configBase64.replace(/\s/g, '');
+                const decodedConfig = atob(cleanedBase64);
+                const firebaseConfig = JSON.parse(decodedConfig);
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                return true;
+            } catch (e) {
+                console.error("Firebase init failed:", e);
+                return false;
+            }
+        }
+
+        async function checkAdminStatus() {
+            const authInfo = document.getElementById('telegramAuthInfo');
+            authInfo.textContent = 'Проверка доступа...';
+
+            if (!auth || !initialAuthToken) {
+                 authInfo.textContent = 'Ошибка: Токен доступа не найден.';
+                 return false;
+            }
+
+            try {
+                const userCredential = await signInWithCustomToken(auth, initialAuthToken);
+                const idTokenResult = await getIdTokenResult(userCredential.user);
+
+                isAdmin = (idTokenResult.claims && (idTokenResult.claims.admin === true || idTokenResult.claims.admin === 'true'));
+
+                if (isAdmin) {
+                    authInfo.innerHTML = `Привет, Администратор! <span class="text-green-600 font-bold">Полный доступ.</span>`;
+                } else {
+                    authInfo.innerHTML = `Привет, Агитатор! <span class="text-blue-600 font-bold">Доступ только к форме.</span>`;
+                }
+                return true;
+            } catch (error) {
+                console.error("Auth check error:", error);
+                 authInfo.textContent = `Ошибка аутентификации: ${error.code}`;
+                return false;
+            }
+        }
+
+
+        function selectRole(role) {
+            const params = new URLSearchParams(window.location.search).toString();
+            const hash = window.location.hash;
+
+            let targetUrl = `/admin_dashboard.html?`;
+
+            if (role === 'user') {
+                targetUrl += params + hash + '&view=form';
+            } else if (role === 'admin') {
+                if (!isAdmin) {
+                     alert('У вас нет прав Администратора для доступа к отчетам.');
+                     return;
+                }
+                targetUrl += params + hash + '&view=reports';
+            }
+
+            window.location.href = targetUrl;
+        }
+
+        window.selectRole = selectRole;
+
+        window.onload = async () => {
+            lucide.createIcons();
+            if (initializeFirebase()) {
+                await checkAdminStatus();
+            } else {
+                 document.getElementById('telegramAuthInfo').textContent = 'Приложение загружено, ожидание токена Telegram...';
+            }
+        };
+    </script>
+</body>
+</html>
