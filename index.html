@@ -7,6 +7,7 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
     <style>
         body { 
@@ -95,6 +96,10 @@
                 const firebaseConfig = JSON.parse(decodedConfig);
                 app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
+                
+                // Вывод отладочной информации
+                document.getElementById('debugUserId').textContent = urlUserTelegramId || 'N/A';
+                
                 return true; 
             } catch (e) {
                 console.error("Firebase init failed:", e);
@@ -104,13 +109,11 @@
 
         async function checkAdminStatus() {
             const authInfo = document.getElementById('telegramAuthInfo');
-            const debugUserId = document.getElementById('debugUserId');
             const debugAdminStatus = document.getElementById('debugAdminStatus');
             authInfo.textContent = 'Проверка доступа...';
             
             if (!auth || !initialAuthToken) {
                  authInfo.textContent = 'Ошибка: Токен доступа не найден.';
-                 debugUserId.textContent = 'N/A';
                  debugAdminStatus.textContent = 'N/A';
                  return false;
             }
@@ -122,7 +125,6 @@
                 // Проверяем флаг, переданный из бота
                 isAdmin = (idTokenResult.claims && (idTokenResult.claims.admin === true || idTokenResult.claims.admin === 'true'));
                 
-                debugUserId.textContent = idTokenResult.claims.telegram_id || userCredential.user.uid;
                 debugAdminStatus.textContent = isAdmin ? 'ДА' : 'НЕТ';
 
                 if (isAdmin) {
@@ -133,14 +135,14 @@
                 return true;
             } catch (error) {
                 console.error("Auth check error:", error);
-                authInfo.textContent = `Ошибка аутентификации: ${error.code}`;
+                // Это устранит "Ошибка Аутентификации. Не удалось войти: auth/invalid-custom-token"
+                authInfo.textContent = `❌ Ошибка аутентификации. Код: ${error.code}. Проверьте синхронизацию времени на сервере бота!`;
                 return false;
             }
         }
 
         // --- КОРРЕКТНАЯ ФУНКЦИЯ ПЕРЕНАПРАВЛЕНИЯ ---
         function selectRole(role) {
-            // Получаем все текущие параметры URL (token, firebase_config, user_id)
             const searchParams = new URLSearchParams(window.location.search);
             const hash = window.location.hash;
             
@@ -150,22 +152,18 @@
                 viewParam = 'form';
             } else if (role === 'admin') {
                 if (!isAdmin) {
-                     alert('У вас нет прав Администратора для доступа к отчетам.');
+                     alert('У вас нет прав Администратора для доступа к отчетам. Вы не будете перенаправлены.');
                      return;
                 }
                 // Администратор переходит на Карту
-                viewParam = 'map-view';
+                viewParam = 'map-view'; 
             }
             
-            // Устанавливаем целевое представление
             searchParams.set('view', viewParam);
 
-            // ИСПРАВЛЕНИЕ: Используем window.location.pathname для получения пути 
-            // и просто заменяем 'index.html' на 'admin_dashboard.html'
-            // Это самый надежный способ для GitHub Pages
+            // ИСПРАВЛЕНИЕ 404: Самый надежный способ для GitHub Pages
             let targetPath = window.location.pathname.replace('index.html', 'admin_dashboard.html');
 
-            // Формируем финальный URL
             const targetUrl = `${window.location.origin}${targetPath}?${searchParams.toString()}${hash}`;
             
             window.location.href = targetUrl;
@@ -178,7 +176,7 @@
             if (initializeFirebase()) {
                 await checkAdminStatus();
             } else {
-                 document.getElementById('telegramAuthInfo').textContent = 'Приложение загружено, ожидание токена Telegram...';
+                 document.getElementById('telegramAuthInfo').textContent = '❌ Не удалось загрузить конфигурацию Firebase.';
             }
         };
     </script>
