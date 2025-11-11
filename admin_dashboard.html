@@ -223,9 +223,8 @@
                 sectionButton.classList.add('active');
             }
 
-            // Запускаем карту при переходе, если она еще не инициализирована
+            // Запускаем карту при переходе
             if (sectionId === 'map-view' && typeof ymaps !== 'undefined' && !window.mapInstance) {
-                 // initMap вызовется из main.js
                  if (typeof window.initMap === 'function') {
                     window.initMap(); 
                  }
