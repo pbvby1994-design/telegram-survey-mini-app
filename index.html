@@ -3,163 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Блокнот Агитатора | Выбор роли</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <title>Выбор Роли | Блокнот Агитатора</title>
+    <link rel="stylesheet" href="main.css"> 
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
     <style>
+        /* Минимальные стили для отображения выбора роли */
         body {
-            font-family: 'Jost', sans-serif;
-            background-color: #f4f6f9;
+            font-family: Arial, sans-serif;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
+            height: 100vh;
+            margin: 0;
+            background-color: var(--tg-theme-bg-color, #f4f4f4);
+            color: var(--tg-theme-text-color, #000);
+            padding: 20px;
         }
-        .card {
-            background-color: #ffffff;
-            border-radius: 16px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            padding: 40px;
-            max-width: 500px;
-            width: 100%;
+        .container {
             text-align: center;
-        }
-        .btn-role {
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            padding: 30px;
+            border-radius: 12px;
+            background-color: var(--tg-theme-secondary-bg-color, #fff);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
             width: 100%;
+        }
+        h1 {
+            color: var(--tg-theme-link-color, #333);
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+        .role-button {
+            background-color: var(--tg-theme-button-color, #007bff);
+            color: var(--tg-theme-button-text-color, #fff);
+            border: none;
             padding: 15px 20px;
-            margin-top: 20px;
-            font-size: 1.125rem;
-            font-weight: 600;
-            border-radius: 10px;
-            transition: all 0.2s;
+            margin: 10px 0;
+            border-radius: 8px;
             cursor: pointer;
+            font-size: 18px;
+            transition: background-color 0.2s;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .role-button:hover {
+            opacity: 0.9;
+        }
+        .debug {
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid var(--tg-theme-hint-color, #ccc);
+            font-size: 12px;
+            color: var(--tg-theme-hint-color, #999);
+            text-align: left;
         }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h1 class="text-3xl font-bold text-gray-800 mb-6 flex items-center justify-center">
-            <i data-lucide="notebook-pen" class="w-8 h-8 text-indigo-600 mr-3"></i>
-            Блокнот Агитатора
-        </h1>
-        <p class="text-gray-600 mb-8">Выберите вашу роль для продолжения работы с приложением:</p>
+    <div class="container">
+        <h1>Выберите Вашу Роль</h1>
+        <button class="role-button" onclick="selectRole('user')">Агитатор (Запись Отчетов)</button>
+        <button class="role-button" onclick="selectRole('admin')">Администратор (Просмотр Отчетов)</button>
 
-        <button onclick="selectRole('user')" class="btn-role bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg">
-            <i data-lucide="user-check" class="w-6 h-6 mr-3"></i>
-            Я — Агитатор (Ввод данных)
-        </button>
-
-        <button onclick="selectRole('admin')" class="btn-role bg-gray-200 hover:bg-gray-300 text-gray-800 shadow-md">
-            <i data-lucide="shield-check" class="w-6 h-6 mr-3"></i>
-            Я — Админ (Отчеты/Карта)
-        </button>
-
-        <div class="mt-8 pt-4 border-t text-sm text-gray-500">
-             <p id="telegramAuthInfo">Загрузка информации...</p>
+        <div class="debug">
+            <p>ID Пользователя: <span id="debugUserId">Нет</span></p>
+            <p>Статус Админа: <span id="debugAdminStatus">Нет</span></p>
         </div>
     </div>
-
+    
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithCustomToken, getIdTokenResult } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // Импорт функций из вашего firebase-auth.js
+        import { initializeFirebase, authenticateUser, isAdmin } from './firebase-auth.js';
 
-        // Вспомогательная функция для получения параметров URL
-        function getUrlParameter(name) {
-            let value = null;
-            const urlParamsSearch = new URLSearchParams(window.location.search);
-            value = urlParamsSearch.get(name);
-            if (!value && window.location.hash) {
-                const hashParams = new URLSearchParams(window.location.hash.substring(1));
-                value = hashParams.get(name);
-            }
-            return value;
-        }
+        let customToken = initializeFirebase();
 
-        const configBase64 = getUrlParameter('firebase_config');
-        const initialAuthToken = getUrlParameter('token');
-        const urlUserTelegramId = getUrlParameter('user_id');
-
-        let app = null;
-        let auth = null;
-        let isAdmin = false;
-
-        function initializeFirebase() {
-             if (!configBase64) return false;
-            try {
-                const cleanedBase64 = configBase64.replace(/\s/g, '');
-                const decodedConfig = atob(cleanedBase64);
-                const firebaseConfig = JSON.parse(decodedConfig);
-                app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                return true;
-            } catch (e) {
-                console.error("Firebase init failed:", e);
-                return false;
-            }
-        }
-
-        async function checkAdminStatus() {
-            const authInfo = document.getElementById('telegramAuthInfo');
-            authInfo.textContent = 'Проверка доступа...';
-
-            if (!auth || !initialAuthToken) {
-                 authInfo.textContent = 'Ошибка: Токен доступа не найден.';
-                 return false;
-            }
-
-            try {
-                const userCredential = await signInWithCustomToken(auth, initialAuthToken);
-                const idTokenResult = await getIdTokenResult(userCredential.user);
-
-                isAdmin = (idTokenResult.claims && (idTokenResult.claims.admin === true || idTokenResult.claims.admin === 'true'));
-
-                if (isAdmin) {
-                    authInfo.innerHTML = `Привет, Администратор! <span class="text-green-600 font-bold">Полный доступ.</span>`;
+        if (customToken) {
+            authenticateUser(customToken).then(isAuthenticated => {
+                if (isAuthenticated) {
+                    // Аутентификация успешна
+                    console.log("User authenticated. isAdmin:", isAdmin);
                 } else {
-                    authInfo.innerHTML = `Привет, Агитатор! <span class="text-blue-600 font-bold">Доступ только к форме.</span>`;
+                    console.error("Authentication failed.");
                 }
-                return true;
-            } catch (error) {
-                console.error("Auth check error:", error);
-                 authInfo.textContent = `Ошибка аутентификации: ${error.code}`;
-                return false;
-            }
+            });
         }
-
-
+        
+        // --- КОРРЕКЦИЯ ФУНКЦИИ ПЕРЕНАПРАВЛЕНИЯ (Исправление 404) ---
         function selectRole(role) {
-            const params = new URLSearchParams(window.location.search).toString();
+            // Сохраняем все текущие параметры URL (token, firebase_config, user_id)
+            const searchParams = new URLSearchParams(window.location.search);
             const hash = window.location.hash;
 
-            let targetUrl = `/admin_dashboard.html?`;
+            // 1. Формируем базовый URL для admin_dashboard.html
+            let base_url_parts = window.location.href.split('?')[0].split('#')[0].split('/');
+            
+            // Заменяем index.html на admin_dashboard.html
+            base_url_parts[base_url_parts.length - 1] = 'admin_dashboard.html';
+            let targetUrl = base_url_parts.join('/');
+
+            let viewParam = '';
 
             if (role === 'user') {
-                targetUrl += params + hash + '&view=form';
+                // Агитатор (Пользователь) -> Форма
+                viewParam = 'form';
             } else if (role === 'admin') {
                 if (!isAdmin) {
-                     alert('У вас нет прав Администратора для доступа к отчетам.');
-                     return;
+                     alert('У вас нет прав Администратора для доступа к отчетам. Вы будете перенаправлены на форму записи.');
+                     viewParam = 'form';
+                } else {
+                    // Админ -> Карта (map-view). КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ:
+                    // Используем map-view, чтобы попасть на карту, а не на несуществующий reports.
+                    viewParam = 'map-view'; 
                 }
-                targetUrl += params + hash + '&view=reports';
             }
+            
+            // Добавляем параметр 'view' к существующим параметрам
+            searchParams.set('view', viewParam);
 
-            window.location.href = targetUrl;
+            // Перенаправляем
+            window.location.href = `${targetUrl}?${searchParams.toString()}${hash}`;
         }
 
+        // Выставляем функцию в глобальный скоуп
         window.selectRole = selectRole;
-
-        window.onload = async () => {
-            lucide.createIcons();
-            if (initializeFirebase()) {
-                await checkAdminStatus();
-            } else {
-                 document.getElementById('telegramAuthInfo').textContent = 'Приложение загружено, ожидание токена Telegram...';
-            }
-        };
+        
     </script>
 </body>
 </html>
