@@ -12,10 +12,14 @@
 
     <script src="https://api-maps.yandex.ru/2.1/?apikey=35d34bfb-514d-42c1-b37d-cb751ea4793e&lang=ru_RU&onload=initMap" type="text/javascript"></script>
 
+    <link href="https://cdn.jsdelivr.net/npm/suggestions-jquery@21.12.0/dist/css/suggestions.min.css" rel="stylesheet" />
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/suggestions-jquery@21.12.0/dist/js/suggestions.min.js"></script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
+    
     <link rel="manifest" href="/manifest.json">
 
     <style>
@@ -38,7 +42,6 @@
             color: #4f46e5;
             font-weight: 600;
         }
-        /* Используем #map-container для Яндекс Карт */
         #map-container { 
             height: 70vh; 
             border-radius: 8px; 
@@ -52,6 +55,14 @@
         @keyframes fadeIn { 
             from { opacity: 0; transform: translateY(10px); } 
             to { opacity: 1; transform: translateY(0); } 
+        }
+        /* Стили для Dadata */
+        .suggestions-suggestion {
+            padding: 8px;
+            cursor: pointer;
+        }
+        .suggestions-suggestion.selected {
+            background-color: #f3f4f6;
         }
     </style>
 </head>
@@ -87,8 +98,8 @@
                         </div>
                         
                         <div class="space-y-2">
-                            <label for="address" class="block text-sm font-medium text-gray-700">Адрес (Улица и Дом)</label>
-                            <input type="text" id="address" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2" placeholder="Улица, Дом">
+                            <label for="address" class="block text-sm font-medium text-gray-700">Адрес (Улица, Дом)</label>
+                            <input type="text" id="address" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2" placeholder="Начните вводить адрес...">
                         </div>
                         
                         <div class="space-y-2">
@@ -119,7 +130,7 @@
                         
                         <div class="space-y-2 col-span-full">
                             <label for="geolocation" class="block text-sm font-medium text-gray-700">
-                                Геолокация 
+                                Геолокация (GPS)
                                 <span id="geoStatus" class="ml-2 text-xs text-gray-500">
                                     (Нажмите кнопку ниже)
                                 </span>
@@ -187,7 +198,6 @@
     <script type="module" src="main.js"></script>
     
     <script>
-        // Глобальные функции для кнопок
         window.changeRole = function() {
             let currentPath = window.location.pathname;
             let targetPath = currentPath.replace('admin_dashboard.html', 'index.html');
@@ -210,13 +220,11 @@
                 sectionButton.classList.add('active');
             }
 
-            // Запускаем загрузку карты при необходимости
             if (sectionId === 'map-view' && typeof ymaps !== 'undefined' && !window.mapInstance) {
                  window.initMap(); 
             }
         }
         
-        // Функции модального окна
         window.showAlert = function(title, message) {
             document.getElementById('alertTitle').textContent = title;
             document.getElementById('alertMessage').textContent = message;
