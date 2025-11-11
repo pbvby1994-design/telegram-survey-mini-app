@@ -1,149 +1,308 @@
 // main.js
 
-import { initializeFirebase, authenticateUser, isAdmin, db } from './firebase-auth.js';
-import { collection, getDocs } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+import { initializeFirebase, authenticateUser, isAdmin, db, userTelegramId } from './firebase-auth.js';
+import { collection, getDocs, addDoc, query, orderBy, Timestamp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
-let mapInstance = null; // Глобальная переменная для экземпляра карты
+// --- Глобальные переменные ---
+window.mapInstance = null; // Экземпляр карты Yandex
+let currentLatitude = null;
+let currentLongitude = null;
+
+// Ваши населенные пункты
+const SETTLEMENTS = [
+    'г.п. Лянтор', 'с.п. Русскинская', 'г.п. Федоровский', 'г.п. Барсово', 
+    'г.п. Белый Яр', 'с.п. Лямина', 'с.п. Сытомино', 'с.п. Угут', 
+    'с.п. Ульт-Ягун', 'с.п. Солнечный', 'с.п. Нижнесортымский', 
+    'с.п. Тундрино', 'с.п. Локосово'
+];
 
 // ----------------------------------------------------------------------
-// 1. ФУНКЦИИ КАРТЫ (Устранение ошибки Yandex is not a function)
+// 1. ЛОГИКА ФОРМЫ И ГЕО
 // ----------------------------------------------------------------------
 
 /**
- * Инициализирует карту и загружает данные отчетов.
- * Вызывается автоматически после загрузки API Яндекс Карт (см admin_dashboard.html).
+ * Заполняет выпадающий список поселений.
  */
-window.initMap = async function() {
-    console.log("Яндекс API загружен. Инициализация карты...");
-
-    if (!ymaps) {
-        console.error("Яндекс API не определен, проверьте подключение скрипта.");
-        return;
-    }
-    
-    // Центр по умолчанию (например, Москва)
-    mapInstance = new ymaps.Map("map-container", {
-        center: [55.7558, 37.6173], 
-        zoom: 10,
-        controls: ['zoomControl', 'fullscreenControl']
+function populateSettlements() {
+    const select = document.getElementById('settlement');
+    select.innerHTML = '<option value="" disabled selected>Выберите населенный пункт</option>';
+    SETTLEMENTS.forEach(s => {
+        const option = document.createElement('option');
+        option.value = s;
+        option.textContent = s;
+        select.appendChild(option);
     });
+}
 
-    if (isAdmin) {
-        // Если пользователь — админ, загружаем данные отчетов
-        await loadReportsToMap();
+/**
+ * Получает текущее местоположение и адрес.
+ */
+window.getGeolocation = function() {
+    const geoStatus = document.getElementById('geoStatus');
+    const addressInput = document.getElementById('address');
+    
+    geoStatus.textContent = 'Определение...';
+    geoStatus.classList.remove('text-green-600', 'text-red-500');
+    geoStatus.classList.add('text-gray-500');
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                currentLatitude = position.coords.latitude; 
+                currentLongitude = position.coords.longitude;
+                document.getElementById('geolocation').value = `${currentLatitude.toFixed(6)}, ${currentLongitude.toFixed(6)}`;
+                geoStatus.textContent = 'Успешно! Ищем адрес...';
+                
+                // Использование API Яндекс Карт для обратного геокодирования
+                // Используем fetch, так как встроенной функции геокодера в API v2.1 нет
+                const YANDEX_GEOCODE_URL = `https://geocode-maps.yandex.ru/1.x/?apikey=35d34bfb-514d-42c1-b37d-cb751ea4793e&format=json&geocode=${currentLongitude},${currentLatitude}&kind=house`;
+                
+                let address = "Не удалось определить адрес.";
+                try {
+                    const response = await fetch(YANDEX_GEOCODE_URL);
+                    const data = await response.json();
+                    
+                    const members = data.response.GeoObjectCollection.featureMember;
+                    if (members.length > 0) {
+                        address = members[0].GeoObject.metaDataProperty.GeocoderMetaData.text;
+                    }
+                } catch (e) {
+                    console.warn("Yandex Geocoding failed:", e);
+                }
+                
+                addressInput.value = address;
+                geoStatus.textContent = 'Успешно!';
+                geoStatus.classList.add('text-green-600');
+            },
+            (error) => {
+                currentLatitude = null;
+                currentLongitude = null;
+                document.getElementById('geolocation').value = 'Нет данных';
+                addressInput.value = '';
+                geoStatus.textContent = 'Ошибка доступа';
+                geoStatus.classList.add('text-red-500');
+                window.showAlert('Ошибка GPS', 'Не удалось получить местоположение. Введите адрес вручную.');
+            },
+            { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
+        );
     } else {
-        console.warn("Пользователь не администратор. Отчеты не загружаются.");
+        geoStatus.textContent = 'Не поддерживается';
+        window.showAlert('Ошибка', 'Геолокация не поддерживается вашим устройством.');
     }
-};
+}
 
 /**
- * Загружает отчеты из Firestore и размещает их на карте.
+ * Сохранение данных формы в Firestore.
  */
-async function loadReportsToMap() {
-    if (!db) {
-        console.error("Firestore не инициализирован. Проблема аутентификации.");
-        alert("Не удалось загрузить отчеты: нет доступа к базе данных.");
+window.saveSurveyData = async function(event) {
+    event.preventDefault();
+    const saveStatus = document.getElementById('saveStatus');
+
+    if (!db || !userTelegramId) {
+        window.showAlert('Ошибка', 'Приложение не подключено к базе данных или пользователь не авторизован.');
         return;
     }
     
-    const reportsCollection = collection(db, "reports");
-    const snapshot = await getDocs(reportsCollection);
-    const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    document.getElementById('saveButton').disabled = true;
+    saveStatus.textContent = '⏳ Отправка...';
 
-    if (reports.length === 0) {
-        console.log("Отчетов не найдено.");
-        return;
-    }
-
-    const objectManager = new ymaps.ObjectManager({
-        clusterize: true, // Включаем кластеризацию
-        gridSize: 32
-    });
+    // Считывание данных из полей формы
+    const data = {
+        reporterId: userTelegramId, 
+        timestamp: Timestamp.fromDate(new Date()), 
+        
+        settlement: document.getElementById('settlement').value,
+        address: document.getElementById('address').value,
+        loyalty: document.getElementById('loyalty').value,
+        action: document.getElementById('action').value, 
+        comment: document.getElementById('comment').value || "",
+        
+        latitude: currentLatitude,
+        longitude: currentLongitude
+    };
     
-    const features = reports.filter(r => r.location && r.location.latitude && r.location.longitude).map(r => {
-        // Форматирование данных для балуна (всплывающего окна)
-        const date = r.timestamp ? new Date(r.timestamp.toDate()).toLocaleDateString('ru-RU') : 'N/A';
-        const content = `
-            <div>
-                <strong>Отчет #${r.id}</strong><br>
-                Дата: ${date}<br>
-                Тема: ${r.topic || 'N/A'}<br>
-                Результат: ${r.result || 'N/A'}
-            </div>
-        `;
+    try {
+        // Проверка обязательных полей
+        if (!data.settlement || !data.address || !data.loyalty || !data.action) {
+             throw new Error("Не все обязательные поля заполнены.");
+        }
+        
+        await addDoc(collection(db, "reports"), data);
+        window.showAlert('Успех', 'Данные успешно сохранены! Спасибо за работу.');
+        document.getElementById('surveyForm').reset();
+        saveStatus.textContent = '✅ Успешно!';
+        
+        // Сброс геоданных и статуса
+        currentLatitude = null;
+        currentLongitude = null;
+        document.getElementById('geolocation').value = '';
+        document.getElementById('geoStatus').textContent = '(Нажмите кнопку ниже, если нужно)';
+        document.getElementById('geoStatus').classList.remove('text-green-600', 'text-red-500');
+        document.getElementById('geoStatus').classList.add('text-gray-500');
 
-        return {
-            type: 'Feature',
-            id: r.id,
-            geometry: {
-                type: 'Point',
-                coordinates: [r.location.longitude, r.location.latitude] // Yandex Maps ожидает [долгота, широта]
-            },
-            properties: {
-                balloonContent: content,
-                hintContent: r.topic || 'Отчет'
-            },
-            options: {
-                preset: 'islands#blueDotIcon'
-            }
-        };
-    });
-
-    objectManager.add(features);
-    mapInstance.geoObjects.add(objectManager);
+        setTimeout(() => saveStatus.textContent = 'Готов', 3000);
+    } catch (e) {
+        console.error("Error adding document: ", e);
+        window.showAlert('Ошибка', `Не удалось сохранить данные: ${e.message}.`);
+        saveStatus.textContent = 'Ошибка';
+    } finally {
+        document.getElementById('saveButton').disabled = false;
+    }
 }
 
 // ----------------------------------------------------------------------
-// 2. ФУНКЦИЯ СМЕНЫ РОЛИ (Устранение нерабочей кнопки)
+// 2. ЛОГИКА КАРТЫ (Админ) - ПЕРЕПИСАНО ДЛЯ YANDEX.MAPS
 // ----------------------------------------------------------------------
 
 /**
- * Перенаправляет пользователя обратно на экран выбора роли (index.html),
- * сохраняя все параметры URL (токен, конфиг и т.д.).
+ * Вызывается автоматически после загрузки API Яндекс Карт (onload=initMap).
  */
-window.changeRole = function() {
-    // Получаем текущий путь (например, /telegram-survey-mini-app/admin_dashboard.html)
-    let currentPath = window.location.pathname;
+window.initMap = async function() {
+    if (typeof ymaps === 'undefined') {
+        console.error("Яндекс API не определен.");
+        document.getElementById('map-loading-status').textContent = 'Ошибка загрузки API Яндекс Карт.';
+        return;
+    }
     
-    // Заменяем admin_dashboard.html на index.html
-    let targetPath = currentPath.replace('admin_dashboard.html', 'index.html');
+    if (window.mapInstance) return; // Уже инициализирована
     
-    // Сохраняем все текущие параметры (token, firebase_config, user_id)
-    const search = window.location.search;
-    const hash = window.location.hash;
+    // Центр по умолчанию (например, Сургутский район)
+    window.mapInstance = new ymaps.Map("map-container", {
+        center: [61.25, 73.4], 
+        zoom: 9,
+        controls: ['zoomControl', 'fullscreenControl']
+    });
+    
+    document.getElementById('map-loading-status').style.display = 'none';
 
-    // Перенаправляем
-    window.location.href = `${window.location.origin}${targetPath}${search}${hash}`;
+    if (isAdmin) {
+        await fetchAndLoadReportsToMap();
+    } else {
+        document.getElementById('map-container').innerHTML = `<div class="p-6 text-red-500 text-center">Доступ к карте только для Администраторов.</div>`;
+    }
 };
 
-// ----------------------------------------------------------------------
-// 3. ОБЩАЯ ИНИЦИАЛИЗАЦИЯ
-// ----------------------------------------------------------------------
+/**
+ * Загружает отчеты из Firestore и размещает маркеры на карте.
+ */
+async function fetchAndLoadReportsToMap() {
+    if (!db) return;
+    
+    try {
+        const reportsCollection = collection(db, "reports");
+        const q = query(reportsCollection, orderBy("timestamp", "desc"));
+        const snapshot = await getDocs(q);
+        const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-window.onload = async () => {
-    // Выполняется после загрузки DOM, но до initMap (которая асинхронна)
-    if (initializeFirebase()) {
-        const isAuthenticated = await authenticateUser();
-        
-        if (!isAuthenticated) {
-            alert("Ошибка доступа. Проверьте токен.");
+        if (reports.length === 0) {
+            document.getElementById('map-loading-status').textContent = 'Отчетов с геолокацией не найдено.';
+            document.getElementById('map-loading-status').style.display = 'block';
             return;
         }
 
-        // Обновляем UI после успешной авторизации
-        const roleStatus = document.getElementById('role-status');
-        if (roleStatus) {
-            roleStatus.textContent = isAdmin ? 'Администратор' : 'Агитатор';
-        }
+        const objectManager = new ymaps.ObjectManager({
+            clusterize: true, // Включаем кластеризацию
+            gridSize: 32
+        });
+        
+        const loyaltyMap = {
+            'strong': 'Положительно',
+            'moderate': 'Скорее положительно',
+            'neutral': 'Нейтрально',
+            'against': 'Отрицательно'
+        };
 
-        // Если вид - это форма, показываем форму. Если карта, ждем initMap.
-        const view = new URLSearchParams(window.location.search).get('view');
-        if (view === 'form') {
-            // Здесь может быть код для активации формы агитатора
-            console.log("Загружена форма для Агитатора.");
+        const features = reports.filter(r => r.latitude && r.longitude).map(r => {
+            const date = r.timestamp ? new Date(r.timestamp.toDate()).toLocaleDateString('ru-RU') : 'N/A';
+            const loyaltyText = loyaltyMap[r.loyalty] || r.loyalty;
+            const preset = r.loyalty === 'against' ? 'islands#redDotIcon' : 'islands#blueDotIcon';
+
+            const content = `
+                <div>
+                    <strong>${r.settlement}</strong>, ${r.address}<br>
+                    Лояльность: <strong>${loyaltyText}</strong><br>
+                    Действие: ${r.action || 'N/A'}<br>
+                    Комментарий: ${r.comment || 'Нет'}<br>
+                    Дата: ${date}
+                </div>
+            `;
+
+            return {
+                type: 'Feature',
+                id: r.id,
+                geometry: {
+                    type: 'Point',
+                    // Яндекс Карты ожидает [широта, долгота]
+                    coordinates: [r.latitude, r.longitude] 
+                },
+                properties: {
+                    balloonContent: content,
+                    hintContent: `${r.settlement}: ${loyaltyText}`
+                },
+                options: {
+                    preset: preset
+                }
+            };
+        });
+
+        objectManager.add(features);
+        window.mapInstance.geoObjects.add(objectManager);
+        
+        // Центрирование по кластерам
+        if (features.length > 0) {
+            window.mapInstance.setBounds(objectManager.getBounds(), { checkZoom: true, zoomMargin: 30 });
         }
         
+    } catch (e) {
+        console.error("Ошибка загрузки отчетов:", e);
+        window.showAlert('Ошибка', `Не удалось загрузить отчеты для карты: ${e.message}`);
+    }
+}
+
+
+// ----------------------------------------------------------------------
+// 3. ГЛАВНЫЙ БЛОК
+// ----------------------------------------------------------------------
+
+window.onload = async () => {
+    // Делаем функции доступными для HTML
+    window.showSection = window.showSection; 
+    window.changeRole = window.changeRole;
+    window.showAlert = window.showAlert;
+    window.closeAlert = window.closeAlert;
+    
+    populateSettlements();
+    lucide.createIcons();
+    document.getElementById('saveButton').disabled = true; // Блокируем до аутентификации
+
+    if (!initializeFirebase()) {
+         window.showSection('form');
+         return;
+    }
+
+    const isAuthenticated = await authenticateUser();
+    
+    if (isAuthenticated) {
+         // Показать кнопку "Карта", если пользователь - админ
+         if (isAdmin) {
+             document.getElementById('btn-map-view').style.display = 'inline-block';
+         }
+         
+         // Определяем, какую секцию показать
+         const urlParams = new URLSearchParams(window.location.search);
+         const initialView = urlParams.get('view');
+         
+         let startSection = 'form';
+         if (isAdmin && (initialView === 'map' || initialView === 'map-view')) {
+             startSection = 'map-view';
+         }
+         
+         window.showSection(startSection);
+         document.getElementById('saveButton').disabled = false;
+         
     } else {
-        alert("Критическая ошибка: Не удалось инициализировать Firebase.");
+         window.showSection('form');
+         document.getElementById('saveButton').disabled = true;
+         document.getElementById('geoStatus').textContent = 'Нет доступа.';
     }
 };
