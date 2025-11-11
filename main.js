@@ -8,7 +8,7 @@ window.mapInstance = null; // Экземпляр карты Yandex
 let currentLatitude = null;
 let currentLongitude = null;
 
-// Ваши населенные пункты
+// !!! ВОССТАНОВЛЕННЫЙ И ПОЛНЫЙ СПИСОК ВАШИХ НАСЕЛЕННЫХ ПУНКТОВ !!!
 const SETTLEMENTS = [
     'г.п. Лянтор', 'с.п. Русскинская', 'г.п. Федоровский', 'г.п. Барсово', 
     'г.п. Белый Яр', 'с.п. Лямина', 'с.п. Сытомино', 'с.п. Угут', 
@@ -40,59 +40,68 @@ function populateSettlements() {
 window.getGeolocation = function() {
     const geoStatus = document.getElementById('geoStatus');
     const addressInput = document.getElementById('address');
+    const geoInput = document.getElementById('geolocation');
     
     geoStatus.textContent = 'Определение...';
-    geoStatus.classList.remove('text-green-600', 'text-red-500');
-    geoStatus.classList.add('text-gray-500');
+    geoStatus.className = 'ml-2 text-xs text-gray-500'; // Сброс классов цвета
 
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             async (position) => {
                 currentLatitude = position.coords.latitude; 
                 currentLongitude = position.coords.longitude;
-                document.getElementById('geolocation').value = `${currentLatitude.toFixed(6)}, ${currentLongitude.toFixed(6)}`;
-                geoStatus.textContent = 'Успешно! Ищем адрес...';
+                geoInput.value = `${currentLatitude.toFixed(6)}, ${currentLongitude.toFixed(6)}`;
                 
-                // Использование API Яндекс Карт для обратного геокодирования
-                // Используем fetch, так как встроенной функции геокодера в API v2.1 нет
-                const YANDEX_GEOCODE_URL = `https://geocode-maps.yandex.ru/1.x/?apikey=35d34bfb-514d-42c1-b37d-cb751ea4793e&format=json&geocode=${currentLongitude},${currentLatitude}&kind=house`;
-                
-                let address = "Не удалось определить адрес.";
-                try {
-                    const response = await fetch(YANDEX_GEOCODE_URL);
-                    const data = await response.json();
+                // Проверяем, что координаты получены, прежде чем искать адрес
+                if (currentLatitude && currentLongitude) {
+                    geoStatus.textContent = 'Успешно! Ищем адрес...';
                     
-                    const members = data.response.GeoObjectCollection.featureMember;
-                    if (members.length > 0) {
-                        address = members[0].GeoObject.metaDataProperty.GeocoderMetaData.text;
+                    // Использование API Яндекс Карт для обратного геокодирования
+                    const YANDEX_GEOCODE_URL = `https://geocode-maps.yandex.ru/1.x/?apikey=35d34bfb-514d-42c1-b37d-cb751ea4793e&format=json&geocode=${currentLongitude},${currentLatitude}&kind=house`;
+                    
+                    let address = "Не удалось определить адрес. Введите вручную.";
+                    try {
+                        const response = await fetch(YANDEX_GEOCODE_URL);
+                        const data = await response.json();
+                        
+                        const members = data.response.GeoObjectCollection.featureMember;
+                        if (members.length > 0) {
+                            address = members[0].GeoObject.metaDataProperty.GeocoderMetaData.text;
+                            // Убираем город/регион, оставляем только улицу/дом
+                            address = address.split(',').slice(-2).join(',').trim();
+                        }
+                    } catch (e) {
+                        console.warn("Yandex Geocoding failed:", e);
                     }
-                } catch (e) {
-                    console.warn("Yandex Geocoding failed:", e);
+                    
+                    addressInput.value = address;
+                    geoStatus.textContent = '✅ Успешно!';
+                    geoStatus.classList.add('text-green-600');
+                    document.getElementById('saveButton').disabled = false; // Разблокировать кнопку
                 }
-                
-                addressInput.value = address;
-                geoStatus.textContent = 'Успешно!';
-                geoStatus.classList.add('text-green-600');
             },
             (error) => {
+                // Если геолокация не получена (ошибка или запрет)
                 currentLatitude = null;
                 currentLongitude = null;
-                document.getElementById('geolocation').value = 'Нет данных';
+                geoInput.value = 'Нет данных';
                 addressInput.value = '';
-                geoStatus.textContent = 'Ошибка доступа';
+                geoStatus.textContent = '❌ Ошибка доступа';
                 geoStatus.classList.add('text-red-500');
+                document.getElementById('saveButton').disabled = false; // Разблокировать, чтобы можно было сохранить без GPS
                 window.showAlert('Ошибка GPS', 'Не удалось получить местоположение. Введите адрес вручную.');
             },
             { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
         );
     } else {
-        geoStatus.textContent = 'Не поддерживается';
+        geoStatus.textContent = '❌ Не поддерживается';
         window.showAlert('Ошибка', 'Геолокация не поддерживается вашим устройством.');
+        document.getElementById('saveButton').disabled = false;
     }
 }
 
 /**
- * Сохранение данных формы в Firestore.
+ * Сохранение данных формы в Firestore. (Без изменений)
  */
 window.saveSurveyData = async function(event) {
     event.preventDefault();
@@ -106,7 +115,6 @@ window.saveSurveyData = async function(event) {
     document.getElementById('saveButton').disabled = true;
     saveStatus.textContent = '⏳ Отправка...';
 
-    // Считывание данных из полей формы
     const data = {
         reporterId: userTelegramId, 
         timestamp: Timestamp.fromDate(new Date()), 
@@ -122,7 +130,6 @@ window.saveSurveyData = async function(event) {
     };
     
     try {
-        // Проверка обязательных полей
         if (!data.settlement || !data.address || !data.loyalty || !data.action) {
              throw new Error("Не все обязательные поля заполнены.");
         }
@@ -132,11 +139,10 @@ window.saveSurveyData = async function(event) {
         document.getElementById('surveyForm').reset();
         saveStatus.textContent = '✅ Успешно!';
         
-        // Сброс геоданных и статуса
         currentLatitude = null;
         currentLongitude = null;
         document.getElementById('geolocation').value = '';
-        document.getElementById('geoStatus').textContent = '(Нажмите кнопку ниже, если нужно)';
+        document.getElementById('geoStatus').textContent = '(Нажмите кнопку ниже)';
         document.getElementById('geoStatus').classList.remove('text-green-600', 'text-red-500');
         document.getElementById('geoStatus').classList.add('text-gray-500');
 
@@ -151,7 +157,7 @@ window.saveSurveyData = async function(event) {
 }
 
 // ----------------------------------------------------------------------
-// 2. ЛОГИКА КАРТЫ (Админ) - ПЕРЕПИСАНО ДЛЯ YANDEX.MAPS
+// 2. ЛОГИКА КАРТЫ (Админ)
 // ----------------------------------------------------------------------
 
 /**
@@ -164,9 +170,9 @@ window.initMap = async function() {
         return;
     }
     
-    if (window.mapInstance) return; // Уже инициализирована
+    if (window.mapInstance) return;
     
-    // Центр по умолчанию (например, Сургутский район)
+    // Центр по умолчанию (Сургутский район)
     window.mapInstance = new ymaps.Map("map-container", {
         center: [61.25, 73.4], 
         zoom: 9,
@@ -174,7 +180,8 @@ window.initMap = async function() {
     });
     
     document.getElementById('map-loading-status').style.display = 'none';
-
+    
+    // *КРИТИЧНОЕ ИСПРАВЛЕНИЕ*: Запускаем загрузку отчетов только если админ
     if (isAdmin) {
         await fetchAndLoadReportsToMap();
     } else {
@@ -183,7 +190,7 @@ window.initMap = async function() {
 };
 
 /**
- * Загружает отчеты из Firestore и размещает маркеры на карте.
+ * Загружает отчеты из Firestore и размещает маркеры на карте. (Без изменений)
  */
 async function fetchAndLoadReportsToMap() {
     if (!db) return;
@@ -201,7 +208,7 @@ async function fetchAndLoadReportsToMap() {
         }
 
         const objectManager = new ymaps.ObjectManager({
-            clusterize: true, // Включаем кластеризацию
+            clusterize: true, 
             gridSize: 32
         });
         
@@ -232,7 +239,6 @@ async function fetchAndLoadReportsToMap() {
                 id: r.id,
                 geometry: {
                     type: 'Point',
-                    // Яндекс Карты ожидает [широта, долгота]
                     coordinates: [r.latitude, r.longitude] 
                 },
                 properties: {
@@ -248,7 +254,6 @@ async function fetchAndLoadReportsToMap() {
         objectManager.add(features);
         window.mapInstance.geoObjects.add(objectManager);
         
-        // Центрирование по кластерам
         if (features.length > 0) {
             window.mapInstance.setBounds(objectManager.getBounds(), { checkZoom: true, zoomMargin: 30 });
         }
@@ -261,7 +266,7 @@ async function fetchAndLoadReportsToMap() {
 
 
 // ----------------------------------------------------------------------
-// 3. ГЛАВНЫЙ БЛОК
+// 3. ГЛАВНЫЙ БЛОК ИНИЦИАЛИЗАЦИИ
 // ----------------------------------------------------------------------
 
 window.onload = async () => {
@@ -273,10 +278,10 @@ window.onload = async () => {
     
     populateSettlements();
     lucide.createIcons();
-    document.getElementById('saveButton').disabled = true; // Блокируем до аутентификации
+    document.getElementById('saveButton').disabled = true;
 
     if (!initializeFirebase()) {
-         window.showSection('form');
+         showSection('form');
          return;
     }
 
@@ -288,13 +293,17 @@ window.onload = async () => {
              document.getElementById('btn-map-view').style.display = 'inline-block';
          }
          
-         // Определяем, какую секцию показать
          const urlParams = new URLSearchParams(window.location.search);
          const initialView = urlParams.get('view');
          
          let startSection = 'form';
-         if (isAdmin && (initialView === 'map' || initialView === 'map-view')) {
+         // Если админ, по умолчанию показываем карту, иначе форму
+         if (isAdmin && (initialView === 'map' || initialView === 'map-view' || !initialView)) {
              startSection = 'map-view';
+             // Если мы стартуем с карты, запускаем ее инициализацию
+             if (typeof ymaps !== 'undefined') {
+                window.initMap(); 
+             }
          }
          
          window.showSection(startSection);
