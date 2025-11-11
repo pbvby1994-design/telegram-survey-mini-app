@@ -15,10 +15,10 @@
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet-heat/dist/leaflet-heat.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
     <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/leaflet-yandex-tiles/leaflet-yandex.js"></script>
 
     <link rel="manifest" href="/manifest.json">
 
@@ -42,7 +42,7 @@
             color: #4f46e5;
             font-weight: 600;
         }
-        #map { height: 60vh; border-radius: 8px; 
+        #map { height: 70vh; border-radius: 8px; 
         }
         .content-section { animation: fadeIn 0.3s ease-in-out;
         }
@@ -57,13 +57,13 @@
             <h1 class="text-xl font-bold">Блокнот Агитатора</h1>
             <div class="flex space-x-4">
                 <button onclick="showSection('form')" class="tab-button active hover:text-indigo-200" id="btn-form">
-                    <i data-lucide="notebook-pen" class="w-5 h-5 inline-block mr-1"></i>Форма
-                </button>
-                <button onclick="showSection('reports')" class="tab-button hover:text-indigo-200" id="btn-reports">
-                    <i data-lucide="bar-chart-3" class="w-5 h-5 inline-block mr-1"></i>Отчеты
+                    <i data-lucide="notebook-pen" class="w-5 h-5 inline-block mr-1"></i>Ввод данных
                 </button>
                 <button onclick="showSection('map-view')" class="tab-button hover:text-indigo-200" id="btn-map-view">
                     <i data-lucide="map" class="w-5 h-5 inline-block mr-1"></i>Карта
+                </button>
+                <button onclick="window.location.href='/index.html' + window.location.search + window.location.hash" class="tab-button hover:text-indigo-200">
+                    <i data-lucide="log-out" class="w-5 h-5 inline-block mr-1"></i>Сменить роль
                 </button>
             </div>
         </div>
@@ -147,83 +147,11 @@
             </div>
         </section>
 
-        <section id="reports" class="content-section hidden">
-            <div class="card p-6">
-                <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Сводные Отчеты</h2>
-                
-                <div id="kpiSummary" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <div class="bg-blue-50 p-4 rounded-lg"><p class="text-sm text-blue-600">Всего отчетов</p><p class="text-2xl font-bold text-gray-800" id="kpiTotalReports">0</p></div>
-                    <div class="bg-green-50 p-4 rounded-lg"><p class="text-sm text-green-600">Сильная лояльность</p><p class="text-2xl font-bold text-gray-800" id="kpiStrongLoyalty">0%</p></div>
-                    <div class="bg-red-50 p-4 rounded-lg"><p class="text-sm text-red-600">Против лояльность</p><p class="text-2xl font-bold text-gray-800" id="kpiAgainstLoyalty">0%</p></div>
-                    <div class="bg-yellow-50 p-4 rounded-lg"><p class="text-sm text-yellow-600">С геоданными</p><p class="text-2xl font-bold text-gray-800" id="kpiGeoPercent">0%</p></div>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-                    <div class="space-y-1">
-                        <label for="reportSettlementFilter" class="text-sm font-medium text-gray-700">Поселение</label>
-                        <select id="reportSettlementFilter" onchange="filterAndRenderReports()" class="w-full border-gray-300 rounded-md shadow-sm p-2"></select>
-                    </div>
-
-                    <div class="space-y-1">
-                        <label for="reportLoyaltyFilter" class="text-sm font-medium text-gray-700">Лояльность</label>
-                        <select id="reportLoyaltyFilter" onchange="filterAndRenderReports()" class="w-full border-gray-300 rounded-md shadow-sm p-2">
-                             <option value="all">Все уровни</option>
-                             <option value="strong">Сильная (ДА)</option>
-                             <option value="moderate">Умеренная</option>
-                             <option value="neutral">Нейтрально</option>
-                             <option value="against">Против (НЕТ)</option>
-                        </select>
-                    </div>
-                    
-                    <div class="space-y-1">
-                        <label for="reportActionFilter" class="text-sm font-medium text-gray-700">Действие</label>
-                        <select id="reportActionFilter" onchange="filterAndRenderReports()" class="w-full border-gray-300 rounded-md shadow-sm p-2">
-                            <option value="all">Все действия</option>
-                            <option value="Опрос">Опрос</option>
-                            <option value="Агитация">Агитация</option>
-                            <option value="Жалоба">Жалоба/Запрос</option>
-                        </select>
-                    </div>
-
-                     <div class="space-y-1">
-                        <label for="reportReporterFilter" class="text-sm font-medium text-gray-700">Агитатор (10)</label>
-                        <select id="reportReporterFilter" onchange="filterAndRenderReports()" class="w-full border-gray-300 rounded-md shadow-sm p-2"></select>
-                    </div>
-
-                    <div class="space-y-1">
-                        <label for="reportDateRange" class="text-sm font-medium text-gray-700">Период (2)</label>
-                        <select id="reportDateRange" onchange="filterAndRenderReports()" class="w-full border-gray-300 rounded-md shadow-sm p-2">
-                             <option value="all">Весь период</option>
-                             <option value="today">Сегодня</option>
-                             <option value="yesterday">Вчера</option>
-                             <option value="last7">Последние 7 дней</option>
-                             <option value="last30">Последние 30 дней</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-                    <div class="card p-4"><h3 class="font-semibold mb-2">Лояльность</h3><div class="h-64"><canvas id="loyaltyChart"></canvas></div></div>
-                    <div class="card p-4"><h3 class="font-semibold mb-2">Целевые действия</h3><div class="h-64"><canvas id="actionChart"></canvas></div></div>
-                </div>
-
-                <div class="mt-6 flex justify-end">
-                    <button onclick="exportReportsToCSV()" class="bg-indigo-500 hover:bg-indigo-600 text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center">
-                        <i data-lucide="download" class="w-4 h-4 inline-block mr-1"></i>
-                        Экспорт CSV
-                    </button>
-                </div>
-
-                <div id="reportsListContainer">
-                    </div>
-            </div>
-        </section>
-
         <section id="map-view" class="content-section hidden">
             <div class="card p-6">
-                <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Карта Активности (Heatmap)</h2>
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Карта Активности (Точки агитации)</h2>
                 <div id="map"></div>
-                <p class="mt-4 text-sm text-gray-600">На карте отображается тепловая карта активности. Чем ярче точка, тем больше отрицательной лояльности в этой области.</p>
+                <p class="mt-4 text-sm text-gray-600">На карте отображаются все точки активности агитаторов. Красные маркеры - негативная лояльность.</p>
             </div>
         </section>
 
@@ -249,7 +177,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, collection, addDoc, query, getDocs, orderBy, where, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInWithCustomToken, getIdTokenResult } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        // Firebase Storage больше не импортируется
 
         // ----------------------------------------------------------------------------------
         // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И КОНФИГУРАЦИЯ
@@ -277,10 +204,7 @@
         let isAdmin = false; 
         
         let allReportsData = []; 
-        let latestReportData = []; 
-        let loyaltyChartInstance = null; 
-        let actionChartInstance = null; 
-
+        
         const SETTLEMENTS = [
             'г.п. Лянтор', 'с.п. Русскинская', 'г.п. Федоровский', 'г.п. Барсово', 
             'г.п. Белый Яр', 'с.п. Лямина', 'с.п. Сытомино', 'с.п. Угут', 
@@ -295,7 +219,6 @@
         function initializeFirebase() {
             if (!configBase64) {
                 console.error("Firebase config not found in URL parameters. Initialization failed.");
-                window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Не удалось найти конфигурацию Firebase в URL.');
                 document.getElementById('debugAdminStatus').textContent = "ОШИБКА URL";
                 return false;
             }
@@ -347,7 +270,7 @@
         }
 
         // ----------------------------------------------------------------------------------
-        // ФУНКЦИИ ФОРМЫ И ГЕОКОДИРОВАНИЕ (Улучшение 6)
+        // ФУНКЦИИ ФОРМЫ И ГЕОКОДИРОВАНИЕ
         // ----------------------------------------------------------------------------------
 
         function populateSettlements() {
@@ -367,29 +290,25 @@
             try {
                 const response = await fetch(NOMINATIM_URL, {
                     headers: {
-                         // Рекомендация Nominatim: указать User-Agent для идентификации запроса
                         'User-Agent': 'AgitatorApp/1.0 (Telegram Mini App)'
                     }
                 });
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
                 
-                // Формирование читаемого адреса
                 const address = data.address;
                 let fullAddress = data.display_name;
                 
                 if (address) {
-                    // Пытаемся собрать более точный адрес
                     const parts = [
                         address.road,
                         address.house_number,
                         address.postcode,
                         address.city || address.town || address.village
-                    ].filter(Boolean); // Удаляем null/undefined
+                    ].filter(Boolean); 
                     
                     fullAddress = parts.join(', ');
                     if (fullAddress.length < 10) {
-                        // Если короткий, берем более длинный вариант
                         fullAddress = data.display_name;
                     }
                 }
@@ -400,6 +319,9 @@
                 return "Не удалось определить адрес. Введите вручную.";
             }
         }
+
+        let currentLatitude = null;
+        let currentLongitude = null;
 
         function getGeolocation() {
             const geoStatus = document.getElementById('geoStatus');
@@ -413,7 +335,6 @@
                         document.getElementById('geolocation').value = `${currentLatitude.toFixed(6)}, ${currentLongitude.toFixed(6)}`;
                         geoStatus.textContent = 'Успешно! Ищем адрес...';
                         
-                        // Улучшение 6: Геокодирование
                         const addressInput = document.getElementById('address');
                         const address = await reverseGeocode(currentLatitude, currentLongitude);
                         addressInput.value = address;
@@ -470,14 +391,14 @@
                 action: document.getElementById('action').value, 
                 loyalty: document.getElementById('loyalty').value,
                 comment: comment,
-                photo: null, // УДАЛЕНО: photo теперь всегда null
+                photo: null, 
                 latitude: geo.length === 2 && geo[0] ? parseFloat(geo[0]) : null,
                 longitude: geo.length === 2 && geo[1] ? parseFloat(geo[1]) : null
             };
             
             try {
                 await addDoc(collection(db, "reports"), data);
-                showAlert('Успех', 'Данные успешно сохранены!');
+                showAlert('Успех', 'Данные успешно сохранены! Спасибо за работу.');
                 document.getElementById('surveyForm').reset();
                 saveStatus.textContent = '✅ Успешно!';
                 
@@ -498,87 +419,107 @@
         }
         
         // ----------------------------------------------------------------------------------
-        // ФУНКЦИИ ОТЧЕТОВ, KPI, КАРТА (Улучшения 1, 2, 3, 10)
+        // ФУНКЦИИ КАРТЫ (Маркеры + Яндекс.Карты)
         // ----------------------------------------------------------------------------------
         
-        function populateReportFilters() {
-            // ... (фильтр поселений)
-            const sSelect = document.getElementById('reportSettlementFilter');
-            sSelect.innerHTML = '<option value="all">Все населенные пункты</option>';
-            SETTLEMENTS.forEach(s => { sSelect.innerHTML += `<option value="${s}">${s}</option>`; });
+        // Создание кастомных иконок
+        const defaultIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+        });
 
-            // Улучшение 10: Фильтр Агитаторов
-            const rSelect = document.getElementById('reportReporterFilter');
-            rSelect.innerHTML = '<option value="all">Все агитаторы</option>';
-            const uniqueReporters = [...new Set(allReportsData.map(r => r.reporterId))].filter(Boolean);
-            uniqueReporters.forEach(id => { rSelect.innerHTML += `<option value="${id}">${id}</option>`; });
-        }
-
-        function renderKPIs(reports) {
-            const total = reports.length;
-            const strong = reports.filter(r => r.loyalty === 'strong').length;
-            const against = reports.filter(r => r.loyalty === 'against').length;
-            const geoCount = reports.filter(r => r.latitude && r.longitude).length;
-
-            document.getElementById('kpiTotalReports').textContent = total;
-            document.getElementById('kpiStrongLoyalty').textContent = total > 0 ? `${((strong / total) * 100).toFixed(1)}%` : '0%';
-            document.getElementById('kpiAgainstLoyalty').textContent = total > 0 ? `${((against / total) * 100).toFixed(1)}%` : '0%';
-            document.getElementById('kpiGeoPercent').textContent = total > 0 ? `${((geoCount / total) * 100).toFixed(1)}%` : '0%';
-        }
+        const redIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+        });
         
-        function filterAndRenderReports() {
-            const settlementFilter = document.getElementById('reportSettlementFilter').value;
-            const loyaltyFilter = document.getElementById('reportLoyaltyFilter').value;
-            const actionFilter = document.getElementById('reportActionFilter').value;
-            const reporterFilter = document.getElementById('reportReporterFilter').value; 
-            const dateRangeFilter = document.getElementById('reportDateRange').value; 
+        let mapInstance = null;
+        let markerClusterGroup = null;
 
-            let filteredReports = allReportsData;
-            const now = new Date();
-            let startDate = null;
+        function generateMap() {
+             if (!isAdmin) {
+                 document.getElementById('map').innerHTML = `<div class="p-6 text-red-500">Доступ к карте только для Администраторов.</div>`;
+                 return;
+             }
+            
+            if (!mapInstance) {
+                 // Инициализация карты (Центр России: ~61.0, 73.0)
+                 mapInstance = L.map('map').setView([61.0, 73.0], 9); 
 
-            // Логика фильтрации по дате (Улучшение 2)
-            if (dateRangeFilter !== 'all') {
-                startDate = new Date(now);
-                if (dateRangeFilter === 'today') startDate.setHours(0, 0, 0, 0);
-                else if (dateRangeFilter === 'yesterday') { startDate.setDate(now.getDate() - 1); startDate.setHours(0, 0, 0, 0); }
-                else if (dateRangeFilter === 'last7') startDate.setDate(now.getDate() - 7);
-                else if (dateRangeFilter === 'last30') startDate.setDate(now.getDate() - 30);
-                
-                filteredReports = filteredReports.filter(report => report.timestamp.toDate() >= startDate);
+                 // Добавляем тайлы Яндекс.Карты
+                 const yandexLayer = L.yandex();
+                 mapInstance.addLayer(yandexLayer);
+
+                 // Инициализация группы кластеров
+                 markerClusterGroup = L.markerClusterGroup({
+                    showCoverageOnHover: false,
+                    maxClusterRadius: 40 // Меньший радиус для лучшей детализации
+                 });
+                 mapInstance.addLayer(markerClusterGroup);
             }
 
-            // Остальные фильтры
-            if (settlementFilter !== 'all') { filteredReports = filteredReports.filter(r => r.settlement === settlementFilter); }
-            if (loyaltyFilter !== 'all') { filteredReports = filteredReports.filter(r => r.loyalty === loyaltyFilter); }
-            if (actionFilter !== 'all') { filteredReports = filteredReports.filter(r => r.action === actionFilter); }
-            if (reporterFilter !== 'all') { filteredReports = filteredReports.filter(r => r.reporterId === reporterFilter); }
+            // Очищаем предыдущие маркеры
+            markerClusterGroup.clearLayers();
             
-            latestReportData = filteredReports; 
+            const markers = [];
+            let hasGeoData = false;
             
-            renderKPIs(latestReportData);
-            renderLoyaltyChart(latestReportData); 
-            renderActionChart(latestReportData);
-            renderReportsList(latestReportData);
+            allReportsData.forEach(r => {
+                if (r.latitude && r.longitude) {
+                    hasGeoData = true;
+                    
+                    const loyaltyText = {
+                        'strong': 'Сильная (ДА)', 
+                        'moderate': 'Умеренная (СКОРЕЕ ДА)', 
+                        'neutral': 'Нейтрально (НЕ ЗНАЮ)', 
+                        'against': 'Против (НЕТ)'
+                    }[r.loyalty] || r.loyalty;
+
+                    const markerIcon = r.loyalty === 'against' ? redIcon : defaultIcon;
+                    
+                    const popupContent = `
+                        <strong>${r.settlement}</strong>: ${r.address}<br>
+                        Лояльность: <strong>${loyaltyText}</strong><br>
+                        Действие: ${r.action}<br>
+                        Агитатор: ${r.reporterId}<br>
+                        ${r.comment ? `Комментарий: <em>${r.comment}</em>` : ''}
+                    `;
+
+                    const marker = L.marker([r.latitude, r.longitude], { icon: markerIcon })
+                        .bindPopup(popupContent);
+                        
+                    markers.push(marker);
+                }
+            });
+            
+            if (hasGeoData) {
+                 markerClusterGroup.addLayers(markers);
+
+                 // Автоматическое центрирование карты по всем маркерам
+                 try {
+                     mapInstance.fitBounds(markerClusterGroup.getBounds());
+                 } catch (e) {
+                      // Если маркер один, getBounds может не сработать. Центрируем на первом.
+                     if (markers.length > 0) mapInstance.setView(markers[0].getLatLng(), 13);
+                 }
+               
+            } else {
+                 document.getElementById('map').innerHTML = `<div class="p-6 text-gray-500">Нет данных с геолокацией для отображения на карте.</div>`;
+            }
+
+            mapInstance.invalidateSize();
         }
 
-        async function fetchAndRenderReports() {
-            if (!db || !isAdmin) {
-                 document.getElementById('reportsListContainer').innerHTML = `<div class="card p-6 text-red-500"><p>Доступ запрещен. Вам нужно быть авторизованным админом.</p></div>`;
-                return;
-            }
+        async function fetchAllReportsForMap() {
+            if (!db || !isAdmin) return;
             
-            const reportsListContainer = document.getElementById('reportsListContainer');
-            reportsListContainer.innerHTML = `
-                <div class="card p-6 text-center text-gray-500">
-                    <i data-lucide="loader-2" class="w-8 h-8 mx-auto animate-spin"></i>
-                    <p class="mt-2">Загрузка всех отчетов...</p>
-                </div>
-            `;
-            lucide.createIcons();
-
+             // Тут можно добавить индикатор загрузки для карты, если нужно
+            
             try {
                 const reportsCol = collection(db, "reports");
+                // Запрос без фильтрации для карты
                 const q = query(reportsCol, orderBy("timestamp", "desc")); 
 
                 const reportSnapshot = await getDocs(q);
@@ -593,194 +534,19 @@
                     };
                 });
                 
-                populateReportFilters();
-                filterAndRenderReports(); 
+                generateMap(); 
 
             } catch (e) {
-                console.error("Error fetching reports: ", e);
-                window.showAlert('Ошибка', `Не удалось загрузить отчеты. Проверьте правила безопасности Firestore: ${e.message}`);
-                reportsListContainer.innerHTML = `<div class="card p-6 text-red-500">
-                    <p>Ошибка загрузки данных. Проверьте права доступа в Firebase (Security Rules).</p>
-                </div>`;
+                console.error("Error fetching reports for map: ", e);
+                window.showAlert('Ошибка', `Не удалось загрузить отчеты для карты: ${e.message}`);
             }
         }
 
-        function renderLoyaltyChart(reportList) {
-            if (loyaltyChartInstance) loyaltyChartInstance.destroy();
-            const loyaltyCounts = { strong: 0, moderate: 0, neutral: 0, against: 0 };
-            reportList.forEach(report => {
-                if (loyaltyCounts.hasOwnProperty(report.loyalty)) loyaltyCounts[report.loyalty]++;
-            });
-            const labels = ['Сильная', 'Умеренная', 'Нейтрально', 'Против'];
-            const data = [loyaltyCounts.strong, loyaltyCounts.moderate, loyaltyCounts.neutral, loyaltyCounts.against];
-            const backgroundColors = ['#10b981', '#fcd34d', '#9ca3af', '#ef4444'];
-            const ctx = document.getElementById('loyaltyChart').getContext('2d');
-            loyaltyChartInstance = new Chart(ctx, {
-                type: 'pie',
-                data: { labels: labels, datasets: [{ data: data, backgroundColor: backgroundColors, hoverOffset: 4 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { padding: 10 } }, title: { display: false } } }
-            });
-        }
-
-        function renderActionChart(reportList) {
-            if (actionChartInstance) actionChartInstance.destroy();
-            const actionCounts = {};
-            reportList.forEach(report => {
-                const action = report.action || 'Не указано';
-                actionCounts[action] = (actionCounts[action] || 0) + 1;
-            });
-            const labels = Object.keys(actionCounts);
-            const data = Object.values(actionCounts);
-            const backgroundColors = labels.map(label => {
-                if (label === 'Опрос') return '#22c55e';
-                if (label === 'Агитация') return '#3b82f6';
-                if (label === 'Жалоба') return '#f97316';
-                return '#9ca3af';
-            });
-            const ctx = document.getElementById('actionChart').getContext('2d');
-            actionChartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: { labels: labels, datasets: [{ label: 'Количество действий', data: data, backgroundColor: backgroundColors, borderWidth: 1 }] },
-                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false }, title: { display: false } } }
-            });
-        }
-
-        function renderReportsList(reportList) {
-            const reportsListContainer = document.getElementById('reportsListContainer');
-            const totalCount = reportList.length;
-
-            if (totalCount === 0) {
-                reportsListContainer.innerHTML = `<div class="card p-6 text-gray-500"><p>Отчетов пока нет, или они не соответствуют выбранному фильтру.</p></div>`;
-                return;
-            }
-
-            reportsListContainer.innerHTML = `
-                <div class="card p-6 mt-4">
-                    <h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Детализация (${totalCount} записей)</h3>
-                    
-                    <div class="mt-4 space-y-3 max-h-[60vh] overflow-y-auto">
-                        ${reportList.map(r => 
-                            `<div class="p-4 border rounded-lg shadow-sm bg-gray-50 transition duration-150 hover:shadow-md">
-                                <div class="flex justify-between items-start mb-1">
-                                    <strong class="text-indigo-600">${r.settlement}</strong>
-                                    <span class="text-xs text-gray-500">${r.date} ${r.time}</span>
-                                </div>
-                                <p class="text-sm text-gray-800 mb-1">${r.address}</p>
-                                <p class="text-xs">
-                                    Лояльность: 
-                                    <span class="font-medium ${r.loyalty === 'strong' ? 'text-green-600' : r.loyalty === 'against' ? 'text-red-600' : 'text-yellow-600'}">
-                                        ${r.loyalty}
-                                    </span> 
-                                    / Действие: <span class="font-medium text-blue-600">${r.action}</span>
-                                </p>
-                                ${r.comment ? `<p class="mt-2 text-sm italic text-gray-600 border-t pt-2">Комментарий: ${r.comment}</p>` : ''}
-                            </div>`
-                        ).join('')}
-                    </div>
-                </div>
-            `;
-            lucide.createIcons();
-        }
-        
-        function exportReportsToCSV() {
-            if (!latestReportData || latestReportData.length === 0) {
-                window.showAlert('Ошибка', 'Нет данных для экспорта. Загрузите отчеты.');
-                return;
-            }
-
-            const reportList = latestReportData;
-            const headers = [
-                'ID Агитатора', 'Дата/Время', 'Населенный пункт', 'Адрес', 
-                'Действие', 'Лояльность', 'Комментарий', 'Широта', 'Долгота'
-            ].join(';');
-            
-            const csvRows = reportList.map(report => {
-                return [
-                    `"${report.reporterId}"`,
-                    `"${report.date} ${report.time}"`,
-                    `"${report.settlement}"`,
-                    `"${report.address}"`,
-                    `"${report.action}"`,
-                    `"${report.loyalty}"`,
-                    `"${report.comment ? report.comment.replace(/"/g, '""') : ''}"`,
-                    report.latitude || '',
-                    report.longitude || ''
-                ].join(';');
-            });
-
-            const csvContent = headers + '\n' + csvRows.join('\n');
-            const blob = new Blob([ '\ufeff', csvContent ], { type: 'text/csv;charset=utf-8;' });
-            
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `Отчет_Агитатор_${new Date().toISOString().slice(0, 10)}.csv`;
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            window.showAlert('Успех', `Экспортировано ${reportList.length} записей в файл CSV.`);
-        }
-
-        let mapInstance = null;
-        let currentHeatmap = null;
-
-        function generateMap() {
-            const mapContainer = document.getElementById('map');
-            
-            if (!mapInstance) {
-                 mapInstance = L.map('map').setView([61.0, 73.0], 9); 
-                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 18,
-                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                 }).addTo(mapInstance);
-            }
-            
-            if (currentHeatmap) currentHeatmap.remove();
-            
-            const heatPoints = [];
-            let hasGeoData = false;
-            
-            latestReportData.forEach(r => {
-                if (r.latitude && r.longitude) {
-                    hasGeoData = true;
-                    let weight = 0.5;
-                    // Чем больше "против" (against), тем выше вес (более яркое пятно)
-                    if (r.loyalty === 'against') weight = 2.0; 
-                    else if (r.loyalty === 'strong') weight = 0.1; 
-                    else if (r.loyalty === 'neutral') weight = 1.0; 
-                    
-                    heatPoints.push([r.latitude, r.longitude, weight]);
-                }
-            });
-            
-            if (hasGeoData) {
-                currentHeatmap = L.heatLayer(heatPoints, {
-                    radius: 25,
-                    blur: 15,
-                    maxZoom: 17,
-                    max: 2.0, 
-                }).addTo(mapInstance);
-                
-                try {
-                    const latLngs = heatPoints.map(p => [p[0], p[1]]);
-                    mapInstance.fitBounds(L.latLngBounds(latLngs));
-                } catch (e) { /* ignore error with one point */ }
-               
-            } else {
-                 mapContainer.innerHTML = `<div class="p-6 text-gray-500">Нет данных с геолокацией для отображения на карте.</div>`;
-            }
-
-            mapInstance.invalidateSize();
-        }
 
         // ----------------------------------------------------------------------------------
         // ФУНКЦИИ ИНТЕРФЕЙСА И ГЛАВНЫЙ БЛОК
         // ----------------------------------------------------------------------------------
         
-        let currentLatitude = null;
-        let currentLongitude = null;
-
         function showSection(sectionId) {
             document.querySelectorAll('.content-section').forEach(section => {
                 section.classList.add('hidden');
@@ -795,9 +561,10 @@
                 sectionButton.classList.add('active');
             }
 
-            if (sectionId === 'map-view' && mapInstance) {
+            if (sectionId === 'map-view') {
+                 // Асинхронно загружаем данные и рендерим карту только при переходе
                 setTimeout(() => {
-                    generateMap(); 
+                     fetchAllReportsForMap(); 
                 }, 200);
             }
         }
@@ -814,24 +581,30 @@
             document.getElementById('alertModal').classList.add('hidden');
             document.getElementById('alertModal').classList.remove('flex');
         }
+        
+        function determineInitialView() {
+            const initialView = getUrlParameter('view');
+            const mapBtn = document.getElementById('btn-map-view');
+            
+            if (!isAdmin) {
+                if (mapBtn) mapBtn.style.display = 'none'; // Скрыть кнопку "Карта"
+                return 'form';
+            } else if (initialView === 'reports' || initialView === 'map') {
+                return 'map-view';
+            }
+            return 'form'; // По умолчанию
+        }
+
 
         window.onload = async () => {
-            // 0. Назначаем глобальные функции
             window.showAlert = showAlert;
             window.closeAlert = closeAlert;
             window.showSection = showSection;
             window.getGeolocation = getGeolocation;
             window.saveSurveyData = saveSurveyData;
-            window.fetchAndRenderReports = fetchAndRenderReports;
-            window.generateMap = generateMap;
-            window.filterAndRenderReports = filterAndRenderReports;
-            window.exportReportsToCSV = exportReportsToCSV; 
 
-            // Улучшение 9: PWA Service Worker Registration
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/sw.js').then(function(registration) {
-                    console.log('Service Worker registered with scope:', registration.scope);
-                }).catch(function(error) {
+                navigator.serviceWorker.register('/sw.js').catch(function(error) {
                     console.error('Service Worker registration failed:', error);
                 });
             }
@@ -847,20 +620,9 @@
             const isAuthenticated = await authenticateUser();
             
             if (isAuthenticated) {
-                const reportBtn = document.getElementById('btn-reports');
-                const mapBtn = document.getElementById('btn-map-view');
-                
-                if (!isAdmin) {
-                    if (reportBtn) reportBtn.style.display = 'none';
-                    if (mapBtn) mapBtn.style.display = 'none';
-                    showSection('form');
-                } else {
-                    if (reportBtn) reportBtn.style.display = '';
-                    if (mapBtn) mapBtn.style.display = '';
-                    showSection('reports');
-                    await fetchAndRenderReports(); 
-                    generateMap(); 
-                }
+                 // Устанавливаем секцию в зависимости от URL-параметра и роли
+                 const initialSection = determineInitialView();
+                 showSection(initialSection);
             } else {
                  showSection('form');
                  document.getElementById('saveButton').disabled = true;
