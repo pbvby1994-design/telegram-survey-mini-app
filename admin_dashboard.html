@@ -8,631 +8,156 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
-    <script src="https://api-maps.yandex.ru/2.1/?apikey=ВАШ_КЛЮЧ_API&lang=ru_RU&onload=initMap" type="text/javascript"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <script src="https://api-maps.yandex.ru/2.1/?apikey=35d34bfb-514d-42c1-b37d-cb751ea4793e&lang=ru_RU&onload=initMap" type="text/javascript"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
-    <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-    <script src="https://unpkg.com/leaflet-yandex-tiles/leaflet-yandex.js"></script>
-
-    <link rel="manifest" href="/manifest.json">
-
     <style>
-        body { 
-            font-family: 'Jost', sans-serif;
-            background-color: #f4f6f9;
+        body { font-family: 'Jost', sans-serif; background-color: #f4f6f9; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .tab-link {
+            padding: 8px 12px;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 8px;
+            transition: background-color 0.15s, color 0.15s;
+            cursor: pointer;
         }
-        .card {
-            background-color: #ffffff;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-            padding: 20px;
+        .tab-link.active {
+            background-color: #4f46e5; /* indigo-600 */
+            color: #ffffff;
         }
-        .tab-button {
-            transition: all 0.2s;
-            border-bottom: 3px solid transparent;
+        .tab-link:not(.active) {
+            color: #4b5563; /* gray-600 */
+            background-color: #f3f4f6; /* gray-100 */
         }
-        .tab-button.active {
-            border-bottom-color: #4f46e5;
-            color: #4f46e5;
-            font-weight: 600;
-        }
-        #map { height: 70vh; border-radius: 8px; 
-        }
-        .content-section { animation: fadeIn 0.3s ease-in-out;
-        }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px);
-        } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="min-h-screen">
-<div id="map-container" style="width: 100%; height: 500px;"></div>
-<button onclick="changeRole()">Сменить роль</button>
-<script type="module" src="firebase-auth.js"></script>
-<script type="module" src="main.js"></script>
-    <header class="bg-indigo-600 shadow-md p-4 text-white">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold">Блокнот Агитатора</h1>
-            <div class="flex space-x-4">
-                <button onclick="showSection('form')" class="tab-button active hover:text-indigo-200" id="btn-form">
-                    <i data-lucide="notebook-pen" class="w-5 h-5 inline-block mr-1"></i>Ввод данных
-                </button>
-                <button onclick="showSection('map-view')" class="tab-button hover:text-indigo-200" id="btn-map-view">
-                    <i data-lucide="map" class="w-5 h-5 inline-block mr-1"></i>Карта
-                </button>
-                <button onclick="window.location.href='/index.html' + window.location.search + window.location.hash" class="tab-button hover:text-indigo-200">
-                    <i data-lucide="log-out" class="w-5 h-5 inline-block mr-1"></i>Сменить роль
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <main class="container mx-auto p-4 md:p-8">
-       
-        <section id="form" class="content-section">
-            <div class="card p-6">
-                <h2 class="text-2xl font-semibold text-gray-800 mb-6 border-b pb-2">Запись Опроса</h2>
-                <form id="surveyForm" onsubmit="saveSurveyData(event)">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        
-                        <div class="space-y-2">
-                            <label for="settlement" class="block text-sm font-medium text-gray-700">Населенный пункт</label>
-                            <select id="settlement" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"></select>
-                        </div>
-                        
-                        <div class="space-y-2">
-                            <label for="address" class="block text-sm font-medium text-gray-700">Адрес (Улица и Дом)</label>
-                            <input type="text" id="address" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2" placeholder="Улица, Дом">
-                        </div>
-                        
-                        <div class="space-y-2">
-                            <label for="loyalty" class="block text-sm font-medium text-gray-700">Лояльность кандидата</label>
-                            <select id="loyalty" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
-                                <option value="" disabled selected>Выберите уровень</option>
-                                <option value="strong">Сильная (ДА)</option>
-                                <option value="moderate">Умеренная (СКОРЕЕ ДА)</option>
-                                <option value="neutral">Нейтрально (НЕ ЗНАЮ)</option>
-                                <option value="against">Против (НЕТ)</option>
-                            </select>
-                        </div>
-            
-                        <div class="space-y-2 col-span-full md:col-span-1">
-                            <label for="action" class="block text-sm font-medium text-gray-700">Целевое действие</label>
-                            <select id="action" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
-                                <option value="" disabled selected>Выберите действие</option>
-                                <option value="Опрос">Опрос</option>
-                                <option value="Агитация">Агитация</option>
-                                <option value="Жалоба">Жалоба/Запрос</option>
-                            </select>
-                        </div>
-                        
-                        <div class="space-y-2 col-span-full">
-                            <label for="comment" class="block text-sm font-medium text-gray-700">Комментарий / Запрос (дополнительно)</label>
-                            <textarea id="comment" rows="3" class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"></textarea>
-                        </div>
-                        
-                        <div class="space-y-2 col-span-full">
-                            <label for="geolocation" class="block text-sm font-medium text-gray-700">
-                                Геолокация 
-                                <span id="geoStatus" class="ml-2 text-xs text-gray-500">
-                                    (Нажмите кнопку ниже)
-                                </span>
-                            </label>
-                            <div class="flex space-x-2">
-                                <input type="text" id="geolocation" placeholder="Широта, Долгота" readonly class="w-full bg-gray-50 border-gray-300 rounded-md shadow-sm p-2">
-                                <button type="button" onclick="getGeolocation()" class="flex-shrink-0 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition-colors">
-                                    <i data-lucide="locate" class="w-5 h-5 inline-block mr-1"></i>
-                                    Определить & Адрес
-                                </button>
-                            </div>
-                        </div>
-
-                    </div>
-                    
-                    <div class="mt-8">
-                        <button type="submit" id="saveButton" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-colors disabled:opacity-50" disabled>
-                            <i data-lucide="save" class="w-5 h-5 inline-block mr-2"></i>
-                            Сохранить Запись
-                        </button>
-                    </div>
-                </form>
-                
-                <div class="mt-4 text-xs text-gray-500 border-t pt-4">
-                    <p>Статус Админа: <span id="debugAdminStatus" class="font-bold text-red-500">НЕ ПОДКЛЮЧЕНО</span></p>
-                    <p>Telegram ID (Auth UID): <span id="debugUserId">Загрузка...</span></p>
-                    <p>Статус сохранения: <span id="saveStatus" class="font-bold">Готов</span></p>
+    <div class="container mx-auto p-4 max-w-4xl">
+        <header class="bg-white shadow-md rounded-lg p-4 mb-6">
+            <div class="flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-indigo-600 flex items-center">
+                    <i data-lucide="notebook-pen" class="w-6 h-6 mr-2"></i>
+                    Блокнот Агитатора
+                </h1>
+                <div class="text-sm text-gray-600">
+                    Статус: <span id="role-status" class="font-semibold">Загрузка...</span>
                 </div>
             </div>
-        </section>
 
-        <section id="map-view" class="content-section hidden">
-            <div class="card p-6">
-                <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Карта Активности (Точки агитации)</h2>
-                <div id="map"></div>
-                <p class="mt-4 text-sm text-gray-600">На карте отображаются все точки активности агитаторов. Красные маркеры - негативная лояльность.</p>
-            </div>
-        </section>
-
-    </main>
-    
-    <div id="alertModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden items-center justify-center z-[1000]">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center">
-            <h3 id="alertTitle" class="text-xl font-bold text-gray-900 mb-3">ВНИМАНИЕ</h3>
-            <p id="alertMessage" class="text-gray-700 mb-6">Сообщение.</p>
-            <div id="alertButtons" class="flex justify-center space-x-4">
-                <button id="alertOkBtn" onclick="window.closeAlert()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-lg transition-colors">
-                    ОК
+            <div class="mt-4 pt-3 border-t flex justify-between items-center">
+                <button
+                    id="changeRoleButton"
+                    onclick="changeRole()"
+                    class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm py-1 px-3 rounded-md transition duration-150"
+                >
+                    <i data-lucide="shuffle" class="w-4 h-4 inline mr-1"></i>
+                    Сменить роль
                 </button>
+                <div class="text-xs text-red-500" id="auth-error-message"></div>
+            </div>
+
+            <nav id="admin-nav" class="mt-4 hidden p-1 bg-gray-100 rounded-xl space-x-1">
+                <a href="javascript:void(0)" onclick="switchView('map-view')" id="tab-map-view" class="tab-link active">Карта</a>
+                <a href="javascript:void(0)" onclick="switchView('reports-list')" id="tab-reports-list" class="tab-link">Отчеты</a>
+                <a href="javascript:void(0)" onclick="switchView('admin-settings')" id="tab-admin-settings" class="tab-link">Настройки</a>
+            </nav>
+
+        </header>
+
+        <div id="map-view" class="tab-content active bg-white p-6 rounded-lg shadow-md min-h-96">
+            <h2 class="text-xl font-semibold mb-4">Карта Агитации</h2>
+            <div id="map-container" class="w-full" style="height: 500px;">
+                <p id="map-loading-status" class="text-center text-gray-500 mt-20">Загрузка карты...</p>
             </div>
         </div>
+
+        <div id="reports-list" class="tab-content">
+             <h2 class="text-xl font-semibold mb-4">Список Отчетов</h2>
+             <div id="reports-table-container" class="bg-white p-6 rounded-lg shadow-md">
+                 <p>Здесь будет отображаться таблица со всеми отчетами.</p>
+             </div>
+        </div>
+
+        <div id="form" class="tab-content bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold mb-4">Запись Отчета Агитатора</h2>
+            <form id="report-form">
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="topic">Тема разговора</label>
+                    <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="topic" type="text" placeholder="Условия жизни, работа и т.д." required>
+                </div>
+                
+                <button type="submit" id="saveButton" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" disabled>
+                    Сохранить Отчет
+                </button>
+            </form>
+        </div>
+
+        <div id="admin-settings" class="tab-content">
+             <h2 class="text-xl font-semibold mb-4">Настройки Администратора</h2>
+             <div class="bg-white p-6 rounded-lg shadow-md">
+                 <p>Здесь можно будет управлять пользователями или экспортировать данные.</p>
+             </div>
+        </div>
+
     </div>
 
+    <script type="module" src="firebase-auth.js"></script>
+    <script type="module" src="main.js"></script>
 
-    <script type="module">
-        // ----------------------------------------------------------------------------------
-        // ИМПОРТЫ FIREBASE (CDN)
-        // ----------------------------------------------------------------------------------
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, getDocs, orderBy, where, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, signInWithCustomToken, getIdTokenResult } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-
-        // ----------------------------------------------------------------------------------
-        // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И КОНФИГУРАЦИЯ
-        // ----------------------------------------------------------------------------------
-        
-        function getUrlParameter(name) {
-            let value = null;
-            const urlParamsSearch = new URLSearchParams(window.location.search);
-            value = urlParamsSearch.get(name);
-            if (!value && window.location.hash) {
-                const hashParams = new URLSearchParams(window.location.hash.substring(1));
-                value = hashParams.get(name);
-            }
-            return value;
-        }
-
-        const configBase64 = getUrlParameter('firebase_config');
-        const initialAuthToken = getUrlParameter('token'); 
-        const urlUserTelegramId = getUrlParameter('user_id'); 
-        
-        let app = null;
-        let db = null;
-        let auth = null;
-        let userTelegramId = urlUserTelegramId || null;
-        let isAdmin = false; 
-        
-        let allReportsData = []; 
-        
-        const SETTLEMENTS = [
-            'г.п. Лянтор', 'с.п. Русскинская', 'г.п. Федоровский', 'г.п. Барсово', 
-            'г.п. Белый Яр', 'с.п. Лямина', 'с.п. Сытомино', 'с.п. Угут', 
-            'с.п. Ульт-Ягун', 'с.п. Солнечный', 'с.п. Нижнесортымский', 
-            'с.п. Тундрино', 'с.п. Локосово'
-        ];
-        
-        // ----------------------------------------------------------------------------------
-        // ФУНКЦИИ FIREBASE INIT & AUTH
-        // ----------------------------------------------------------------------------------
-        
-        function initializeFirebase() {
-            if (!configBase64) {
-                console.error("Firebase config not found in URL parameters. Initialization failed.");
-                document.getElementById('debugAdminStatus').textContent = "ОШИБКА URL";
-                return false;
-            }
-
-            try {
-                const cleanedBase64 = configBase64.replace(/\s/g, ''); 
-                const decodedConfig = atob(cleanedBase64);
-                const firebaseConfig = JSON.parse(decodedConfig);
-                
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                
-                return true; 
-            } catch (e) {
-                console.error("Failed to decode or initialize Firebase:", e);
-                window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось инициализировать Firebase: ${e.message}`);
-                document.getElementById('debugAdminStatus').textContent = "ОШИБКА INIT";
-                return false;
-            }
-        }
-
-        async function authenticateUser() {
-            const adminStatus = document.getElementById('debugAdminStatus');
-            if (!auth || !initialAuthToken) {
-                adminStatus.textContent = 'ОШИБКА';
-                return false;
-            }
-            
-            try {
-                const userCredential = await signInWithCustomToken(auth, initialAuthToken);
-                const idTokenResult = await getIdTokenResult(userCredential.user);
-                
-                isAdmin = (idTokenResult.claims && (idTokenResult.claims.admin === true || idTokenResult.claims.admin === 'true'));
-                userTelegramId = idTokenResult.claims.telegram_id || userCredential.user.uid;
-
-                document.getElementById('debugUserId').textContent = userTelegramId;
-                document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'ПОЛЬЗОВАТЕЛЬ';
-                document.getElementById('debugAdminStatus').classList.add(isAdmin ? 'text-green-600' : 'text-green-500');
-                
-                document.getElementById('saveButton').disabled = false;
-                return true;
-            } catch (error) {
-                console.error("Firebase Authentication Error:", error);
-                document.getElementById('debugAdminStatus').textContent = 'ОШИБКА';
-                window.showAlert('Ошибка Аутентификации', `Не удалось войти: ${error.code}`);
-                return false;
-            }
-        }
-
-        // ----------------------------------------------------------------------------------
-        // ФУНКЦИИ ФОРМЫ И ГЕОКОДИРОВАНИЕ
-        // ----------------------------------------------------------------------------------
-
-        function populateSettlements() {
-            const select = document.getElementById('settlement');
-            select.innerHTML = '<option value="" disabled selected>Выберите населенный пункт</option>';
-            SETTLEMENTS.forEach(settlement => {
-                const option = document.createElement('option');
-                option.value = settlement;
-                option.textContent = settlement;
-                select.appendChild(option);
-            });
-        }
-
-        async function reverseGeocode(lat, lon) {
-            const NOMINATIM_URL = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
-            
-            try {
-                const response = await fetch(NOMINATIM_URL, {
-                    headers: {
-                        'User-Agent': 'AgitatorApp/1.0 (Telegram Mini App)'
-                    }
-                });
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                const data = await response.json();
-                
-                const address = data.address;
-                let fullAddress = data.display_name;
-                
-                if (address) {
-                    const parts = [
-                        address.road,
-                        address.house_number,
-                        address.postcode,
-                        address.city || address.town || address.village
-                    ].filter(Boolean); 
-                    
-                    fullAddress = parts.join(', ');
-                    if (fullAddress.length < 10) {
-                        fullAddress = data.display_name;
-                    }
-                }
-                
-                return fullAddress;
-            } catch (error) {
-                console.error("Geocoding failed:", error);
-                return "Не удалось определить адрес. Введите вручную.";
-            }
-        }
-
-        let currentLatitude = null;
-        let currentLongitude = null;
-
-        function getGeolocation() {
-            const geoStatus = document.getElementById('geoStatus');
-            geoStatus.textContent = 'Определение...';
-            
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    async (position) => {
-                        currentLatitude = position.coords.latitude; 
-                        currentLongitude = position.coords.longitude;
-                        document.getElementById('geolocation').value = `${currentLatitude.toFixed(6)}, ${currentLongitude.toFixed(6)}`;
-                        geoStatus.textContent = 'Успешно! Ищем адрес...';
-                        
-                        const addressInput = document.getElementById('address');
-                        const address = await reverseGeocode(currentLatitude, currentLongitude);
-                        addressInput.value = address;
-
-                        geoStatus.textContent = 'Успешно!';
-                        geoStatus.classList.remove('text-gray-500', 'text-red-500');
-                        geoStatus.classList.add('text-green-600');
-                    },
-                    (error) => {
-                        currentLatitude = null;
-                        currentLongitude = null;
-                        document.getElementById('geolocation').value = 'Нет данных';
-                        document.getElementById('address').value = '';
-                        geoStatus.textContent = 'Ошибка доступа';
-                        geoStatus.classList.remove('text-gray-500', 'text-green-600');
-                        geoStatus.classList.add('text-red-500');
-                    },
-                    { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
-                );
-            } else {
-                geoStatus.textContent = 'Не поддерживается';
-                showAlert('Ошибка', 'Геолокация не поддерживается вашим устройством/браузером.');
-            }
-        }
-        
-        async function saveSurveyData(event) {
-            event.preventDefault();
-            const saveStatus = document.getElementById('saveStatus');
-
-            if (!db || !userTelegramId) {
-                showAlert('Ошибка', 'Приложение не подключено к базе данных или пользователь не авторизован.');
-                return;
-            }
-            
-            const comment = document.getElementById('comment').value || "";
-            
-            if (comment.length > 500) {
-                showAlert('Ошибка', 'Комментарий слишком длинный (максимум 500 символов).');
-                return;
-            }
-            
-            document.getElementById('saveButton').disabled = true;
-            saveStatus.textContent = '⏳ Отправка...';
-
-            // Разбор геоданных
-            const geo = document.getElementById('geolocation').value.split(',').map(s => s.trim());
-            
-            const data = {
-                reporterId: userTelegramId, 
-                timestamp: Timestamp.fromDate(new Date()), 
-                
-                settlement: document.getElementById('settlement').value,
-                address: document.getElementById('address').value,
-                action: document.getElementById('action').value, 
-                loyalty: document.getElementById('loyalty').value,
-                comment: comment,
-                photo: null, 
-                latitude: geo.length === 2 && geo[0] ? parseFloat(geo[0]) : null,
-                longitude: geo.length === 2 && geo[1] ? parseFloat(geo[1]) : null
-            };
-            
-            try {
-                await addDoc(collection(db, "reports"), data);
-                showAlert('Успех', 'Данные успешно сохранены! Спасибо за работу.');
-                document.getElementById('surveyForm').reset();
-                saveStatus.textContent = '✅ Успешно!';
-                
-                // Сброс геоданных и статуса
-                document.getElementById('geolocation').value = '';
-                document.getElementById('geoStatus').textContent = '(Нажмите кнопку ниже, если нужно)';
-                document.getElementById('geoStatus').classList.remove('text-green-600', 'text-red-500');
-                document.getElementById('geoStatus').classList.add('text-gray-500');
-
-                setTimeout(() => saveStatus.textContent = 'Готов', 3000);
-            } catch (e) {
-                console.error("Error adding document: ", e);
-                showAlert('Ошибка', `Не удалось сохранить данные: ${e.message}. Проверьте правила Firestore.`);
-                saveStatus.textContent = 'Ошибка';
-            } finally {
-                document.getElementById('saveButton').disabled = false;
-            }
-        }
-        
-        // ----------------------------------------------------------------------------------
-        // ФУНКЦИИ КАРТЫ (Маркеры + Яндекс.Карты)
-        // ----------------------------------------------------------------------------------
-        
-        // Создание кастомных иконок
-        const defaultIcon = L.icon({
-            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-        });
-
-        const redIcon = L.icon({
-            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-        });
-        
-        let mapInstance = null;
-        let markerClusterGroup = null;
-
-        function generateMap() {
-             if (!isAdmin) {
-                 document.getElementById('map').innerHTML = `<div class="p-6 text-red-500">Доступ к карте только для Администраторов.</div>`;
-                 return;
-             }
-            
-            if (!mapInstance) {
-                 // Инициализация карты (Центр России: ~61.0, 73.0)
-                 mapInstance = L.map('map').setView([61.0, 73.0], 9); 
-
-                 // Добавляем тайлы Яндекс.Карты
-                 const yandexLayer = L.yandex();
-                 mapInstance.addLayer(yandexLayer);
-
-                 // Инициализация группы кластеров
-                 markerClusterGroup = L.markerClusterGroup({
-                    showCoverageOnHover: false,
-                    maxClusterRadius: 40 // Меньший радиус для лучшей детализации
-                 });
-                 mapInstance.addLayer(markerClusterGroup);
-            }
-
-            // Очищаем предыдущие маркеры
-            markerClusterGroup.clearLayers();
-            
-            const markers = [];
-            let hasGeoData = false;
-            
-            allReportsData.forEach(r => {
-                if (r.latitude && r.longitude) {
-                    hasGeoData = true;
-                    
-                    const loyaltyText = {
-                        'strong': 'Сильная (ДА)', 
-                        'moderate': 'Умеренная (СКОРЕЕ ДА)', 
-                        'neutral': 'Нейтрально (НЕ ЗНАЮ)', 
-                        'against': 'Против (НЕТ)'
-                    }[r.loyalty] || r.loyalty;
-
-                    const markerIcon = r.loyalty === 'against' ? redIcon : defaultIcon;
-                    
-                    const popupContent = `
-                        <strong>${r.settlement}</strong>: ${r.address}<br>
-                        Лояльность: <strong>${loyaltyText}</strong><br>
-                        Действие: ${r.action}<br>
-                        Агитатор: ${r.reporterId}<br>
-                        ${r.comment ? `Комментарий: <em>${r.comment}</em>` : ''}
-                    `;
-
-                    const marker = L.marker([r.latitude, r.longitude], { icon: markerIcon })
-                        .bindPopup(popupContent);
-                        
-                    markers.push(marker);
-                }
-            });
-            
-            if (hasGeoData) {
-                 markerClusterGroup.addLayers(markers);
-
-                 // Автоматическое центрирование карты по всем маркерам
-                 try {
-                     mapInstance.fitBounds(markerClusterGroup.getBounds());
-                 } catch (e) {
-                      // Если маркер один, getBounds может не сработать. Центрируем на первом.
-                     if (markers.length > 0) mapInstance.setView(markers[0].getLatLng(), 13);
-                 }
-               
-            } else {
-                 document.getElementById('map').innerHTML = `<div class="p-6 text-gray-500">Нет данных с геолокацией для отображения на карте.</div>`;
-            }
-
-            mapInstance.invalidateSize();
-        }
-
-        async function fetchAllReportsForMap() {
-            if (!db || !isAdmin) return;
-            
-             // Тут можно добавить индикатор загрузки для карты, если нужно
-            
-            try {
-                const reportsCol = collection(db, "reports");
-                // Запрос без фильтрации для карты
-                const q = query(reportsCol, orderBy("timestamp", "desc")); 
-
-                const reportSnapshot = await getDocs(q);
-                allReportsData = reportSnapshot.docs.map(doc => { 
-                    const data = doc.data();
-                    const timestampDate = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate() : new Date();
-                    return { 
-                        id: doc.id, 
-                        date: timestampDate.toLocaleDateString('ru-RU'),
-                        time: timestampDate.toLocaleTimeString('ru-RU'),
-                        ...data 
-                    };
-                });
-                
-                generateMap(); 
-
-            } catch (e) {
-                console.error("Error fetching reports for map: ", e);
-                window.showAlert('Ошибка', `Не удалось загрузить отчеты для карты: ${e.message}`);
-            }
-        }
-
-
-        // ----------------------------------------------------------------------------------
-        // ФУНКЦИИ ИНТЕРФЕЙСА И ГЛАВНЫЙ БЛОК
-        // ----------------------------------------------------------------------------------
-        
-        function showSection(sectionId) {
-            document.querySelectorAll('.content-section').forEach(section => {
-                section.classList.add('hidden');
-            });
-            document.getElementById(sectionId).classList.remove('hidden');
-
-            document.querySelectorAll('.tab-button').forEach(btn => {
-                btn.classList.remove('active', 'text-indigo-600');
-            });
-            const sectionButton = document.getElementById(`btn-${sectionId}`);
-            if (sectionButton) {
-                sectionButton.classList.add('active');
-            }
-
-            if (sectionId === 'map-view') {
-                 // Асинхронно загружаем данные и рендерим карту только при переходе
-                setTimeout(() => {
-                     fetchAllReportsForMap(); 
-                }, 200);
-            }
-        }
-
-        function showAlert(title, message) {
-            document.getElementById('alertTitle').textContent = title;
-            document.getElementById('alertMessage').textContent = message;
-            
-            document.getElementById('alertModal').classList.remove('hidden');
-            document.getElementById('alertModal').classList.add('flex');
-        }
-
-        function closeAlert() {
-            document.getElementById('alertModal').classList.add('hidden');
-            document.getElementById('alertModal').classList.remove('flex');
-        }
-        
-        function determineInitialView() {
-            const initialView = getUrlParameter('view');
-            const mapBtn = document.getElementById('btn-map-view');
-            
-            if (!isAdmin) {
-                if (mapBtn) mapBtn.style.display = 'none'; // Скрыть кнопку "Карта"
-                return 'form';
-            } else if (initialView === 'reports' || initialView === 'map') {
-                return 'map-view';
-            }
-            return 'form'; // По умолчанию
-        }
-
-
-        window.onload = async () => {
-            window.showAlert = showAlert;
-            window.closeAlert = closeAlert;
-            window.showSection = showSection;
-            window.getGeolocation = getGeolocation;
-            window.saveSurveyData = saveSurveyData;
-
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/sw.js').catch(function(error) {
-                    console.error('Service Worker registration failed:', error);
-                });
-            }
-
-            populateSettlements();
-            lucide.createIcons();
-
-            if (!initializeFirebase()) {
-                 showSection('form');
-                 return;
-            }
-
-            const isAuthenticated = await authenticateUser();
-            
-            if (isAuthenticated) {
-                 // Устанавливаем секцию в зависимости от URL-параметра и роли
-                 const initialSection = determineInitialView();
-                 showSection(initialSection);
-            } else {
-                 showSection('form');
-                 document.getElementById('saveButton').disabled = true;
-            }
+    <script>
+        // Инициализация иконки (для Lucide)
+        window.onload = () => {
+             lucide.createIcons();
         };
+
+        // КОРРЕКТНАЯ ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ВКЛАДОК
+        function switchView(viewId) {
+            document.querySelectorAll('.tab-content').forEach(el => {
+                el.classList.remove('active');
+            });
+            document.getElementById(viewId).classList.add('active');
+
+            // Обновление активной вкладки
+            document.querySelectorAll('.tab-link').forEach(link => {
+                if (link.id === `tab-${viewId}`) {
+                    link.classList.add('active');
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+            
+            // Если переключаемся на карту, вызываем initMap (если она еще не была вызвана)
+            if (viewId === 'map-view' && typeof ymaps !== 'undefined' && window.mapInstance === null) {
+                window.initMap();
+            }
+        }
+        window.switchView = switchView; 
+
+        // КОРРЕКТНАЯ ФУНКЦИЯ СМЕНЫ РОЛИ (для кнопки в шапке)
+        function changeRole() {
+            let currentPath = window.location.pathname;
+            // Перенаправляем на index.html, сохраняя все параметры URL
+            let targetPath = currentPath.replace('admin_dashboard.html', 'index.html');
+            const search = window.location.search;
+            const hash = window.location.hash;
+            window.location.href = `${window.location.origin}${targetPath}${search}${hash}`;
+        }
+        window.changeRole = changeRole; // Делаем функцию доступной глобально
+        
+        // Автоматическое переключение на нужную вкладку при загрузке
+        const initialView = new URLSearchParams(window.location.search).get('view');
+        if (initialView) {
+            switchView(initialView);
+        } else {
+            switchView('form'); // По умолчанию
+        }
     </script>
 </body>
 </html>
-
