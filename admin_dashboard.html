@@ -12,10 +12,6 @@
 
     <script src="https://api-maps.yandex.ru/2.1/?apikey=35d34bfb-514d-42c1-b37d-cb751ea4793e&lang=ru_RU&onload=initMap" type="text/javascript"></script>
 
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/suggestions-jquery@21.12.0/dist/css/suggestions.min.css" rel="stylesheet" />
-    <script src="https://cdn.jsdelivr.net/npm/suggestions-jquery@21.12.0/dist/js/suggestions.min.js"></script>
-
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -56,12 +52,23 @@
             from { opacity: 0; transform: translateY(10px); } 
             to { opacity: 1; transform: translateY(0); } 
         }
-        /* Стили для Dadata */
-        .suggestions-suggestion {
+        /* Стили для ручного Dadata рендеринга */
+        #suggestionsList {
+            position: absolute; /* Позволяет списку перекрывать контент */
+            z-index: 10;
+            max-height: 200px;
+            overflow-y: auto;
+            width: calc(100% - 40px); /* Чтобы соответствовать ширине родительского card */
+        }
+        .suggestion-item {
             padding: 8px;
             cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
         }
-        .suggestions-suggestion.selected {
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+        .suggestion-item:hover {
             background-color: #f3f4f6;
         }
     </style>
@@ -87,8 +94,7 @@
     <main class="container mx-auto p-4 md:p-8">
        
         <section id="form" class="content-section">
-            <div class="card p-6">
-                <h2 class="text-2xl font-semibold text-gray-800 mb-6 border-b pb-2">Запись Опроса</h2>
+            <div class="card p-6 relative"> <h2 class="text-2xl font-semibold text-gray-800 mb-6 border-b pb-2">Запись Опроса</h2>
                 <form id="surveyForm" onsubmit="saveSurveyData(event)">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         
@@ -97,11 +103,13 @@
                             <select id="settlement" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"></select>
                         </div>
                         
-                        <div class="space-y-2">
+                        <div class="space-y-2 col-span-full md:col-span-1">
                             <label for="address" class="block text-sm font-medium text-gray-700">Адрес (Улица, Дом)</label>
-                            <input type="text" id="address" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2" placeholder="Начните вводить адрес (подсказки Dadata)...">
+                            <input type="text" id="address" required 
+                                class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2" 
+                                placeholder="Начните вводить адрес (ручной поиск Dadata)..." autocomplete="off">
+                            <ul id="suggestionsList" class="border rounded bg-white shadow-lg hidden"></ul>
                         </div>
-                        
                         <div class="space-y-2">
                             <label for="loyalty" class="block text-sm font-medium text-gray-700">Лояльность кандидата</label>
                             <select id="loyalty" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
@@ -223,7 +231,6 @@
                 sectionButton.classList.add('active');
             }
 
-            // Запускаем карту при переходе
             if (sectionId === 'map-view' && typeof ymaps !== 'undefined' && !window.mapInstance) {
                  if (typeof window.initMap === 'function') {
                     window.initMap(); 
