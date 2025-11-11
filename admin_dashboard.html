@@ -29,12 +29,12 @@
             cursor: pointer;
         }
         .tab-link.active {
-            background-color: #4f46e5; /* indigo-600 */
+            background-color: #4f46e5; 
             color: #ffffff;
         }
         .tab-link:not(.active) {
-            color: #4b5563; /* gray-600 */
-            background-color: #f3f4f6; /* gray-100 */
+            color: #4b5563; 
+            background-color: #f3f4f6; 
         }
     </style>
 </head>
@@ -88,13 +88,42 @@
         <div id="form" class="tab-content bg-white p-6 rounded-lg shadow-md">
             <h2 class="text-xl font-semibold mb-4">Запись Отчета Агитатора</h2>
             <form id="report-form">
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="settlement">Поселение</label>
+                    <select class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="settlement" required>
+                        <option value="" disabled selected>Выберите поселение</option>
+                        </select>
+                </div>
+
                 <div class="mb-4">
                     <label class="block text-gray-700 text-sm font-bold mb-2" for="topic">Тема разговора</label>
-                    <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="topic" type="text" placeholder="Условия жизни, работа и т.д." required>
+                    <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="topic" type="text" placeholder="Условия жизни, работа, проблемы" required>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="result">Результат беседы (Оценка)</label>
+                    <select class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="result" required>
+                        <option value="Положительно">Положительно (Поддерживает)</option>
+                        <option value="Нейтрально">Нейтрально (Не определился)</option>
+                        <option value="Отрицательно">Отрицательно (Против)</option>
+                    </select>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="comment">Комментарий</label>
+                    <textarea class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="comment" placeholder="Подробности разговора..."></textarea>
+                </div>
+
+                <div class="mb-6 flex items-center justify-between border-t pt-4">
+                    <button type="button" id="locationButton" class="bg-indigo-500 hover:bg-indigo-700 text-white text-sm font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline flex items-center">
+                        <i data-lucide="map-pin" class="w-4 h-4 mr-2"></i> Получить GPS
+                    </button>
+                    <span id="locationStatus" class="text-sm text-gray-600">Ожидание местоположения.</span>
                 </div>
                 
-                <button type="submit" id="saveButton" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" disabled>
-                    Сохранить Отчет
+                <button type="submit" id="saveButton" class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded focus:outline-none focus:shadow-outline" disabled>
+                    <i data-lucide="send" class="w-5 h-5 inline mr-2"></i> Сохранить Отчет
                 </button>
             </form>
         </div>
@@ -112,52 +141,19 @@
     <script type="module" src="main.js"></script>
 
     <script>
-        // Инициализация иконки (для Lucide)
         window.onload = () => {
              lucide.createIcons();
         };
-
-        // КОРРЕКТНАЯ ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ВКЛАДОК
-        function switchView(viewId) {
-            document.querySelectorAll('.tab-content').forEach(el => {
-                el.classList.remove('active');
-            });
-            document.getElementById(viewId).classList.add('active');
-
-            // Обновление активной вкладки
-            document.querySelectorAll('.tab-link').forEach(link => {
-                if (link.id === `tab-${viewId}`) {
-                    link.classList.add('active');
-                } else {
-                    link.classList.remove('active');
-                }
-            });
-            
-            // Если переключаемся на карту, вызываем initMap (если она еще не была вызвана)
-            if (viewId === 'map-view' && typeof ymaps !== 'undefined' && window.mapInstance === null) {
-                window.initMap();
-            }
-        }
-        window.switchView = switchView; 
-
+        
         // КОРРЕКТНАЯ ФУНКЦИЯ СМЕНЫ РОЛИ (для кнопки в шапке)
         function changeRole() {
             let currentPath = window.location.pathname;
-            // Перенаправляем на index.html, сохраняя все параметры URL
             let targetPath = currentPath.replace('admin_dashboard.html', 'index.html');
             const search = window.location.search;
             const hash = window.location.hash;
             window.location.href = `${window.location.origin}${targetPath}${search}${hash}`;
         }
-        window.changeRole = changeRole; // Делаем функцию доступной глобально
-        
-        // Автоматическое переключение на нужную вкладку при загрузке
-        const initialView = new URLSearchParams(window.location.search).get('view');
-        if (initialView) {
-            switchView(initialView);
-        } else {
-            switchView('form'); // По умолчанию
-        }
+        window.changeRole = changeRole; 
     </script>
 </body>
 </html>
