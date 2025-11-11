@@ -1,15 +1,13 @@
-// firebase-auth.js
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-import { getFirestore, Timestamp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
-import { getAuth, signInWithCustomToken, getIdTokenResult } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+// firebase-auth.js (ГЛОБАЛЬНАЯ ВЕРСИЯ)
 
-// --- Глобальные переменные ---
+// --- Глобальные переменные (доступны в main.js) ---
 let app = null;
-export let db = null;
-export let auth = null;
-export let userTelegramId = null;
-export let isAdmin = false; 
-export let token = null;
+window.db = null;
+window.auth = null;
+window.userTelegramId = null;
+window.isAdmin = false;
+
+let token = null;
 
 // Функция для получения параметра из URL
 function getUrlParameter(name) {
@@ -18,70 +16,96 @@ function getUrlParameter(name) {
 }
 
 // ----------------------------------------------------------------------
-// ИНИЦИАЛИЗАЦИЯ
+// ИНИЦИАЛИЗАЦИЯ И ПОЛУЧЕНИЕ ПАРАМЕТРОВ ИЗ URL
 // ----------------------------------------------------------------------
 
-export function initializeFirebase() {
-    const configBase64 = getUrlParameter('firebase_config');
-    token = getUrlParameter('token');
-    userTelegramId = getUrlParameter('user_id');
-
-    if (!configBase64 || !token) {
-        console.error("Missing Firebase Config or Auth Token in URL.");
-        document.getElementById('debugAdminStatus').textContent = "ОШИБКА URL";
+window.initializeFirebase = function() {
+    // Проверка наличия глобального объекта Firebase
+    if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Firebase SDK не загружен. Проверьте подключение CDN в HTML.');
         return false;
     }
+    
+    // 1. Считывание и декодирование конфигурации Firebase
+    const configBase64 = getUrlParameter('firebase_config');
+    token = getUrlParameter('token'); 
+    
+    // Получение user_id и admin_status
+    const url_user_id = getUrlParameter('user_id');
+    const url_is_admin = getUrlParameter('is_admin'); 
+    
+    if (url_user_id) {
+        window.userTelegramId = url_user_id;
+        document.getElementById('debugUserId').textContent = window.userTelegramId;
+    } else {
+        document.getElementById('debugUserId').textContent = 'НЕ АВТОРИЗОВАН';
+        return false; // Прерываем инициализацию, если нет ID
+    }
 
-    try {
-        const cleanedBase64 = configBase64.replace(/\s/g, '');
-        const decodedConfig = atob(cleanedBase64);
-        const firebaseConfig = JSON.parse(decodedConfig);
+    if (url_is_admin) {
+        // Устанавливаем статус админа из URL (этот статус может быть переопределен токеном)
+        window.isAdmin = (url_is_admin.toLowerCase() === 'true');
+    }
 
-        app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        db = getFirestore(app);
-        
-        return true;
-    } catch (e) {
-        console.error("Firebase Initialization Failed:", e);
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось инициализировать Firebase: ${e.message}`);
-        document.getElementById('debugAdminStatus').textContent = "ОШИБКА INIT";
+    if (configBase64) {
+        try {
+            const decodedConfig = JSON.parse(atob(configBase64));
+            
+            // 2. Инициализация Firebase (v8 Syntax)
+            app = firebase.initializeApp(decodedConfig);
+            window.db = firebase.firestore(app);
+            window.auth = firebase.auth(app);
+            
+            return true;
+        } catch (e) {
+            console.error("Firebase config error:", e);
+            window.showAlert('Ошибка Конфигурации', 'Не удалось декодировать Firebase config.');
+            return false;
+        }
+    } else {
+        window.showAlert('Ошибка Конфигурации', 'Параметр firebase_config отсутствует в URL.');
         return false;
     }
 }
 
 // ----------------------------------------------------------------------
-// АУТЕНТИФИКАЦИЯ
+// АУТЕНТИФИКАЦИЯ С ПОМОЩЬЮ CUSTOM TOKEN
 // ----------------------------------------------------------------------
 
-export async function authenticateUser() {
-    const adminStatus = document.getElementById('debugAdminStatus');
-    if (!auth || !token) {
-        adminStatus.textContent = 'ОШИБКА';
+window.authenticateUser = async function() {
+    if (!window.auth) return false;
+    
+    // 1. Проверка наличия токена
+    if (!token) {
+        console.warn("Custom token not found in URL.");
+        document.getElementById('saveButton').disabled = true;
+        document.getElementById('debugAdminStatus').textContent = "ОТКАЗ (Нет токена)";
         return false;
     }
     
     try {
-        const userCredential = await signInWithCustomToken(auth, token);
-        const idTokenResult = await getIdTokenResult(userCredential.user);
+        // 2. Аутентификация с помощью Custom Token (v8 Syntax)
+        const userCredential = await window.auth.signInWithCustomToken(token);
         
-        // Проверяем Claims (флаг admin)
+        // 3. Получение Claims (проверка флага админа из токена)
+        const idTokenResult = await userCredential.user.getIdTokenResult();
+        
+        // Перезаписываем isAdmin на основе Claims
         if (idTokenResult.claims && idTokenResult.claims.admin) {
-            const tokenAdmin = idTokenResult.claims.admin;
-            isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
+             const tokenAdmin = idTokenResult.claims.admin;
+             // Снова проверяем, что 'true' (string) -> true (boolean)
+             window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
         }
         
-        userTelegramId = idTokenResult.claims.telegram_id || userCredential.user.uid;
-        
-        document.getElementById('debugUserId').textContent = userTelegramId;
-        document.getElementById('debugAdminStatus').textContent = isAdmin ? 'ДА' : 'ПОЛЬЗОВАТЕЛЬ';
-        document.getElementById('debugAdminStatus').classList.add(isAdmin ? 'text-green-600' : 'text-green-500');
+        document.getElementById('debugAdminStatus').textContent = window.isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
+        document.getElementById('saveButton').disabled = false;
         
         return true;
     } catch (error) {
-        console.error("Firebase Authentication Error:", error);
-        window.showAlert('Ошибка Аутентификации', `Не удалось войти: ${error.code}`);
-        adminStatus.textContent = 'ОШИБКА';
+        console.error("Firebase Custom Token Auth failed:", error);
+        window.showAlert('ОШИБКА АУТЕНТИФИКАЦИИ', `Не удалось войти: ${error.message}. Проверьте Custom Token.`);
+        document.getElementById('saveButton').disabled = true;
+        document.getElementById('debugAdminStatus').textContent = "ОШИБКА АВТОРИЗАЦИИ";
         return false;
     }
 }
