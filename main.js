@@ -1,7 +1,8 @@
-// main.js
+// main.js (БЕЗ ИМПОРТОВ, так как type="module" удален в HTML)
 
-import { initializeFirebase, authenticateUser, isAdmin, db, userTelegramId } from './firebase-auth.js';
-import { collection, getDocs, addDoc, query, orderBy, Timestamp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+// Эти переменные должны быть экспортированы в firebase-auth.js и стать глобальными
+// Предполагается, что firebase-auth.js загрузился раньше.
+// const db, isAdmin, userTelegramId - теперь глобальные переменные из firebase-auth.js
 
 // --- Глобальные переменные ---
 window.mapInstance = null; 
@@ -21,16 +22,19 @@ const SETTLEMENTS = [
 ];
 
 // ----------------------------------------------------------------------
-// 1. ИНТЕГРАЦИЯ DADATA (ИСПРАВЛЕНО)
+// 1. ИНТЕГРАЦИЯ DADATA 
 // ----------------------------------------------------------------------
 
 function initDadata() {
-    // ВНИМАНИЕ: Если jQuery и Dadata правильно подключены в HTML, 
-    // этот код должен работать. Если нет, появится ошибка в консоли.
+    // Теперь JQuery $ и функция suggestions должны быть доступны
+    if (typeof $ === 'undefined' || typeof $.fn.suggestions === 'undefined') {
+        console.warn("Dadata Suggestions или jQuery не загружены. Проверьте HTML.");
+        return;
+    }
+    
     $("#address").suggestions({
         token: DADATA_API_KEY,
         type: "ADDRESS",
-        // Ограничиваем поиск Сургутским районом
         bounds: { "city_area": "Сургутский район" }, 
         onSelect: function(suggestion) {
             if (suggestion.data.geo_lat && suggestion.data.geo_lon) {
@@ -98,11 +102,13 @@ window.saveSurveyData = async function(event) {
     event.preventDefault();
     const saveStatus = document.getElementById('saveStatus');
 
-    if (!db || !userTelegramId) {
-        window.showAlert('Ошибка', 'Приложение не подключено к базе данных или пользователь не авторизован.');
+    // !!! ВАЖНО: Функции Firebase теперь вызываются глобально !!!
+    // Предполагается, что 'db' и 'userTelegramId' доступны глобально
+    if (typeof db === 'undefined' || typeof userTelegramId === 'undefined') {
+        window.showAlert('Ошибка', 'Приложение не подключено к базе данных (db или userTelegramId не найдены).');
         return;
     }
-    
+
     document.getElementById('saveButton').disabled = true;
     saveStatus.textContent = '⏳ Отправка...';
 
@@ -116,7 +122,8 @@ window.saveSurveyData = async function(event) {
 
     const data = {
         reporterId: userTelegramId, 
-        timestamp: Timestamp.fromDate(new Date()), 
+        // Здесь используется глобальный Timestamp, который должен быть в зоне видимости
+        timestamp: firebase.firestore.Timestamp.fromDate(new Date()), 
         
         settlement: document.getElementById('settlement').value,
         address: document.getElementById('address').value,
@@ -133,7 +140,8 @@ window.saveSurveyData = async function(event) {
              throw new Error("Не все обязательные поля заполнены.");
         }
         
-        await addDoc(collection(db, "reports"), data);
+        // Здесь используется глобальный db и addDoc
+        await db.collection("reports").add(data);
         window.showAlert('Успех', 'Данные успешно сохранены! Спасибо за работу.');
         
         document.getElementById('surveyForm').reset();
@@ -156,7 +164,7 @@ window.saveSurveyData = async function(event) {
 }
 
 // ----------------------------------------------------------------------
-// 2. ЛОГИКА КАРТЫ (Админ) (Без изменений)
+// 2. ЛОГИКА КАРТЫ (Админ) (Без изменений, но использует глобальный 'isAdmin')
 // ----------------------------------------------------------------------
 
 window.initMap = async function() {
@@ -175,6 +183,7 @@ window.initMap = async function() {
     
     document.getElementById('map-loading-status').style.display = 'none';
     
+    // Использует глобальный isAdmin
     if (isAdmin) {
         await fetchAndLoadReportsToMap();
     } else {
@@ -183,7 +192,7 @@ window.initMap = async function() {
 };
 
 async function fetchAndLoadReportsToMap() {
-    if (!db || !window.mapInstance) return;
+    if (typeof db === 'undefined' || !window.mapInstance) return;
     
     try {
         if (window.objectManager) {
@@ -196,9 +205,8 @@ async function fetchAndLoadReportsToMap() {
             window.mapInstance.geoObjects.add(window.objectManager);
         }
         
-        const reportsCollection = collection(db, "reports");
-        const q = query(reportsCollection, orderBy("timestamp", "desc"));
-        const snapshot = await getDocs(q);
+        // Использует глобальный db
+        const snapshot = await db.collection("reports").orderBy("timestamp", "desc").get();
         const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         if (reports.length === 0) {
@@ -277,6 +285,13 @@ window.onload = async () => {
     lucide.createIcons();
     document.getElementById('saveButton').disabled = true;
 
+    // !!! ВАЖНО: Функции initializeFirebase и authenticateUser должны быть доступны !!!
+    if (typeof initializeFirebase === 'undefined' || typeof authenticateUser === 'undefined') {
+         window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Проверьте подключение Firebase в HTML. Скрипт firebase-auth не найден.');
+         showSection('form');
+         return;
+    }
+    
     if (!initializeFirebase()) {
          showSection('form');
          return;
@@ -285,6 +300,7 @@ window.onload = async () => {
     const isAuthenticated = await authenticateUser();
     
     if (isAuthenticated) {
+         // Использует глобальный isAdmin
          if (isAdmin) {
              document.getElementById('btn-map-view').style.display = 'inline-block';
          }
