@@ -16,144 +16,218 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
+    <link rel="manifest" href="/manifest.json">
+
     <style>
-        body { font-family: 'Jost', sans-serif; background-color: #f4f6f9; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .tab-link {
-            padding: 8px 12px;
-            font-size: 14px;
-            font-weight: 500;
-            border-radius: 8px;
-            transition: background-color 0.15s, color 0.15s;
-            cursor: pointer;
+        body { 
+            font-family: 'Jost', sans-serif;
+            background-color: #f4f6f9;
         }
-        .tab-link.active {
-            background-color: #4f46e5; 
-            color: #ffffff;
+        .card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            padding: 20px;
         }
-        .tab-link:not(.active) {
-            color: #4b5563; 
-            background-color: #f3f4f6; 
+        .tab-button {
+            transition: all 0.2s;
+            border-bottom: 3px solid transparent;
+        }
+        .tab-button.active {
+            border-bottom-color: #4f46e5;
+            color: #4f46e5;
+            font-weight: 600;
+        }
+        /* Используем #map-container для Яндекс Карт */
+        #map-container { 
+            height: 70vh; 
+            border-radius: 8px; 
+        }
+        .content-section { 
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        .content-section.hidden {
+            display: none;
+        }
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: translateY(10px); } 
+            to { opacity: 1; transform: translateY(0); } 
         }
     </style>
 </head>
 <body class="min-h-screen">
-    <div class="container mx-auto p-4 max-w-4xl">
-        <header class="bg-white shadow-md rounded-lg p-4 mb-6">
-            <div class="flex justify-between items-center">
-                <h1 class="text-2xl font-bold text-indigo-600 flex items-center">
-                    <i data-lucide="notebook-pen" class="w-6 h-6 mr-2"></i>
-                    Блокнот Агитатора
-                </h1>
-                <div class="text-sm text-gray-600">
-                    Статус: <span id="role-status" class="font-semibold">Загрузка...</span>
-                </div>
-            </div>
-
-            <div class="mt-4 pt-3 border-t flex justify-between items-center">
-                <button
-                    id="changeRoleButton"
-                    onclick="changeRole()"
-                    class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm py-1 px-3 rounded-md transition duration-150"
-                >
-                    <i data-lucide="shuffle" class="w-4 h-4 inline mr-1"></i>
-                    Сменить роль
+    <header class="bg-indigo-600 shadow-md p-4 text-white">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold">Блокнот Агитатора</h1>
+            <div class="flex space-x-4">
+                <button onclick="showSection('form')" class="tab-button active hover:text-indigo-200" id="btn-form">
+                    <i data-lucide="notebook-pen" class="w-5 h-5 inline-block mr-1"></i>Ввод данных
                 </button>
-                <div class="text-xs text-red-500" id="auth-error-message"></div>
-            </div>
-
-            <nav id="admin-nav" class="mt-4 hidden p-1 bg-gray-100 rounded-xl space-x-1">
-                <a href="javascript:void(0)" onclick="switchView('map-view')" id="tab-map-view" class="tab-link active">Карта</a>
-                <a href="javascript:void(0)" onclick="switchView('reports-list')" id="tab-reports-list" class="tab-link">Отчеты</a>
-                <a href="javascript:void(0)" onclick="switchView('admin-settings')" id="tab-admin-settings" class="tab-link">Настройки</a>
-            </nav>
-
-        </header>
-
-        <div id="map-view" class="tab-content active bg-white p-6 rounded-lg shadow-md min-h-96">
-            <h2 class="text-xl font-semibold mb-4">Карта Агитации</h2>
-            <div id="map-container" class="w-full" style="height: 500px;">
-                <p id="map-loading-status" class="text-center text-gray-500 mt-20">Загрузка карты...</p>
-            </div>
-        </div>
-
-        <div id="reports-list" class="tab-content">
-             <h2 class="text-xl font-semibold mb-4">Список Отчетов</h2>
-             <div id="reports-table-container" class="bg-white p-6 rounded-lg shadow-md">
-                 <p>Здесь будет отображаться таблица со всеми отчетами.</p>
-             </div>
-        </div>
-
-        <div id="form" class="tab-content bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-xl font-semibold mb-4">Запись Отчета Агитатора</h2>
-            <form id="report-form">
-                
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2" for="settlement">Поселение</label>
-                    <select class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="settlement" required>
-                        <option value="" disabled selected>Выберите поселение</option>
-                        </select>
-                </div>
-
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2" for="topic">Тема разговора</label>
-                    <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="topic" type="text" placeholder="Условия жизни, работа, проблемы" required>
-                </div>
-
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2" for="result">Результат беседы (Оценка)</label>
-                    <select class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="result" required>
-                        <option value="Положительно">Положительно (Поддерживает)</option>
-                        <option value="Нейтрально">Нейтрально (Не определился)</option>
-                        <option value="Отрицательно">Отрицательно (Против)</option>
-                    </select>
-                </div>
-
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2" for="comment">Комментарий</label>
-                    <textarea class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="comment" placeholder="Подробности разговора..."></textarea>
-                </div>
-
-                <div class="mb-6 flex items-center justify-between border-t pt-4">
-                    <button type="button" id="locationButton" class="bg-indigo-500 hover:bg-indigo-700 text-white text-sm font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline flex items-center">
-                        <i data-lucide="map-pin" class="w-4 h-4 mr-2"></i> Получить GPS
-                    </button>
-                    <span id="locationStatus" class="text-sm text-gray-600">Ожидание местоположения.</span>
-                </div>
-                
-                <button type="submit" id="saveButton" class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded focus:outline-none focus:shadow-outline" disabled>
-                    <i data-lucide="send" class="w-5 h-5 inline mr-2"></i> Сохранить Отчет
+                <button onclick="showSection('map-view')" class="tab-button hover:text-indigo-200" id="btn-map-view" style="display: none;">
+                    <i data-lucide="map" class="w-5 h-5 inline-block mr-1"></i>Карта
                 </button>
-            </form>
+                <button onclick="changeRole()" class="tab-button hover:text-indigo-200">
+                    <i data-lucide="shuffle" class="w-5 h-5 inline-block mr-1"></i>Сменить роль
+                </button>
+            </div>
         </div>
+    </header>
 
-        <div id="admin-settings" class="tab-content">
-             <h2 class="text-xl font-semibold mb-4">Настройки Администратора</h2>
-             <div class="bg-white p-6 rounded-lg shadow-md">
-                 <p>Здесь можно будет управлять пользователями или экспортировать данные.</p>
-             </div>
+    <main class="container mx-auto p-4 md:p-8">
+       
+        <section id="form" class="content-section">
+            <div class="card p-6">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-6 border-b pb-2">Запись Опроса</h2>
+                <form id="surveyForm" onsubmit="saveSurveyData(event)">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        
+                        <div class="space-y-2">
+                            <label for="settlement" class="block text-sm font-medium text-gray-700">Населенный пункт</label>
+                            <select id="settlement" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"></select>
+                        </div>
+                        
+                        <div class="space-y-2">
+                            <label for="address" class="block text-sm font-medium text-gray-700">Адрес (Улица и Дом)</label>
+                            <input type="text" id="address" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2" placeholder="Улица, Дом">
+                        </div>
+                        
+                        <div class="space-y-2">
+                            <label for="loyalty" class="block text-sm font-medium text-gray-700">Лояльность кандидата</label>
+                            <select id="loyalty" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
+                                <option value="" disabled selected>Выберите уровень</option>
+                                <option value="strong">Сильная (ДА)</option>
+                                <option value="moderate">Умеренная (СКОРЕЕ ДА)</option>
+                                <option value="neutral">Нейтрально (НЕ ЗНАЮ)</option>
+                                <option value="against">Против (НЕТ)</option>
+                            </select>
+                        </div>
+            
+                        <div class="space-y-2 col-span-full md:col-span-1">
+                            <label for="action" class="block text-sm font-medium text-gray-700">Целевое действие</label>
+                            <select id="action" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
+                                <option value="" disabled selected>Выберите действие</option>
+                                <option value="Опрос">Опрос</option>
+                                <option value="Агитация">Агитация</option>
+                                <option value="Жалоба">Жалоба/Запрос</option>
+                            </select>
+                        </div>
+                        
+                        <div class="space-y-2 col-span-full">
+                            <label for="comment" class="block text-sm font-medium text-gray-700">Комментарий / Запрос (дополнительно)</label>
+                            <textarea id="comment" rows="3" class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"></textarea>
+                        </div>
+                        
+                        <div class="space-y-2 col-span-full">
+                            <label for="geolocation" class="block text-sm font-medium text-gray-700">
+                                Геолокация 
+                                <span id="geoStatus" class="ml-2 text-xs text-gray-500">
+                                    (Нажмите кнопку ниже)
+                                </span>
+                            </label>
+                            <div class="flex space-x-2">
+                                <input type="text" id="geolocation" placeholder="Широта, Долгота" readonly class="w-full bg-gray-50 border-gray-300 rounded-md shadow-sm p-2">
+                                <button type="button" onclick="getGeolocation()" class="flex-shrink-0 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition-colors">
+                                    <i data-lucide="locate" class="w-5 h-5 inline-block mr-1"></i>
+                                    Определить GPS
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                    
+                    <div class="mt-8">
+                        <button type="submit" id="saveButton" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-colors disabled:opacity-50" disabled>
+                            <i data-lucide="save" class="w-5 h-5 inline-block mr-2"></i>
+                            Сохранить Запись
+                        </button>
+                    </div>
+                </form>
+                
+                <div class="mt-4 text-xs text-gray-500 border-t pt-4">
+                    <p>Статус Админа: <span id="debugAdminStatus" class="font-bold text-red-500">НЕ ПОДКЛЮЧЕНО</span></p>
+                    <p>Telegram ID (Auth UID): <span id="debugUserId">Загрузка...</span></p>
+                    <p>Статус сохранения: <span id="saveStatus" class="font-bold">Готов</span></p>
+                </div>
+            </div>
+        </section>
+
+        <section id="map-view" class="content-section hidden">
+            <div class="card p-6">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Карта Активности (Точки агитации)</h2>
+                <div id="map-container" style="height: 70vh;">
+                    <p id="map-loading-status" class="text-center text-gray-500 pt-20">Загрузка карты...</p>
+                </div>
+                <p class="mt-4 text-sm text-gray-600">На карте отображаются все точки активности агитаторов.</p>
+            </div>
+        </section>
+        
+        <section id="reports-list" class="content-section hidden">
+            <div class="card p-6">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Список Отчетов</h2>
+                <p>Здесь будет отображаться таблица со всеми отчетами.</p>
+            </div>
+        </section>
+
+    </main>
+    
+    <div id="alertModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden items-center justify-center z-[1000]">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center">
+            <h3 id="alertTitle" class="text-xl font-bold text-gray-900 mb-3">ВНИМАНИЕ</h3>
+            <p id="alertMessage" class="text-gray-700 mb-6">Сообщение.</p>
+            <div id="alertButtons" class="flex justify-center space-x-4">
+                <button id="alertOkBtn" onclick="window.closeAlert()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-lg transition-colors">
+                    ОК
+                </button>
+            </div>
         </div>
-
     </div>
+
 
     <script type="module" src="firebase-auth.js"></script>
     <script type="module" src="main.js"></script>
-
+    
     <script>
-        window.onload = () => {
-             lucide.createIcons();
-        };
-        
-        // КОРРЕКТНАЯ ФУНКЦИЯ СМЕНЫ РОЛИ (для кнопки в шапке)
-        function changeRole() {
+        // Глобальные функции для кнопок
+        window.changeRole = function() {
             let currentPath = window.location.pathname;
             let targetPath = currentPath.replace('admin_dashboard.html', 'index.html');
             const search = window.location.search;
             const hash = window.location.hash;
             window.location.href = `${window.location.origin}${targetPath}${search}${hash}`;
         }
-        window.changeRole = changeRole; 
+        
+        window.showSection = function(sectionId) {
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.classList.add('hidden');
+            });
+            document.getElementById(sectionId).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            const sectionButton = document.getElementById(`btn-${sectionId}`);
+            if (sectionButton) {
+                sectionButton.classList.add('active');
+            }
+
+            // Запускаем загрузку карты при необходимости
+            if (sectionId === 'map-view' && typeof ymaps !== 'undefined' && !window.mapInstance) {
+                 window.initMap(); 
+            }
+        }
+        
+        // Функции модального окна
+        window.showAlert = function(title, message) {
+            document.getElementById('alertTitle').textContent = title;
+            document.getElementById('alertMessage').textContent = message;
+            document.getElementById('alertModal').classList.remove('hidden');
+            document.getElementById('alertModal').classList.add('flex');
+        }
+
+        window.closeAlert = function() {
+            document.getElementById('alertModal').classList.add('hidden');
+            document.getElementById('alertModal').classList.remove('flex');
+        }
     </script>
 </body>
 </html>
