@@ -1,6 +1,6 @@
-// firebase-auth.js (ГЛОБАЛЬНАЯ ВЕРСИЯ)
+// firebase-auth.js (ГЛОБАЛЬНАЯ ВЕРСИЯ - БЕЗ ИМПОРТОВ)
 
-// --- Глобальные переменные (доступны в main.js) ---
+// --- Глобальные переменные (доступны в main.js через window.) ---
 let app = null;
 window.db = null;
 window.auth = null;
@@ -53,8 +53,8 @@ window.initializeFirebase = function() {
             
             // 2. Инициализация Firebase (v8 Syntax)
             app = firebase.initializeApp(decodedConfig);
-            window.db = firebase.firestore(app);
-            window.auth = firebase.auth(app);
+            window.db = firebase.firestore(app); // Используем глобальный firebase.firestore
+            window.auth = firebase.auth(app);     // Используем глобальный firebase.auth
             
             return true;
         } catch (e) {
@@ -93,7 +93,6 @@ window.authenticateUser = async function() {
         // Перезаписываем isAdmin на основе Claims
         if (idTokenResult.claims && idTokenResult.claims.admin) {
              const tokenAdmin = idTokenResult.claims.admin;
-             // Снова проверяем, что 'true' (string) -> true (boolean)
              window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
         }
         
