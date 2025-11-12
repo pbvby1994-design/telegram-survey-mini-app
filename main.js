@@ -10,9 +10,6 @@ let dadataCoords = null;
 const DADATA_API_KEY = '29c85666d57139f459e452d1290dd73c23708472'; 
 let selectedSuggestionData = null; 
 
-// Ваши населенные пункты (УДАЛЕНО, так как теперь используется Dadata)
-// const SETTLEMENTS = [...]; 
-
 // ----------------------------------------------------------------------
 // 1. ИНТЕГРАЦИЯ DADATA (Fetch API)
 // ----------------------------------------------------------------------
@@ -40,7 +37,7 @@ addressInput.addEventListener('input', async () => {
                 'Authorization': `Token ${DADATA_API_KEY}`,
             },
             
-            // !!! ОБНОВЛЕННЫЙ БЛОК DADATA - ФИЛЬТР ПО СУРГУТСКОМУ РАЙОНУ С ДЕТАЛИЗАЦИЕЙ ДО КВАРТИРЫ !!!
+            // ФИЛЬТР: Сургутский район + Детализация до квартиры
             body: JSON.stringify({
                 query,
                 count: 5,
@@ -57,7 +54,6 @@ addressInput.addEventListener('input', async () => {
                 from_bound: { value: 'street' },
                 to_bound: { value: 'flat' } 
             })
-            // !!! КОНЕЦ ОБНОВЛЕННОГО БЛОКА DADATA !!!
 
         });
 
@@ -105,7 +101,7 @@ window.selectAddress = (index) => {
     }
     suggestionsList.innerHTML = '';
     suggestionsList.classList.add('hidden');
-    // Очищаем текущие GPS, чтобы избежать конфликта при сохранении
+    // Очищаем только GPS, но сохраняем адрес Dadata
     document.getElementById('geolocation').value = ''; 
     currentLatitude = null;
     currentLongitude = null;
@@ -118,20 +114,21 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// !!! ФУНКЦИЯ populateSettlements УДАЛЕНА !!!
-
 // ----------------------------------------------------------------------
 // 2. ГЕОЛОКАЦИЯ И СОХРАНЕНИЕ ДАННЫХ
 // ----------------------------------------------------------------------
 
+/**
+ * !!! ИСПРАВЛЕНО: Не сбрасывает addressInput.value, давая пользователю выбор !!!
+ */
 window.getGeolocation = function() {
     const geoStatus = document.getElementById('geoStatus');
     const geoInput = document.getElementById('geolocation');
     
-    // Сброс координат Dadata
-    dadataCoords = null; 
-    selectedSuggestionData = null;
-    addressInput.value = ''; // Очищаем поле Dadata
+    // Сбрасываем только предыдущие GPS-координаты, но не Dadata адрес
+    currentLatitude = null;
+    currentLongitude = null;
+    geoInput.value = ''; 
     
     geoStatus.textContent = 'Определение...';
     geoStatus.className = 'ml-2 text-xs text-gray-500';
@@ -181,6 +178,7 @@ window.saveSurveyData = async function(event) {
     let finalLatitude = currentLatitude;
     let finalLongitude = currentLongitude;
     
+    // Если GPS не получен, используем координаты Dadata
     if (!finalLatitude && dadataCoords) {
         finalLatitude = dadataCoords.latitude;
         finalLongitude = dadataCoords.longitude;
@@ -193,7 +191,6 @@ window.saveSurveyData = async function(event) {
         reporterId: userTelegramId, 
         timestamp: firebase.firestore.Timestamp.fromDate(new Date()), 
         
-        // В качестве поселения теперь сохраняем то, что вернула Dadata
         settlement: finalSettlement, 
         address: document.getElementById('address').value,
         loyalty: document.getElementById('loyalty').value,
@@ -235,7 +232,7 @@ window.saveSurveyData = async function(event) {
 }
 
 // ----------------------------------------------------------------------
-// 3. ЛОГИКА КАРТЫ 
+// 3. ЛОГИКА КАРТЫ И ОТЧЕТОВ
 // ----------------------------------------------------------------------
 
 window.initMap = async function() {
@@ -257,6 +254,7 @@ window.initMap = async function() {
     if (window.isAdmin) {
         await fetchAndLoadReportsToMap();
     } else {
+        // Защита, если статус админа сбросился
         document.getElementById('map-container').innerHTML = `<div class="p-6 text-red-500 text-center">Доступ к карте только для Администраторов.</div>`;
     }
 };
@@ -296,7 +294,7 @@ async function fetchAndLoadReportsToMap() {
 
             const content = `
                 <div>
-                    <strong>${r.settlement}</strong>, ${r.address}<br>
+                    <strong>${r.settlement || 'N/A'}</strong>, ${r.address}<br>
                     Лояльность: <strong>${loyaltyText}</strong><br>
                     Действие: ${r.action || 'N/A'}<br>
                     Комментарий: ${r.comment || 'Нет'}<br>
@@ -336,6 +334,109 @@ async function fetchAndLoadReportsToMap() {
     }
 }
 
+/**
+ * !!! НОВАЯ ФУНКЦИЯ: Загрузка отчетов в таблицу !!!
+ */
+async function fetchAndLoadReportsTable() {
+    if (typeof db === 'undefined') return;
+    
+    const statusEl = document.getElementById('reports-loading-status');
+    const tableEl = document.getElementById('reportsTable');
+    
+    statusEl.textContent = 'Загрузка данных...';
+    statusEl.classList.remove('hidden');
+    tableEl.classList.add('hidden');
+    
+    try {
+        const snapshot = await db.collection("reports").orderBy("timestamp", "desc").get();
+        const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        if (reports.length === 0) {
+            statusEl.textContent = 'Отчетов не найдено.';
+            return;
+        }
+
+        const loyaltyMap = {
+            'strong': 'ДА', 'moderate': 'СКОРЕЕ ДА',
+            'neutral': 'НЕ ЗНАЮ', 'against': 'НЕТ'
+        };
+
+        let html = `
+            <thead>
+                <tr class="text-left">
+                    <th class="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">Дата</th>
+                    <th class="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">Поселение</th>
+                    <th class="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">Адрес</th>
+                    <th class="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">Лояльность</th>
+                    <th class="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">Действие</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+        `;
+        
+        reports.forEach(r => {
+            const date = r.timestamp ? new Date(r.timestamp.toDate()).toLocaleDateString('ru-RU') : 'N/A';
+            const time = r.timestamp ? new Date(r.timestamp.toDate()).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
+            const loyaltyText = loyaltyMap[r.loyalty] || r.loyalty;
+            
+            html += `
+                <tr>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-900">${date}<br><span class="text-xs text-gray-500">${time}</span></td>
+                    <td class="px-4 py-2 text-sm text-gray-700">${r.settlement || 'N/A'}</td>
+                    <td class="px-4 py-2 text-sm text-gray-700">${r.address}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm font-semibold">${loyaltyText}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-700">${r.action || 'N/A'}</td>
+                </tr>
+            `;
+        });
+        
+        html += `</tbody>`;
+        
+        tableEl.innerHTML = html;
+        statusEl.classList.add('hidden');
+        tableEl.classList.remove('hidden');
+
+    } catch (e) {
+        console.error("Ошибка загрузки отчетов:", e);
+        statusEl.textContent = `Ошибка загрузки данных: ${e.message}`;
+        window.showAlert('Ошибка', 'Не удалось загрузить таблицу отчетов.');
+    }
+}
+
+
+/**
+ * !!! ИСПРАВЛЕНО: Добавлена логика для Отчетов и обновлена логика Карты !!!
+ */
+window.showSection = function(sectionId) {
+    document.querySelectorAll('.content-section').forEach(section => {
+        section.classList.add('hidden');
+    });
+    document.getElementById(sectionId).classList.remove('hidden');
+
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    const sectionButton = document.getElementById(`btn-${sectionId}`);
+    if (sectionButton) {
+        sectionButton.classList.add('active');
+    }
+
+    if (sectionId === 'map-view' && window.isAdmin) {
+         if (typeof ymaps !== 'undefined') {
+             if (!window.mapInstance) {
+                window.initMap(); 
+             } else {
+                // Если карта уже инициализирована, обновляем данные
+                fetchAndLoadReportsToMap();
+             }
+         }
+    }
+    
+    if (sectionId === 'reports-list' && window.isAdmin) {
+        fetchAndLoadReportsTable();
+    }
+}
+
 
 // ----------------------------------------------------------------------
 // 4. ГЛАВНЫЙ БЛОК (Запуск после загрузки DOM)
@@ -343,9 +444,7 @@ async function fetchAndLoadReportsToMap() {
 
 window.onload = async () => {
     
-    // !!! populateSettlements УДАЛЕНА ИЗ-ЗА ИСПОЛЬЗОВАНИЯ DADATA !!!
-    
-    // !!! lucide.createIcons(); ЗАКОММЕНТИРОВАН, чтобы избежать ошибки CSP в Telegram !!!
+    // !!! Lucide закомментирован, чтобы избежать ошибки CSP в Telegram !!!
     // lucide.createIcons(); 
     
     document.getElementById('saveButton').disabled = true;
@@ -364,21 +463,29 @@ window.onload = async () => {
     const isAuthenticated = await authenticateUser();
     
     if (isAuthenticated) {
-         if (window.isAdmin) {
-             document.getElementById('btn-map-view').style.display = 'inline-block';
-         }
-         
+         // !!! ИСПРАВЛЕНИЕ: Всегда начинаем с формы, если в URL не указано другое !!!
+         let startSection = 'form'; 
          const urlParams = new URLSearchParams(window.location.search);
          const initialView = urlParams.get('view');
          
-         let startSection = 'form';
-         if (window.isAdmin && (initialView === 'map' || initialView === 'map-view' || !initialView)) {
-             startSection = 'map-view';
+         if (window.isAdmin) {
+             // Показываем кнопки админа
+             document.getElementById('btn-map-view').style.display = 'inline-block';
+             document.getElementById('btn-reports-list').style.display = 'inline-block';
+
+             // Если в URL явно запрошен админский вид, переключаемся на него
+             if (initialView === 'map-view') {
+                 startSection = 'map-view';
+             } else if (initialView === 'reports-list') {
+                 startSection = 'reports-list';
+             }
          }
          
+         // Запускаем стартовую секцию
          window.showSection(startSection);
          document.getElementById('saveButton').disabled = false;
          
+         // Инициализируем карту, только если это стартовая секция и мы админ
          if (startSection === 'map-view' && window.isAdmin && typeof ymaps !== 'undefined') {
              window.initMap();
          }
