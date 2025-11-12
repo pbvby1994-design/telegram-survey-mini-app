@@ -8,15 +8,10 @@ let dadataCoords = null;
 
 // --- КОНФИГУРАЦИЯ DADATA ---
 const DADATA_API_KEY = '29c85666d57139f459e452d1290dd73c23708472'; 
-let selectedSuggestionData = null; // Для хранения координат от Dadata
+let selectedSuggestionData = null; 
 
-// Ваши населенные пункты
-const SETTLEMENTS = [
-    'г.п. Лянтор', 'с.п. Русскинская', 'г.п. Федоровский', 'г.п. Барсово', 
-    'г.п. Белый Яр', 'с.п. Лямина', 'с.п. Сытомино', 'с.п. Угут', 
-    'с.п. Ульт-Ягун', 'с.п. Солнечный', 'с.п. Нижнесортымский', 
-    'с.п. Тундрино', 'с.п. Локосово'
-];
+// Ваши населенные пункты (УДАЛЕНО, так как теперь используется Dadata)
+// const SETTLEMENTS = [...]; 
 
 // ----------------------------------------------------------------------
 // 1. ИНТЕГРАЦИЯ DADATA (Fetch API)
@@ -44,14 +39,26 @@ addressInput.addEventListener('input', async () => {
                 'Accept': 'application/json',
                 'Authorization': `Token ${DADATA_API_KEY}`,
             },
-            // Запрос с фильтрами, чтобы получать полные адреса (до квартиры/комнаты)
+            
+            // !!! ОБНОВЛЕННЫЙ БЛОК DADATA - ФИЛЬТР ПО СУРГУТСКОМУ РАЙОНУ С ДЕТАЛИЗАЦИЕЙ ДО КВАРТИРЫ !!!
             body: JSON.stringify({
                 query,
                 count: 5,
-                locations: [{ country: 'Россия' }],
-                from_bound: { value: 'settlement' },
-                to_bound: { value: 'house' } // Ограничиваем до дома/владения
+                // KLADR ID для Сургутского района (для приоритета)
+                locations_boost: [{ kladr_id: "8601600000000" }], 
+                
+                // Ограничение по региону (ХМАО)
+                locations: [{ 
+                    region_type_full: "автономный округ", 
+                    region: "Ханты-Мансийский Автономный Округ - Югра" 
+                }],
+                
+                // Диапазон подсказок: от улицы до помещения (квартиры)
+                from_bound: { value: 'street' },
+                to_bound: { value: 'flat' } 
             })
+            // !!! КОНЕЦ ОБНОВЛЕННОГО БЛОКА DADATA !!!
+
         });
 
         const data = await response.json();
@@ -64,7 +71,7 @@ addressInput.addEventListener('input', async () => {
         `).join('');
 
         if (suggestions.length > 0) {
-            suggestionsList.suggestionsData = suggestions; // Сохраняем данные для выбора
+            suggestionsList.suggestionsData = suggestions; 
             suggestionsList.classList.remove('hidden');
         } else {
             suggestionsList.classList.add('hidden');
@@ -104,23 +111,14 @@ window.selectAddress = (index) => {
     currentLongitude = null;
 };
 
-// Скрытие списка при потере фокуса (простой вариант)
+// Скрытие списка при потере фокуса 
 document.addEventListener('click', (e) => {
     if (!addressInput.contains(e.target) && !suggestionsList.contains(e.target)) {
         suggestionsList.classList.add('hidden');
     }
 });
 
-function populateSettlements() {
-    const select = document.getElementById('settlement');
-    select.innerHTML = '<option value="" disabled selected>Выберите населенный пункт</option>';
-    SETTLEMENTS.forEach(s => {
-        const option = document.createElement('option');
-        option.value = s;
-        option.textContent = s;
-        select.appendChild(option);
-    });
-}
+// !!! ФУНКЦИЯ populateSettlements УДАЛЕНА !!!
 
 // ----------------------------------------------------------------------
 // 2. ГЕОЛОКАЦИЯ И СОХРАНЕНИЕ ДАННЫХ
@@ -179,7 +177,6 @@ window.saveSurveyData = async function(event) {
     document.getElementById('saveButton').disabled = true;
     saveStatus.textContent = '⏳ Отправка...';
 
-    // --- ЛОГИКА ОПРЕДЕЛЕНИЯ КООРДИНАТ ---
     // Приоритет: 1. GPS, 2. Dadata
     let finalLatitude = currentLatitude;
     let finalLongitude = currentLongitude;
@@ -189,11 +186,15 @@ window.saveSurveyData = async function(event) {
         finalLongitude = dadataCoords.longitude;
     }
 
+    // Извлекаем населенный пункт из Dadata для сохранения
+    let finalSettlement = (selectedSuggestionData && selectedSuggestionData.settlement_with_type) || '';
+
     const data = {
         reporterId: userTelegramId, 
         timestamp: firebase.firestore.Timestamp.fromDate(new Date()), 
         
-        settlement: document.getElementById('settlement').value,
+        // В качестве поселения теперь сохраняем то, что вернула Dadata
+        settlement: finalSettlement, 
         address: document.getElementById('address').value,
         loyalty: document.getElementById('loyalty').value,
         action: document.getElementById('action').value, 
@@ -204,7 +205,8 @@ window.saveSurveyData = async function(event) {
     };
     
     try {
-        if (!data.settlement || !data.address || !data.loyalty || !data.action) {
+        // Проверка заполнения полей
+        if (!data.address || !data.loyalty || !data.action) {
              throw new Error("Не все обязательные поля заполнены.");
         }
         
@@ -233,7 +235,7 @@ window.saveSurveyData = async function(event) {
 }
 
 // ----------------------------------------------------------------------
-// 3. ЛОГИКА КАРТЫ (Осталась без изменений)
+// 3. ЛОГИКА КАРТЫ 
 // ----------------------------------------------------------------------
 
 window.initMap = async function() {
@@ -341,17 +343,18 @@ async function fetchAndLoadReportsToMap() {
 
 window.onload = async () => {
     
-   // main.js (КОНЕЦ ФАЙЛА, ВНУТРИ window.onload)
-
-window.onload = async () => {
+    // !!! populateSettlements УДАЛЕНА ИЗ-ЗА ИСПОЛЬЗОВАНИЯ DADATA !!!
     
-    // Инициализация списка поселений и иконок
-    populateSettlements();
-    // !!! ИСПРАВЛЕНИЕ: Комментируем вызов Lucide, так как он блокируется !!!
+    // !!! lucide.createIcons(); ЗАКОММЕНТИРОВАН, чтобы избежать ошибки CSP в Telegram !!!
     // lucide.createIcons(); 
+    
     document.getElementById('saveButton').disabled = true;
 
-}
+    if (typeof initializeFirebase === 'undefined' || typeof authenticateUser === 'undefined') {
+         window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Проверьте подключение Firebase в HTML. Скрипты не найдены.');
+         window.showSection('form');
+         return;
+    }
     
     if (!initializeFirebase()) {
          window.showSection('form');
@@ -386,4 +389,3 @@ window.onload = async () => {
          document.getElementById('geoStatus').textContent = 'Нет доступа.';
     }
 };
-
