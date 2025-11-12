@@ -341,17 +341,17 @@ async function fetchAndLoadReportsToMap() {
 
 window.onload = async () => {
     
+   // main.js (КОНЕЦ ФАЙЛА, ВНУТРИ window.onload)
+
+window.onload = async () => {
+    
     // Инициализация списка поселений и иконок
     populateSettlements();
-    // Dadata инициализируется через EventListener, jQuery не нужен.
-    lucide.createIcons();
+    // !!! ИСПРАВЛЕНИЕ: Комментируем вызов Lucide, так как он блокируется !!!
+    // lucide.createIcons(); 
     document.getElementById('saveButton').disabled = true;
 
-    if (typeof initializeFirebase === 'undefined' || typeof authenticateUser === 'undefined') {
-         window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Проверьте подключение Firebase в HTML. Скрипты не найдены.');
-         window.showSection('form');
-         return;
-    }
+}
     
     if (!initializeFirebase()) {
          window.showSection('form');
@@ -386,3 +386,4 @@ window.onload = async () => {
          document.getElementById('geoStatus').textContent = 'Нет доступа.';
     }
 };
+
