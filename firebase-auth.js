@@ -1,120 +1,151 @@
-// firebase-auth.js (ОБНОВЛЕНИЕ: Переход на Firebase v9 Compat SDK)
+// firebase-auth.js (МОДУЛЬНАЯ ВЕРСИЯ - СОВМЕСТИМОСТЬ V9+)
 
-// --- Глобальные переменные (v9 Compat API) ---
+// --- Глобальные переменные ---
 window.app = null;
 window.db = null;
 window.auth = null;
-
 window.userTelegramId = null;
 window.isAdmin = false;
-window.dadataToken = null; // Для более безопасной передачи
+// Placeholder для showAlert. Полная функция в admin_dashboard.html
+window.showAlert = function(title, message) { 
+    if (typeof document !== 'undefined') {
+        // Если это index.html, используем базовый модал
+        const titleEl = document.getElementById('alertTitle');
+        const msgEl = document.getElementById('alertMessage');
+        const modalEl = document.getElementById('alertModal');
+        if (titleEl && msgEl && modalEl) {
+             titleEl.textContent = title;
+             msgEl.textContent = message;
+             modalEl.classList.remove('hidden');
+             modalEl.classList.add('flex');
+             return;
+        }
+    }
+    console.error(`ALERT: ${title} - ${message}`); 
+}; 
 
 let token = null;
 
-// Функция для получения параметра из URL
 function getUrlParameter(name) {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get(name);
 }
 
 // ----------------------------------------------------------------------
-// ИНИЦИАЛИЗАЦИЯ И ПОЛУЧЕНИЕ ПАРАМЕТРОВ ИЗ URL
+// ИНИЦИАЛИЗАЦИЯ
 // ----------------------------------------------------------------------
 
 window.initializeFirebase = function() {
-    // 1. Проверка наличия Telegram WebApp
-    if (typeof Telegram === 'undefined' || typeof Telegram.WebApp === 'undefined') {
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Отсутствует Telegram WebApp SDK.');
+    // 1. Считывание конфигурации из config.js
+    // Предполагается, что config.js загрузил константы в window
+    if (typeof window.FIREBASE_CONFIG === 'undefined') {
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Конфигурация FIREBASE_CONFIG не найдена. Проверьте подключение config.js.');
         return false;
     }
-    
-    // Проверка наличия глобального объекта Firebase v9 Compat
-    if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Firebase SDK v9 не загружен. Проверьте подключение CDN в HTML.');
-        return false;
-    }
-    
-    // 2. Считывание и декодирование конфигурации Firebase и Dadata
-    const configBase64 = getUrlParameter('firebase_config');
+    const firebaseConfig = window.FIREBASE_CONFIG;
+
+    // Считывание Custom Token и ID
     token = getUrlParameter('token'); 
-    window.dadataToken = getUrlParameter('dadata_token'); // !!! БЕЗОПАСНАЯ ПЕРЕДАЧА DADATA KEY !!!
-    
-    // Получение user_id и admin_status
     const url_user_id = getUrlParameter('user_id');
-    const url_is_admin = getUrlParameter('is_admin'); 
-    
+
     if (url_user_id) {
-        window.userTelegramId = url_user_id;
-        document.getElementById('debugUserId').textContent = window.userTelegramId;
-    } else {
-        document.getElementById('debugUserId').textContent = 'НЕ АВТОРИЗОВАН';
-        window.showAlert('Ошибка', 'Отсутствует Telegram ID пользователя.');
-        return false;
+        window.userTelegramId = String(url_user_id);
     }
     
-    if (!window.dadataToken) {
-        console.error("Dadata Token отсутствует. Поиск адресов не будет работать.");
-    }
-
-    if (url_is_admin) {
-        // Устанавливаем статус админа из URL (будет переопределен токеном)
-        window.isAdmin = (url_is_admin.toLowerCase() === 'true');
-    }
-
-    if (configBase64) {
-        try {
-            const decodedConfig = JSON.parse(atob(configBase64));
-            
-            // 3. Инициализация Firebase (v9 Compat Syntax)
-            window.app = firebase.initializeApp(decodedConfig);
-            window.db = firebase.firestore(window.app); 
-            window.auth = firebase.auth(window.app);     
-            
-            return true;
-        } catch (e) {
-            console.error("Firebase config error:", e);
-            window.showAlert('Ошибка Конфигурации', `Не удалось декодировать Firebase config: ${e.message}.`);
-            return false;
+    // 2. Инициализация Firebase
+    try {
+        window.app = firebase.initializeApp(firebaseConfig);
+        window.db = firebase.firestore(window.app);
+        window.auth = firebase.auth(window.app);
+        
+        if (window.userTelegramId) {
+             // Элемент telegramAuthInfo есть только в index.html
+             const infoEl = document.getElementById('telegramAuthInfo');
+             if (infoEl) infoEl.textContent = `✅ Telegram ID: ${window.userTelegramId}`;
+        } else {
+             window.showAlert('ПРЕДУПРЕЖДЕНИЕ', 'Telegram ID не передан. Аутентификация будет невозможна.');
+             return false;
         }
-    } else {
-        window.showAlert('Ошибка Конфигурации', 'Параметр firebase_config отсутствует в URL.');
+
+        return true;
+    } catch (e) {
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось инициализировать Firebase: ${e.message}`);
+        console.error("Firebase initialization failed:", e);
         return false;
     }
 }
 
 // ----------------------------------------------------------------------
-// АУТЕНТИФИКАЦИЯ С ПОМОЩЬЮ CUSTOM TOKEN
+// АУТЕНТИФИКАЦИЯ (для index.html и main.js)
 // ----------------------------------------------------------------------
 
+/**
+ * Проверяет статус админа для index.html (выбор роли).
+ */
+window.checkAdminStatus = async function() {
+    if (!window.auth) return;
+
+    try {
+        if (token) {
+            const userCredential = await window.auth.signInWithCustomToken(token);
+            const idTokenResult = await userCredential.user.getIdTokenResult();
+            
+            if (idTokenResult.claims && idTokenResult.claims.admin) {
+                 const tokenAdmin = idTokenResult.claims.admin;
+                 window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
+            }
+            
+            const infoEl = document.getElementById('telegramAuthInfo');
+            if (infoEl) infoEl.textContent += window.isAdmin ? ' | ✅ Администратор (Токен)' : ' | ⚠️ Пользователь (Токен)';
+
+        } else {
+            await window.auth.signInAnonymously();
+            window.isAdmin = false;
+            const infoEl = document.getElementById('telegramAuthInfo');
+            if (infoEl) infoEl.textContent += ' | 👤 Анонимный вход';
+        }
+
+    } catch (error) {
+        console.error("Firebase Auth failed:", error);
+        window.showAlert('ОШИБКА АУТЕНТИФИКАЦИИ', `Не удалось войти: ${error.message}.`);
+        window.isAdmin = false;
+    }
+}
+
+/**
+ * Аутентификация пользователя для основного приложения (admin_dashboard.html / main.js).
+ */
 window.authenticateUser = async function() {
-    if (!window.auth) return false;
+    // Элемент debugAdminStatus есть только в admin_dashboard.html
+    const statusEl = document.getElementById('debugAdminStatus');
     
     if (!token) {
-        console.warn("Custom token not found in URL. Operating as unauthenticated user.");
-        document.getElementById('debugAdminStatus').textContent = "ОТКАЗ (Нет токена)";
-        return false;
+        // Анонимная аутентификация, чтобы разрешить запись данных (если это не админ-панель)
+        await window.auth.signInAnonymously();
+        window.isAdmin = false;
+        if (statusEl) statusEl.textContent = "ОТКАЗ (Нет токена / Аноним)";
+        return true; 
     }
     
     try {
-        // 1. Аутентификация (v9 Compat Syntax)
         const userCredential = await window.auth.signInWithCustomToken(token);
-        
-        // 2. Получение Claims (проверка флага админа из токена)
         const idTokenResult = await userCredential.user.getIdTokenResult();
         
-        // Перезаписываем isAdmin на основе Claims
         if (idTokenResult.claims && idTokenResult.claims.admin) {
              const tokenAdmin = idTokenResult.claims.admin;
              window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
         }
         
-        document.getElementById('debugAdminStatus').textContent = window.isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
+        if (statusEl) {
+            statusEl.textContent = window.isAdmin ? '✅ ДА (Токен)' : '⚠️ НЕТ (Токен)';
+            if (window.isAdmin) statusEl.classList.replace('text-red-500', 'text-green-600');
+        }
         
         return true;
     } catch (error) {
-        console.error("Firebase Auth failed:", error);
-        window.showAlert('ОШИБКА АУТЕНТИФИКАЦИИ', `Не удалось войти: ${error.message}.`);
-        document.getElementById('debugAdminStatus').textContent = "ОШИБКА АВТОРИЗАЦИИ";
+        console.error("Firebase Custom Token Auth failed:", error);
+        window.showAlert('ОШИБКА АУТЕНТИФИКАЦИИ', `Не удалось войти: ${error.message}. Проверьте Custom Token.`);
+        if (statusEl) statusEl.textContent = "❌ ОШИБКА";
         return false;
     }
 }
