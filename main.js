@@ -1,13 +1,10 @@
-// main.js (ВЕРСИЯ С DADATA FETCH API)
+// main.js (ОБНОВЛЕННАЯ ВЕРСИЯ С DADATA И FIREBASE V9 COMPAT)
 
 // --- Глобальные переменные ---
 window.mapInstance = null; 
 let currentLatitude = null; 
 let currentLongitude = null;
 let dadataCoords = null;    
-
-// --- КОНФИГУРАЦИЯ DADATA ---
-const DADATA_API_KEY = '29c85666d57139f459e452d1290dd73c23708472'; 
 let selectedSuggestionData = null; 
 
 // ----------------------------------------------------------------------
@@ -21,6 +18,13 @@ const suggestionsList = document.getElementById('suggestionsList');
  * Ручной обработчик ввода для Dadata
  */
 addressInput.addEventListener('input', async () => {
+    // Проверка наличия токена
+    if (!window.dadataToken) {
+        addressInput.placeholder = "Ошибка: Dadata Token отсутствует!";
+        suggestionsList.classList.add('hidden');
+        return;
+    }
+
     const query = addressInput.value.trim();
     if (query.length < 3) {
         suggestionsList.innerHTML = '';
@@ -34,28 +38,27 @@ addressInput.addEventListener('input', async () => {
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'Authorization': `Token ${DADATA_API_KEY}`,
+                'Authorization': `Token ${window.dadataToken}`, // !!! ИСПОЛЬЗУЕМ ТОКЕН ИЗ URL !!!
             },
             
             // ФИЛЬТР: Сургутский район + Детализация до квартиры
             body: JSON.stringify({
                 query,
                 count: 5,
-                // KLADR ID для Сургутского района (для приоритета)
                 locations_boost: [{ kladr_id: "8601600000000" }], 
-                
-                // Ограничение по региону (ХМАО)
                 locations: [{ 
                     region_type_full: "автономный округ", 
                     region: "Ханты-Мансийский Автономный Округ - Югра" 
                 }],
-                
-                // Диапазон подсказок: от улицы до помещения (квартиры)
                 from_bound: { value: 'street' },
                 to_bound: { value: 'flat' } 
             })
 
         });
+        
+        if (!response.ok) {
+            throw new Error(`Dadata API returned status ${response.status}`);
+        }
 
         const data = await response.json();
         const suggestions = data.suggestions || [];
@@ -75,6 +78,7 @@ addressInput.addEventListener('input', async () => {
 
     } catch (err) {
         console.error('Dadata error:', err);
+        window.showAlert('Ошибка Dadata', `Не удалось получить подсказки: ${err.message}. Проверьте токен.`);
         suggestionsList.classList.add('hidden');
     }
 });
@@ -87,7 +91,6 @@ window.selectAddress = (index) => {
     if (selectedItem) {
         addressInput.value = selectedItem.value;
         
-        // Сохраняем координаты Dadata
         if (selectedItem.data && selectedItem.data.geo_lat && selectedItem.data.geo_lon) {
             selectedSuggestionData = selectedItem.data;
             dadataCoords = {
@@ -101,7 +104,6 @@ window.selectAddress = (index) => {
     }
     suggestionsList.innerHTML = '';
     suggestionsList.classList.add('hidden');
-    // Очищаем только GPS, но сохраняем адрес Dadata
     document.getElementById('geolocation').value = ''; 
     currentLatitude = null;
     currentLongitude = null;
@@ -119,13 +121,12 @@ document.addEventListener('click', (e) => {
 // ----------------------------------------------------------------------
 
 /**
- * !!! ИСПРАВЛЕНО: Не сбрасывает addressInput.value, давая пользователю выбор !!!
+ * Получает GPS координаты. Не сбрасывает Dadata адрес.
  */
 window.getGeolocation = function() {
     const geoStatus = document.getElementById('geoStatus');
     const geoInput = document.getElementById('geolocation');
     
-    // Сбрасываем только предыдущие GPS-координаты, но не Dadata адрес
     currentLatitude = null;
     currentLongitude = null;
     geoInput.value = ''; 
@@ -142,7 +143,6 @@ window.getGeolocation = function() {
                 
                 geoStatus.textContent = '✅ GPS получен!';
                 geoStatus.classList.add('text-green-600');
-                document.getElementById('saveButton').disabled = false;
             },
             (error) => {
                 currentLatitude = null;
@@ -150,23 +150,24 @@ window.getGeolocation = function() {
                 geoInput.value = 'Нет данных';
                 geoStatus.textContent = '❌ Ошибка GPS';
                 geoStatus.classList.add('text-red-500');
-                document.getElementById('saveButton').disabled = false;
-                window.showAlert('Ошибка GPS', 'Не удалось получить местоположение. Введите адрес вручную.');
+                window.showAlert('Ошибка GPS', 'Не удалось получить местоположение. Убедитесь, что разрешили доступ и используете HTTPS.');
             },
             { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
         );
     } else {
         geoStatus.textContent = '❌ Не поддерживается';
         window.showAlert('Ошибка', 'Геолокация не поддерживается вашим устройством.');
-        document.getElementById('saveButton').disabled = false;
     }
 }
 
+/**
+ * Сохранение данных в Firestore (v9 Compat API)
+ */
 window.saveSurveyData = async function(event) {
     event.preventDefault();
     const saveStatus = document.getElementById('saveStatus');
 
-    if (typeof db === 'undefined' || typeof userTelegramId === 'undefined') {
+    if (!window.db || !window.userTelegramId) {
         window.showAlert('Ошибка', 'Приложение не подключено к базе данных или пользователь не авторизован.');
         return;
     }
@@ -174,40 +175,47 @@ window.saveSurveyData = async function(event) {
     document.getElementById('saveButton').disabled = true;
     saveStatus.textContent = '⏳ Отправка...';
 
+    // --- КЛИЕНТСКАЯ ВАЛИДАЦИЯ ---
+    const address = document.getElementById('address').value.trim();
+    const loyalty = document.getElementById('loyalty').value;
+    const action = document.getElementById('action').value;
+
+    if (!address || !loyalty || !action) {
+        window.showAlert('Ошибка', 'Пожалуйста, заполните все обязательные поля (Адрес, Лояльность, Действие).');
+        document.getElementById('saveButton').disabled = false;
+        saveStatus.textContent = 'Готов';
+        return;
+    }
+
     // Приоритет: 1. GPS, 2. Dadata
     let finalLatitude = currentLatitude;
     let finalLongitude = currentLongitude;
     
-    // Если GPS не получен, используем координаты Dadata
     if (!finalLatitude && dadataCoords) {
         finalLatitude = dadataCoords.latitude;
         finalLongitude = dadataCoords.longitude;
     }
 
-    // Извлекаем населенный пункт из Dadata для сохранения
     let finalSettlement = (selectedSuggestionData && selectedSuggestionData.settlement_with_type) || '';
 
     const data = {
-        reporterId: userTelegramId, 
-        timestamp: firebase.firestore.Timestamp.fromDate(new Date()), 
+        reporterId: window.userTelegramId, 
+        timestamp: firebase.firestore.Timestamp.fromDate(new Date()), // v9 Compat
         
         settlement: finalSettlement, 
-        address: document.getElementById('address').value,
-        loyalty: document.getElementById('loyalty').value,
-        action: document.getElementById('action').value, 
+        address: address,
+        loyalty: loyalty,
+        action: action, 
         comment: document.getElementById('comment').value || "",
         
-        latitude: finalLatitude,
-        longitude: finalLongitude
+        latitude: finalLatitude || null,
+        longitude: finalLongitude || null
     };
     
     try {
-        // Проверка заполнения полей
-        if (!data.address || !data.loyalty || !data.action) {
-             throw new Error("Не все обязательные поля заполнены.");
-        }
+        // v9 Compat: db.collection("reports").add(data);
+        await window.db.collection("reports").add(data); 
         
-        await db.collection("reports").add(data);
         window.showAlert('Успех', 'Данные успешно сохранены! Спасибо за работу.');
         
         // Сброс формы и переменных
@@ -254,13 +262,12 @@ window.initMap = async function() {
     if (window.isAdmin) {
         await fetchAndLoadReportsToMap();
     } else {
-        // Защита, если статус админа сбросился
         document.getElementById('map-container').innerHTML = `<div class="p-6 text-red-500 text-center">Доступ к карте только для Администраторов.</div>`;
     }
 };
 
 async function fetchAndLoadReportsToMap() {
-    if (typeof db === 'undefined' || !window.mapInstance) return;
+    if (!window.db || !window.mapInstance) return;
     
     try {
         if (window.objectManager) {
@@ -273,8 +280,11 @@ async function fetchAndLoadReportsToMap() {
             window.mapInstance.geoObjects.add(window.objectManager);
         }
         
-        const snapshot = await db.collection("reports").orderBy("timestamp", "desc").get();
+        // v9 Compat: db.collection("reports").orderBy("timestamp", "desc").get();
+        const snapshot = await window.db.collection("reports").orderBy("timestamp", "desc").get();
         const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // ... (остальной код карты без изменений) ...
 
         if (reports.length === 0) {
             document.getElementById('map-loading-status').textContent = 'Отчетов с геолокацией не найдено.';
@@ -328,17 +338,15 @@ async function fetchAndLoadReportsToMap() {
         
     } catch (e) {
         console.error("Ошибка загрузки отчетов:", e);
-        window.showAlert('Ошибка', `Не удалось загрузить отчеты для карты: ${e.message}`);
         document.getElementById('map-loading-status').textContent = 'Ошибка загрузки данных.';
-        document.getElementById('map-loading-status').style.display = 'block';
     }
 }
 
 /**
- * !!! НОВАЯ ФУНКЦИЯ: Загрузка отчетов в таблицу !!!
+ * Загрузка отчетов в таблицу (v9 Compat API)
  */
 async function fetchAndLoadReportsTable() {
-    if (typeof db === 'undefined') return;
+    if (!window.db) return;
     
     const statusEl = document.getElementById('reports-loading-status');
     const tableEl = document.getElementById('reportsTable');
@@ -348,13 +356,16 @@ async function fetchAndLoadReportsTable() {
     tableEl.classList.add('hidden');
     
     try {
-        const snapshot = await db.collection("reports").orderBy("timestamp", "desc").get();
+        // v9 Compat: db.collection("reports").orderBy("timestamp", "desc").get();
+        const snapshot = await window.db.collection("reports").orderBy("timestamp", "desc").get();
         const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         if (reports.length === 0) {
             statusEl.textContent = 'Отчетов не найдено.';
             return;
         }
+        
+        // ... (остальной код генерации таблицы без изменений) ...
 
         const loyaltyMap = {
             'strong': 'ДА', 'moderate': 'СКОРЕЕ ДА',
@@ -404,9 +415,6 @@ async function fetchAndLoadReportsTable() {
 }
 
 
-/**
- * !!! ИСПРАВЛЕНО: Добавлена логика для Отчетов и обновлена логика Карты !!!
- */
 window.showSection = function(sectionId) {
     document.querySelectorAll('.content-section').forEach(section => {
         section.classList.add('hidden');
@@ -426,7 +434,6 @@ window.showSection = function(sectionId) {
              if (!window.mapInstance) {
                 window.initMap(); 
              } else {
-                // Если карта уже инициализирована, обновляем данные
                 fetchAndLoadReportsToMap();
              }
          }
@@ -444,18 +451,20 @@ window.showSection = function(sectionId) {
 
 window.onload = async () => {
     
+    // Скрываем экран загрузки в конце
+    const loadingScreen = document.getElementById('loadingScreen');
+    const mainHeader = document.getElementById('mainHeader');
+    const mainContent = document.getElementById('mainContent');
+    
     // !!! Lucide закомментирован, чтобы избежать ошибки CSP в Telegram !!!
     // lucide.createIcons(); 
     
     document.getElementById('saveButton').disabled = true;
 
-    if (typeof initializeFirebase === 'undefined' || typeof authenticateUser === 'undefined') {
-         window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Проверьте подключение Firebase в HTML. Скрипты не найдены.');
-         window.showSection('form');
-         return;
-    }
-    
     if (!initializeFirebase()) {
+         loadingScreen.style.display = 'none';
+         mainHeader.classList.remove('hidden');
+         mainContent.classList.remove('hidden');
          window.showSection('form');
          return;
     }
@@ -463,17 +472,14 @@ window.onload = async () => {
     const isAuthenticated = await authenticateUser();
     
     if (isAuthenticated) {
-         // !!! ИСПРАВЛЕНИЕ: Всегда начинаем с формы, если в URL не указано другое !!!
          let startSection = 'form'; 
          const urlParams = new URLSearchParams(window.location.search);
          const initialView = urlParams.get('view');
          
          if (window.isAdmin) {
-             // Показываем кнопки админа
              document.getElementById('btn-map-view').style.display = 'inline-block';
              document.getElementById('btn-reports-list').style.display = 'inline-block';
 
-             // Если в URL явно запрошен админский вид, переключаемся на него
              if (initialView === 'map-view') {
                  startSection = 'map-view';
              } else if (initialView === 'reports-list') {
@@ -481,11 +487,9 @@ window.onload = async () => {
              }
          }
          
-         // Запускаем стартовую секцию
          window.showSection(startSection);
          document.getElementById('saveButton').disabled = false;
          
-         // Инициализируем карту, только если это стартовая секция и мы админ
          if (startSection === 'map-view' && window.isAdmin && typeof ymaps !== 'undefined') {
              window.initMap();
          }
@@ -495,4 +499,9 @@ window.onload = async () => {
          document.getElementById('saveButton').disabled = true;
          document.getElementById('geoStatus').textContent = 'Нет доступа.';
     }
+    
+    // Показываем контент
+    loadingScreen.style.display = 'none';
+    mainHeader.classList.remove('hidden');
+    mainContent.classList.remove('hidden');
 };
