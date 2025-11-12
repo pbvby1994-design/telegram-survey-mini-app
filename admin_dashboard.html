@@ -6,7 +6,7 @@
     <title>Блокнот Агитатора | Панель</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@latest"></script> 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
@@ -58,7 +58,7 @@
             z-index: 10;
             max-height: 200px;
             overflow-y: auto;
-            width: calc(100% - 40px);
+            width: calc(100% - 40px); /* Adjust based on padding */
         }
         .suggestion-item {
             padding: 8px;
@@ -70,6 +70,12 @@
         }
         .suggestion-item:hover {
             background-color: #f3f4f6;
+        }
+        #reportsTable thead {
+            background-color: #f9fafb;
+        }
+        #reportsTable td {
+            vertical-align: top;
         }
     </style>
 </head>
@@ -83,6 +89,9 @@
                 </button>
                 <button onclick="showSection('map-view')" class="tab-button hover:text-indigo-200" id="btn-map-view" style="display: none;">
                     <i data-lucide="map" class="w-5 h-5 inline-block mr-1"></i>Карта
+                </button>
+                <button onclick="showSection('reports-list')" class="tab-button hover:text-indigo-200" id="btn-reports-list" style="display: none;">
+                    <i data-lucide="list-checks" class="w-5 h-5 inline-block mr-1"></i>Отчеты
                 </button>
                 <button onclick="changeRole()" class="tab-button hover:text-indigo-200">
                     <i data-lucide="shuffle" class="w-5 h-5 inline-block mr-1"></i>Сменить роль
@@ -106,6 +115,7 @@
                                 placeholder="Начните вводить адрес (Сургутский район)..." autocomplete="off">
                             <ul id="suggestionsList" class="border rounded bg-white shadow-lg hidden"></ul>
                         </div>
+
                         <div class="space-y-2">
                             <label for="loyalty" class="block text-sm font-medium text-gray-700">Лояльность кандидата</label>
                             <select id="loyalty" required class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2">
@@ -179,7 +189,11 @@
         <section id="reports-list" class="content-section hidden">
             <div class="card p-6">
                 <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Список Отчетов</h2>
-                <p>Здесь будет отображаться таблица со всеми отчетами.</p>
+                <div id="reportsTableContainer" class="overflow-x-auto">
+                    <p id="reports-loading-status" class="text-center text-gray-500 pt-5">Загрузка данных...</p>
+                    <table id="reportsTable" class="min-w-full divide-y divide-gray-200 hidden">
+                        </table>
+                </div>
             </div>
         </section>
 
@@ -211,27 +225,6 @@
             const search = window.location.search;
             const hash = window.location.hash;
             window.location.href = `${window.location.origin}${targetPath}${search}${hash}`;
-        }
-        
-        window.showSection = function(sectionId) {
-            document.querySelectorAll('.content-section').forEach(section => {
-                section.classList.add('hidden');
-            });
-            document.getElementById(sectionId).classList.remove('hidden');
-
-            document.querySelectorAll('.tab-button').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            const sectionButton = document.getElementById(`btn-${sectionId}`);
-            if (sectionButton) {
-                sectionButton.classList.add('active');
-            }
-
-            if (sectionId === 'map-view' && typeof ymaps !== 'undefined' && !window.mapInstance) {
-                 if (typeof window.initMap === 'function') {
-                    window.initMap(); 
-                 }
-            }
         }
         
         window.showAlert = function(title, message) {
