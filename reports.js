@@ -1,300 +1,342 @@
-// reports.js
-
-// Импортируем orderBy и другие функции/константы из firebase-auth.js
-import { db, isAdmin, getDocs, collection, query, orderBy, where } from './firebase-auth.js'; 
+// reports.js (АДАПТИРОВАНО ПОД YANDEX MAPS)
 
 // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
+// Предполагается, что window.db, window.isAdmin и др. доступны через firebase-auth.js
 let loyaltyChartInstance = null; 
 let actionChartInstance = null; 
-let allReportsData = []; 
-export const SETTLEMENTS = [ 
+window.latestReportData = []; // Глобальный массив для данных
+
+// Набор населенных пунктов для фильтра
+const SETTLEMENTS = [ 
     'г.п. Лянтор', 'с.п. Русскинская', 'г.п. Федоровский', 'г.п. Барсово', 
     'г.п. Белый Яр', 'с.п. Лямина', 'с.п. Сытомино', 'с.п. Угут', 
     'с.п. Ульт-Ягун', 'с.п. Солнечный', 'с.п. Нижнесортымский', 
     'с.п. Тундрино', 'с.п. Локосово'
 ];
-window.latestReportData = []; 
+
 
 // ----------------------------------------------------------------------------------
-// ФУНКЦИИ ГРАФИКОВ 
+// 1. ФУНКЦИИ ГРАФИКОВ (Chart.js) 
 // ----------------------------------------------------------------------------------
 
 function renderLoyaltyChart(reportList) {
-    if (loyaltyChartInstance) {
-        loyaltyChartInstance.destroy();
-    }
+    if (loyaltyChartInstance) loyaltyChartInstance.destroy();
+    // ... (логика Chart.js остается прежней) ...
     
     const loyaltyCounts = {
         strong: 0, moderate: 0, neutral: 0, against: 0
     };
-    reportList.forEach(report => {
-        if (loyaltyCounts.hasOwnProperty(report.loyalty)) {
-            loyaltyCounts[report.loyalty]++;
+    reportList.forEach(r => {
+        if (loyaltyCounts.hasOwnProperty(r.loyalty)) {
+            loyaltyCounts[r.loyalty]++;
         }
     });
 
-    const labels = ['Сильная (ДА)', 'Умеренная (СКОРЕЕ ДА)', 'Нейтрально (НЕ ЗНАЮ)', 'Против (НЕТ)'];
-    const data = [loyaltyCounts.strong, loyaltyCounts.moderate, loyaltyCounts.neutral, loyaltyCounts.against];
-    const backgroundColors = ['#10b981', '#fcd34d', '#9ca3af', '#ef4444'];
-
     const ctx = document.getElementById('loyaltyChart').getContext('2d');
     loyaltyChartInstance = new Chart(ctx, {
-        type: 'pie',
-        data: { labels: labels, datasets: [{ data: data, backgroundColor: backgroundColors, hoverOffset: 4 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { padding: 10 } }, title: { display: false } } }
+        type: 'doughnut',
+        data: {
+            labels: ['Сильная поддержка', 'Умеренная поддержка', 'Нейтрально', 'Против'],
+            datasets: [{
+                data: [loyaltyCounts.strong, loyaltyCounts.moderate, loyaltyCounts.neutral, loyaltyCounts.against],
+                backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'],
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                },
+                title: {
+                    display: true,
+                    text: 'Распределение лояльности'
+                }
+            }
+        }
     });
 }
 
 function renderActionChart(reportList) {
-    if (actionChartInstance) {
-        actionChartInstance.destroy();
-    }
+    if (actionChartInstance) actionChartInstance.destroy();
+    // ... (логика Chart.js остается прежней) ...
     
     const actionCounts = {};
-    reportList.forEach(report => {
-        const action = report.action || 'Не указано';
+    reportList.forEach(r => {
+        const action = r.action || 'Не указано';
         actionCounts[action] = (actionCounts[action] || 0) + 1;
     });
 
     const labels = Object.keys(actionCounts);
     const data = Object.values(actionCounts);
-    const backgroundColors = labels.map(label => {
-        if (label === 'Опрос') return '#22c55e';
-        if (label === 'Агитация') return '#3b82f6';
-        if (label === 'Жалоба') return '#f97316';
-        return '#9ca3af';
-    });
-
+    
     const ctx = document.getElementById('actionChart').getContext('2d');
     actionChartInstance = new Chart(ctx, {
         type: 'bar',
-        data: { labels: labels, datasets: [{ label: 'Количество действий', data: data, backgroundColor: backgroundColors, borderWidth: 1 }] },
-        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false }, title: { display: false } } }
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Количество записей',
+                data: data,
+                backgroundColor: '#6366f1',
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: 'Распределение по действиям'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
     });
 }
 
 
 // ----------------------------------------------------------------------------------
-// РЕНДЕРИНГ СПИСКА ОТЧЕТОВ
+// 2. ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ 
 // ----------------------------------------------------------------------------------
 
-function renderReportsList(reportList) {
-    const reportsListContainer = document.getElementById('reportsListContainer');
-    const totalCount = reportList.length;
-
-    if (totalCount === 0) {
-        reportsListContainer.innerHTML = `<div class="card p-6 text-gray-500"><p>Отчетов пока нет, или они не соответствуют выбранному фильтру.</p></div>`;
-        return;
+/**
+ * Загружает все записи из Firestore
+ * @param {string | null} settlementFilter - Фильтр по населенному пункту
+ */
+window.fetchReports = async function(settlementFilter = null) {
+    if (!window.db || !window.isAdmin) {
+         document.getElementById('mapLoading').classList.add('hidden'); // Скрыть спиннер
+         return;
     }
 
-    reportsListContainer.innerHTML = `
-        <div class="card p-6 mt-4">
-            <h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Детализация (${totalCount} записей)</h3>
-            
-            <div class="mt-4 space-y-3 max-h-[60vh] overflow-y-auto">
-                ${reportList.map(r => 
-                    `<div class="p-4 border rounded-lg shadow-sm bg-gray-50 transition duration-150 hover:shadow-md">
-                        <div class="flex justify-between items-start mb-1">
-                            <strong class="text-indigo-600">${r.settlement}</strong>
-                            <span class="text-xs text-gray-500">${r.date} ${r.time}</span>
-                        </div>
-                        <p class="text-sm text-gray-800 mb-1">${r.address}</p>
-                        <p class="text-xs">
-                            Лояльность: 
-                            <span class="font-medium ${r.loyalty === 'strong' ? 'text-green-600' : r.loyalty === 'against' ? 'text-red-600' : 'text-yellow-600'}">
-                                ${r.loyalty}
-                            </span> 
-                            / Действие: <span class="font-medium text-blue-600">${r.action}</span>
-                        </p>
-                        ${r.comment ? `<p class="mt-2 text-sm italic text-gray-600 border-t pt-2">Комментарий: ${r.comment}</p>` : ''}
-                    </div>`
-                ).join('')}
-            </div>
-        </div>
-    `;
-    lucide.createIcons();
+    document.getElementById('reportStatus').textContent = '⏳ Загрузка данных...';
+    document.getElementById('exportCsvButton').disabled = true;
     
-    window.latestReportData = reportList; 
-}
-
-
-// ----------------------------------------------------------------------------------
-// ОСНОВНАЯ ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ 
-// ----------------------------------------------------------------------------------
-
-export async function fetchAndRenderReports() {
-    if (!db || !isAdmin) {
-         document.getElementById('reportsListContainer').innerHTML = `<div class="card p-6 text-red-500"><p>Доступ запрещен.</p></div>`;
-        return;
-    }
-    
-    const reportsListContainer = document.getElementById('reportsListContainer');
-    reportsListContainer.innerHTML = `
-        <div class="card p-6 text-center text-gray-500">
-            <i data-lucide="loader-2" class="w-8 h-8 mx-auto animate-spin"></i>
-            <p class="mt-2">Загрузка всех отчетов...</p>
-        </div>
-    `;
-    lucide.createIcons();
+    // Показать спиннер карты при загрузке
+    document.getElementById('mapLoading').classList.remove('hidden');
 
     try {
-        const reportsCol = collection(db, "reports");
-        // СОРТИРОВКА по timestamp, от новых к старым
-        const q = query(reportsCol, orderBy("timestamp", "desc")); 
+        let q = firebase.firestore().collection('reports');
+        
+        if (settlementFilter) {
+            q = q.where('settlement', '==', settlementFilter);
+        }
+        
+        q = q.orderBy('timestamp', 'desc');
 
-        const reportSnapshot = await getDocs(q);
-        allReportsData = reportSnapshot.docs.map(doc => { 
-            const data = doc.data();
-            const timestampDate = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate() : new Date();
-            return { 
-                id: doc.id, 
-                date: timestampDate.toLocaleDateString('ru-RU'),
-                time: timestampDate.toLocaleTimeString('ru-RU'),
-                ...data 
-            };
+        const querySnapshot = await q.get();
+        window.latestReportData = [];
+        
+        querySnapshot.forEach(doc => {
+            window.latestReportData.push({ id: doc.id, ...doc.data() });
         });
+
+        document.getElementById('reportStatus').textContent = `✅ Загружено записей: ${window.latestReportData.length}`;
+        document.getElementById('exportCsvButton').disabled = window.latestReportData.length === 0;
+
+        renderLoyaltyChart(window.latestReportData);
+        renderActionChart(window.latestReportData);
         
-        populateReportFilter();
-        
-        // Рендерим все данные при первой загрузке
-        filterAndRenderReports(); 
-
-    } catch (e) {
-        console.error("Error fetching reports: ", e);
-        reportsListContainer.innerHTML = `<div class="card p-6 text-red-500">
-            <p>Ошибка загрузки данных: ${e.message}</p>
-        </div>`;
-    }
-}
-
-
-// ----------------------------------------------------------------------------------
-// ФУНКЦИИ ФИЛЬТРАЦИИ И ЭКСПОРТА
-// ----------------------------------------------------------------------------------
-
-function populateReportFilter() {
-    const select = document.getElementById('reportSettlementFilter');
-    select.innerHTML = '<option value="all">Все населенные пункты</option>';
-    
-    SETTLEMENTS.forEach(settlement => {
-        const option = document.createElement('option');
-        option.value = settlement;
-        option.textContent = settlement;
-        select.appendChild(option);
-    });
-}
-
-export function filterAndRenderReports() {
-    const filterValue = document.getElementById('reportSettlementFilter').value;
-    let filteredReports = [];
-
-    if (filterValue === 'all') {
-        filteredReports = allReportsData;
-    } else {
-        filteredReports = allReportsData.filter(report => report.settlement === filterValue);
-    }
-    
-    // 1. Строим графики по отфильтрованным данным
-    renderLoyaltyChart(filteredReports); 
-    renderActionChart(filteredReports);
-
-    // 2. Рендерим список
-    renderReportsList(filteredReports);
-}
-
-// ФУНКЦИЯ: ЭКСПОРТ В CSV
-export function exportReportsToCSV() {
-    if (!window.latestReportData || window.latestReportData.length === 0) {
-        window.showAlert('Ошибка', 'Нет данных для экспорта. Загрузите отчеты.');
-        return;
-    }
-
-    const reportList = window.latestReportData;
-    
-    // Определяем заголовки CSV
-    const headers = [
-        'ID Агитатора', 'Дата/Время', 'Населенный пункт', 'Адрес', 
-        'Действие', 'Лояльность', 'Комментарий', 'Широта', 'Долгота'
-    ].join(';');
-    
-    // Форматируем данные для CSV
-    const csvRows = reportList.map(report => {
-        return [
-            `"${report.reporterId}"`, // В кавычках, чтобы избежать проблем с форматированием
-            `"${report.date} ${report.time}"`,
-            `"${report.settlement}"`,
-            `"${report.address}"`,
-            `"${report.action}"`,
-            `"${report.loyalty}"`,
-            `"${report.comment ? report.comment.replace(/"/g, '""') : ''}"`, // Экранирование кавычек
-            report.latitude || '',
-            report.longitude || ''
-        ].join(';');
-    });
-
-    const csvContent = headers + '\n' + csvRows.join('\n');
-    
-    // Создаем Blob и ссылку для скачивания
-    const blob = new Blob([
-        // Добавляем BOM для корректного отображения кириллицы в Excel
-        '\ufeff', 
-        csvContent
-    ], { type: 'text/csv;charset=utf-8;' });
-    
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `Отчет_Агитатор_${new Date().toISOString().slice(0, 10)}.csv`;
-    
-    // Инициируем скачивание
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    window.showAlert('Успех', `Экспортировано ${reportList.length} записей в файл CSV.`);
-}
-
-// ----------------------------------------------------------------------------------
-// ФУНКЦИЯ КАРТЫ
-// ----------------------------------------------------------------------------------
-
-export function generateMap() {
-    const mapContainer = document.getElementById('map');
-    
-    if (!window.map) {
-         window.map = L.map('map').setView([61.0, 73.0], 9); 
-         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 18,
-            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-         }).addTo(window.map);
-    }
-    
-    if (window.currentMarkers) window.currentMarkers.clearLayers();
-    
-    if (window.latestReportData && window.latestReportData.length > 0) {
-        const markers = L.markerClusterGroup();
-        let hasGeoData = false;
-        window.latestReportData.forEach(r => {
-            if (r.latitude && r.longitude) {
-                hasGeoData = true;
-                const marker = L.marker([r.latitude, r.longitude]);
-                marker.bindPopup(`<b>${r.settlement}</b><br>${r.address}<br>Лояльность: ${r.loyalty}`);
-                markers.addLayer(marker);
-            }
-        });
-        
-        if (hasGeoData) {
-            window.currentMarkers = markers;
-            window.map.addLayer(markers);
-            try {
-                window.map.fitBounds(markers.getBounds());
-            } catch (e) { /* ignore error with one point */ }
-           
-        } else {
-             mapContainer.innerHTML = `<div class="p-6 text-gray-500">Нет данных с геолокацией для отображения на карте.</div>`;
+        // Обновление карты
+        if (typeof window.initMapMarkers === 'function') {
+            window.initMapMarkers(window.latestReportData);
         }
 
-    } else {
-         mapContainer.innerHTML = `<div class="p-6 text-gray-500">Нет данных с геолокацией для отображения на карте.</div>`;
+    } catch (error) {
+        console.error("Ошибка при загрузке отчетов: ", error);
+        window.showAlert('ОШИБКА ДАННЫХ', `Не удалось загрузить отчеты: ${error.message}`);
+        document.getElementById('reportStatus').textContent = '❌ Ошибка загрузки данных';
+    } finally {
+        // Скрыть спиннер карты после загрузки данных
+        document.getElementById('mapLoading').classList.add('hidden');
     }
-    setTimeout(() => window.map.invalidateSize(), 200);
 }
+
+// ----------------------------------------------------------------------------------
+// 3. ИНТЕГРАЦИЯ YANDEX MAPS API
+// ----------------------------------------------------------------------------------
+
+/**
+ * Инициализация Yandex Map. Вызывается один раз через 'onload' из HTML.
+ */
+window.initMap = function() {
+    // Проверка, что Yandex Maps API загружен и карта еще не инициализирована
+    if (typeof ymaps === 'undefined' || window.mapInstance) {
+        // Если инициализирована, просто обновляем данные
+        if (window.mapInstance) window.fetchReports(document.getElementById('settlementFilter').value || null);
+        return; 
+    }
+    
+    // Стандартные координаты для центрирования (например, Сургутский район)
+    const defaultCoords = [61.644, 72.845]; 
+    const defaultZoom = 8;
+
+    // Создание новой карты
+    window.mapInstance = new ymaps.Map('mapContainer', {
+        center: defaultCoords,
+        zoom: defaultZoom,
+        controls: ['zoomControl', 'fullscreenControl']
+    });
+
+    // Добавляем кластеры
+    window.clusterer = new ymaps.Clusterer({
+        preset: 'islands#invertedVioletClusterIcons',
+        groupByCoordinates: false,
+        clusterDisableClickZoom: true,
+        clusterHideIconOnZoom: true,
+        geoObjectHideIconOnZoom: true
+    });
+    
+    window.mapInstance.geoObjects.add(window.clusterer);
+
+    // УЛУЧШЕНИЕ: Сразу после инициализации карты загружаем данные
+    window.fetchReports();
+}
+
+/**
+ * Добавляет метки на Yandex Map, используя кластеризатор.
+ * @param {Array<Object>} reportList - Список отчетов.
+ */
+window.initMapMarkers = function(reportList) {
+    if (!window.mapInstance || !window.clusterer) return;
+
+    window.clusterer.removeAll(); // Очистка старых меток
+    const geoObjects = [];
+    let hasGeoData = false;
+    
+    const mapContainer = document.getElementById('mapContainer');
+    mapContainer.style.height = '600px'; // Восстанавливаем высоту
+
+    reportList.forEach(r => {
+        // Координаты из Dadata (более надежные для карты)
+        const lat = r.latitude;
+        const lon = r.longitude;
+        
+        if (lat && lon) {
+            hasGeoData = true;
+            
+            const color = (r.loyalty === 'strong') ? '#10b981' : 
+                           (r.loyalty === 'moderate') ? '#3b82f6' : 
+                           (r.loyalty === 'neutral') ? '#f59e0b' : 
+                           '#ef4444'; // Против
+                           
+            const placemark = new ymaps.Placemark([lat, lon], {
+                balloonContentHeader: `<b>${r.settlement}</b>`,
+                balloonContentBody: `${r.address}<br>Лояльность: ${r.loyalty}`,
+                hintContent: r.address 
+            }, {
+                preset: 'islands#dotIcon',
+                iconColor: color 
+            });
+            geoObjects.push(placemark);
+        }
+    });
+
+    if (hasGeoData) {
+        window.clusterer.add(geoObjects);
+        // Автоматическое позиционирование
+        try {
+            window.mapInstance.setBounds(window.clusterer.getBounds(), {
+                checkZoomRange: true,
+                zoomMargin: 30
+            });
+        } catch (e) {
+            // Игнорируем ошибку, если кластеризатор не имеет границ (например, 1 точка)
+        }
+    } else {
+        // УЛУЧШЕНИЕ: Сообщение о том, что нет данных
+        mapContainer.innerHTML = `<div class="p-6 text-gray-500 text-center text-lg">Нет данных с геолокацией для отображения на карте.</div>`;
+        mapContainer.style.height = '200px'; // Уменьшаем высоту для сообщения
+    }
+}
+
+
+// ----------------------------------------------------------------------------------
+// 4. ФУНКЦИЯ ЭКСПОРТА CSV
+// ----------------------------------------------------------------------------------
+
+window.exportToCsv = function() {
+    const data = window.latestReportData;
+    if (data.length === 0) {
+        window.showAlert('ОШИБКА', 'Нет данных для экспорта.');
+        return;
+    }
+    // ... (логика экспорта CSV остается прежней) ...
+
+    const headers = [
+        "ID", "Telegram ID", "Дата", "Населенный пункт", "Адрес", 
+        "Лояльность", "Действие", "Комментарий", "Широта", "Долгота"
+    ];
+    
+    const csvRows = [headers.join(';')];
+    
+    data.forEach(item => {
+        // Форматирование метки времени
+        const formattedTimestamp = item.timestamp ? new Date(item.timestamp.toDate()).toLocaleString('ru-RU') : '';
+        // Экранирование данных, содержащих кавычки или точки с запятой
+        const safeValue = (v) => {
+            const str = String(v || '').replace(/"/g, '""');
+            return str.includes(';') || str.includes('\n') ? `"${str}"` : str;
+        };
+        
+        const values = [
+            safeValue(item.id),
+            safeValue(item.telegramId),
+            safeValue(formattedTimestamp),
+            safeValue(item.settlement),
+            safeValue(item.address),
+            safeValue(item.loyalty),
+            safeValue(item.action),
+            safeValue(item.comment),
+            safeValue(item.latitude),
+            safeValue(item.longitude)
+        ];
+        csvRows.push(values.join(';'));
+    });
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob(["\ufeff" + csvString], { type: 'text/csv;charset=utf-8;' }); 
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.setAttribute('download', 'reports_' + new Date().toISOString().slice(0, 10) + '.csv');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.showAlert('УСПЕХ', 'Данные успешно экспортированы в CSV.');
+}
+
+// ----------------------------------------------------------------------------------
+// 5. ИНИЦИАЛИЗАЦИЯ ФИЛЬТРА
+// ----------------------------------------------------------------------------------
+
+document.addEventListener('DOMContentLoaded', () => {
+    const filterSelect = document.getElementById('settlementFilter');
+    if (filterSelect) {
+        // Добавление опций населенных пунктов
+        SETTLEMENTS.forEach(s => {
+            const option = document.createElement('option');
+            option.value = s;
+            option.textContent = s;
+            filterSelect.appendChild(option);
+        });
+        
+        // Обработчик изменения фильтра
+        filterSelect.addEventListener('change', (e) => {
+            const selectedSettlement = e.target.value === '' ? null : e.target.value;
+            // УЛУЧШЕНИЕ: Загружаем данные с фильтром
+            window.fetchReports(selectedSettlement);
+        });
+    }
+});
