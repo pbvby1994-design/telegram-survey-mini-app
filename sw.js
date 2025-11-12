@@ -1,45 +1,58 @@
 // sw.js (Service Worker)
-const CACHE_NAME = 'agitator-notebook-cache-v1';
+const CACHE_NAME = 'agitator-notebook-cache-v2';
 
 // Список файлов, которые должны быть кешированы при установке Service Worker
 const urlsToCache = [
     // Основные файлы приложения
-    '/', // Главная страница (если это корень)
+    '/', 
+    '/index.html',
     '/admin_dashboard.html',
     '/manifest.json',
+    
+    // Скрипты
+    '/config.js',
+    '/firebase-auth.js',
+    '/main.js',
+    '/reports.js',
 
     // Критические CDN библиотеки
     'https://cdn.tailwindcss.com',
     'https://unpkg.com/lucide@latest',
     'https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js',
-
-    // Leaflet Maps
-    'https://unpkg.com/leaflet/dist/leaflet.css',
-    'https://unpkg.com/leaflet/dist/leaflet.js',
-    'https://unpkg.com/leaflet-heat/dist/leaflet-heat.js',
-    'https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js',
-    'https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css',
-    'https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css'
+    'https://telegram.org/js/telegram-web-app.js',
+    
+    // Firebase Modular SDK (v9+ compatibility)
+    'https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js',
+    'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js',
+    'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js',
+    
+    // Leaflet (УДАЛЕН)
 ];
 
 // 1. Событие INSTALL: Кеширование всех необходимых ресурсов
 self.addEventListener('install', event => {
+    console.log('Service Worker: Установка v2');
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => {
                 console.log('Service Worker: Кеширование ресурсов:', urlsToCache);
                 return cache.addAll(urlsToCache);
             })
+            .catch(error => {
+                 console.error('Service Worker: Ошибка при кешировании:', error);
+            })
     );
 });
 
-// 2. Событие ACTIVATE: Удаление старых версий кеша
+// 2. Событие ACTIVATE: Удаление старого кеша
 self.addEventListener('activate', event => {
+    console.log('Service Worker: Активация v2');
+    const cacheWhitelist = [CACHE_NAME];
     event.waitUntil(
         caches.keys().then(cacheNames => {
             return Promise.all(
                 cacheNames.map(cacheName => {
-                    if (cacheName !== CACHE_NAME) {
+                    if (cacheWhitelist.indexOf(cacheName) === -1) {
                         console.log('Service Worker: Удаление старого кеша:', cacheName);
                         return caches.delete(cacheName);
                     }
@@ -49,43 +62,38 @@ self.addEventListener('activate', event => {
     );
 });
 
-// 3. Событие FETCH: Перехват сетевых запросов
+// 3. Событие FETCH: Стратегия Cache First
 self.addEventListener('fetch', event => {
-    // Не перехватываем запросы к Firebase и Nominatim (они всегда должны быть свежими)
-    if (event.request.url.includes('firebase') || event.request.url.includes('nominatim.openstreetmap.org')) {
-        return fetch(event.request);
+    if (!event.request.url.startsWith('http')) {
+        return;
     }
-
-    // Для остальных ресурсов: сначала ищем в кеше, при неудаче - идем в сеть
+    
     event.respondWith(
         caches.match(event.request)
             .then(response => {
-                // Возвращаем из кеша, если найдено
                 if (response) {
                     return response;
                 }
 
-                // Иначе делаем запрос к сети
                 return fetch(event.request).then(
                     networkResponse => {
-                        // Проверяем, что запрос прошел успешно и не является расширением (например, chrome-extension://)
                         if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
                             return networkResponse;
                         }
 
-                        // Клонируем ответ, т.к. его можно прочитать только один раз
                         const responseToCache = networkResponse.clone();
 
-                        // Добавляем новый ресурс в кеш (для обновления)
                         caches.open(CACHE_NAME)
                             .then(cache => {
-                                cache.put(event.request, responseToCache);
+                                // ИСКЛЮЧЕНИЕ: Не кешируем API и Yandex Maps
+                                if (!event.request.url.includes('firebase') && !event.request.url.includes('api-maps.yandex.ru') && !event.request.url.includes('dadata.ru')) {
+                                     cache.put(event.request, responseToCache);
+                                }
                             });
 
                         return networkResponse;
                     }
                 ).catch(error => {
-                    // Это место для обработки полного оффлайна
                     console.error('Fetch failed; returning offline page.', error);
                 });
             })
