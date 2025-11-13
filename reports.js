@@ -1,161 +1,442 @@
-// reports.js (АДАПТИРОВАНО ПОД YANDEX MAPS С РОЛЕВОЙ МОДЕЛЬЮ)
+// reports.js (ОБНОВЛЕННАЯ ВЕРСИЯ - БЕЗ initMap)
+
+// Импортируем из firebase-auth.js
+// Предполагается, что firebase-auth.js использует глобальные переменные и совместимый синтаксис v8
+// В этом случае 'import' не нужен, если firebase-auth.js и main.js используют window.
+// Оставляем как есть, если используется system.js или похожий модульный загрузчик
+// Если нет - замените 'import' на глобальный доступ.
 
 // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
 let loyaltyChartInstance = null; 
 let actionChartInstance = null; 
-window.latestReportData = []; 
-window.mapInstance = null;
-window.clusterer = null;
-
-const SETTLEMENTS = [ 
+let allReportsData = []; 
+export const SETTLEMENTS = [ 
     'г.п. Лянтор', 'с.п. Русскинская', 'г.п. Федоровский', 'г.п. Барсово', 
     'г.п. Белый Яр', 'с.п. Лямина', 'с.п. Сытомино', 'с.п. Угут', 
     'с.п. Ульт-Ягун', 'с.п. Солнечный', 'с.п. Нижнесортымский', 
     'с.п. Тундрино', 'с.п. Локосово'
 ];
-
-// ... (renderLoyaltyChart, renderActionChart - остаются прежними) ...
+window.latestReportData = []; 
+window.activeReportsQuery = null; // Для подписки/отписки
 
 // ----------------------------------------------------------------------------------
-// 1. ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ (с фильтрацией по роли)
+// ФУНКЦИИ ГРАФИКОВ 
 // ----------------------------------------------------------------------------------
 
-window.fetchReports = async function(settlementFilter = null) {
-    if (!window.db) {
-         document.getElementById('reportStatus').textContent = '❌ Соединение с БД не установлено.';
-         document.getElementById('mapLoading')?.classList.add('hidden'); 
-         return;
+function renderLoyaltyChart(reportList) {
+    if (loyaltyChartInstance) {
+        loyaltyChartInstance.destroy();
     }
     
-    const mapLoading = document.getElementById('mapLoading');
-    if (mapLoading) mapLoading.classList.remove('hidden'); 
+    const loyaltyCounts = {
+        strong: 0, moderate: 0, neutral: 0, against: 0
+    };
+    
+    reportList.forEach(r => {
+        if (loyaltyCounts.hasOwnProperty(r.loyalty)) {
+            loyaltyCounts[r.loyalty]++;
+        }
+    });
 
-    document.getElementById('reportStatus').textContent = '⏳ Загрузка данных...';
-    document.getElementById('exportCsvButton').disabled = true;
+    const ctx = document.getElementById('loyaltyChart')?.getContext('2d');
+    if (!ctx) return;
 
-    try {
-        let q = firebase.firestore().collection('reports');
-        
-        // --- ЛОГИКА ФИЛЬТРАЦИИ ПО РОЛИ ---
-        if (!window.isAdmin) {
-            // Агитатор: видим только свои отчеты
-            if (!window.userTelegramId) throw new Error("Не удалось получить Telegram ID для фильтрации.");
-            q = q.where('telegramId', '==', window.userTelegramId);
-        } else {
-            // Админ: используем фильтр по НП
-            if (settlementFilter) {
-                q = q.where('settlement', '==', settlementFilter);
+    loyaltyChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Сильная поддержка', 'Умеренная поддержка', 'Нейтрально', 'Против'],
+            datasets: [{
+                data: Object.values(loyaltyCounts),
+                backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'],
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' },
+                title: { display: false }
             }
         }
-        // ---------------------------------
-        
-        q = q.orderBy('timestamp', 'desc');
-
-        const querySnapshot = await q.get();
-        window.latestReportData = [];
-        
-        querySnapshot.forEach(doc => {
-            window.latestReportData.push({ id: doc.id, ...doc.data() });
-        });
-
-        document.getElementById('reportStatus').textContent = `✅ Загружено записей: ${window.latestReportData.length}`;
-        document.getElementById('exportCsvButton').disabled = window.latestReportData.length === 0 || !window.isAdmin;
-
-        // Если Админ, рендерим графики и карту
-        if (window.isAdmin) {
-             renderLoyaltyChart(window.latestReportData);
-             renderActionChart(window.latestReportData);
-             if (window.mapInstance && typeof ymaps !== 'undefined') {
-                 window.initMapMarkers(window.latestReportData);
-             } else {
-                 if (mapLoading) mapLoading.classList.add('hidden'); 
-             }
-        } else {
-             // Если Агитатор, рендерим только список его отчетов
-             window.renderAgitatorReports(window.latestReportData);
-             if (mapLoading) mapLoading.classList.add('hidden'); 
-        }
-
-    } catch (error) {
-        console.error("Ошибка при загрузке отчетов: ", error);
-        window.showAlert('ОШИБКА ДАННЫХ', `Не удалось загрузить отчеты: ${error.message}.`);
-        document.getElementById('reportStatus').textContent = '❌ Ошибка загрузки данных';
-        if (mapLoading) mapLoading.classList.add('hidden');
-    }
+    });
 }
 
+function renderActionChart(reportList) {
+    if (actionChartInstance) {
+        actionChartInstance.destroy();
+    }
+    
+    const actionCounts = {
+        conversation: 0, handout: 0, visit: 0
+    };
+    
+    reportList.forEach(r => {
+        if (actionCounts.hasOwnProperty(r.action)) {
+            actionCounts[r.action]++;
+        }
+    });
+
+    const ctx = document.getElementById('actionChart')?.getContext('2d');
+    if (!ctx) return;
+
+    actionChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Разговор', 'Вручение материала', 'Посещение'],
+            datasets: [{
+                label: 'Количество действий',
+                data: Object.values(actionCounts),
+                backgroundColor: ['#4f46e5', '#3730a3', '#1e3a8a'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+
 // ----------------------------------------------------------------------------------
-// 2. ФУНКЦИЯ РЕНДЕРИНГА ОТЧЕТОВ АГИТАТОРА (с кнопкой редактирования)
+// ФУНКЦИИ КАРТЫ (Используют глобальный window.mapInstance, который инициализирован в main.js)
 // ----------------------------------------------------------------------------------
 
-window.renderAgitatorReports = function(reportList) {
-    const container = document.getElementById('agitatorReportsList');
-    if (!container) return;
-    
-    container.innerHTML = ''; 
-    
-    if (reportList.length === 0) {
-        container.innerHTML = '<p class="text-center text-gray-500 p-6">Вы пока не внесли ни одного отчета.</p>';
+window.renderMap = function(reportList) {
+    const mapContainer = document.getElementById('mapContainer');
+    const mapLoading = document.getElementById('mapLoading');
+
+    // 1. Показываем загрузку, если есть
+    if (mapLoading) {
+        mapLoading.classList.remove('hidden');
+    }
+
+    // 2. Проверяем, что карта и API готовы
+    if (!window.mapInstance || typeof ymaps === 'undefined') {
+        if (mapLoading) mapLoading.classList.add('hidden');
+        mapContainer.innerHTML = `<div class="p-6 text-gray-500">Карта еще не инициализирована. Попробуйте обновить страницу.</div>`;
         return;
     }
     
-    const currentTime = new Date();
+    // 3. Очищаем старые объекты
+    window.mapInstance.geoObjects.removeAll();
 
-    reportList.forEach(report => {
-        const reportTime = report.timestamp ? report.timestamp.toDate() : null;
-        const diffMinutes = reportTime ? (currentTime.getTime() - reportTime.getTime()) / (1000 * 60) : Infinity;
-        const canEdit = diffMinutes <= 30;
-        
-        const card = document.createElement('div');
-        card.className = 'bg-white p-4 rounded-xl shadow mb-3 border-l-4 ' + (canEdit ? 'border-indigo-500' : 'border-gray-300');
-        
-        const timestampText = reportTime ? reportTime.toLocaleString('ru-RU') : 'Нет данных';
-        const editStatus = canEdit ? 
-            `<span class="text-sm font-semibold text-indigo-600">Доступно еще ${Math.max(0, 30 - Math.ceil(diffMinutes))} мин.</span>` :
-            `<span class="text-sm font-semibold text-red-500">Редактирование закрыто</span>`;
-            
-        card.innerHTML = `
-            <div class="flex justify-between items-start mb-2">
-                <h3 class="font-bold text-gray-900">${report.settlement || ''}, ${report.address || 'Адрес не указан'}</h3>
-                ${editStatus}
-            </div>
-            <p class="text-sm text-gray-600">Дата: ${timestampText}</p>
-            <p class="text-sm text-gray-600">Лояльность: <b>${report.loyalty || '-'}</b>, Действие: <b>${report.action || '-'}</b></p>
-            <p class="text-sm text-gray-600 mt-1 truncate">Комментарий: ${report.comment || 'Нет'}</p>
-        `;
-        
-        if (canEdit) {
-            const button = document.createElement('button');
-            button.className = 'mt-3 text-indigo-600 hover:text-indigo-800 font-medium text-sm flex items-center';
-            button.innerHTML = '<span data-lucide="edit" class="w-4 h-4 mr-1"></span> Редактировать';
-            // Вызов функции загрузки для редактирования из main.js
-            button.onclick = () => window.loadReportForEdit(report.id); 
-            card.appendChild(button);
-        }
-        
-        container.appendChild(card);
+    const clusterer = new ymaps.Clusterer({
+        preset: 'islands#invertedVioletClusterIcons',
+        groupByCoordinates: false,
+        clusterDisableClickZoom: false,
+        clusterHideIconOnZoom: true,
+        geoObjectHideIconOnZoom: true,
+        margin: [50, 50]
     });
-    lucide.createIcons(); // Обновление иконок
+
+    let hasGeoData = false;
+    let bounds = null;
+
+    reportList.forEach(r => {
+        if (r.latitude && r.longitude) {
+            hasGeoData = true;
+            
+            const loyaltyColor = r.loyalty === 'strong' ? 'green' : 
+                                 r.loyalty === 'moderate' ? 'blue' : 
+                                 r.loyalty === 'neutral' ? 'yellow' : 'red';
+            
+            const placemark = new ymaps.Placemark([r.latitude, r.longitude], {
+                balloonContentHeader: `${r.settlement}`,
+                balloonContentBody: `
+                    <strong>Адрес:</strong> ${r.address}<br>
+                    <strong>Лояльность:</strong> ${r.loyalty}<br>
+                    <strong>Действие:</strong> ${r.action}<br>
+                    <strong>Агитатор:</strong> ${r.username || 'N/A'}<br>
+                    <strong>Дата:</strong> ${new Date(r.timestamp?.seconds * 1000).toLocaleDateString()}
+                `,
+                hintContent: `${r.address} (${r.loyalty})`
+            }, {
+                preset: `islands#${loyaltyColor}DotIcon`
+            });
+
+            clusterer.add(placemark);
+
+            // Обновление границ карты
+            if (bounds) {
+                bounds = ymaps.util.bounds.include(bounds, [r.latitude, r.longitude]);
+            } else {
+                bounds = ymaps.util.bounds.fromPoints([r.latitude, r.longitude]);
+            }
+        }
+    });
+
+    if (hasGeoData) {
+        window.mapInstance.geoObjects.add(clusterer);
+        // Центрируем карту по сгруппированным объектам
+        if (bounds) {
+            window.mapInstance.setBounds(bounds, { checkZoom: true, zoomMargin: 50 });
+        }
+    } else {
+         mapContainer.innerHTML = `<div class="absolute inset-0 flex items-center justify-center text-gray-500">Нет данных с геолокацией для отображения на карте.</div>`;
+    }
+
+    if (mapLoading) {
+        mapLoading.classList.add('hidden');
+    }
 }
 
 
-// ... (initMap, initMapMarkers, exportToCsv - остаются прежними) ...
+// ----------------------------------------------------------------------------------
+// ФУНКЦИИ ЗАГРУЗКИ И ОБРАБОТКИ ОТЧЕТОВ
+// ----------------------------------------------------------------------------------
 
-document.addEventListener('DOMContentLoaded', () => {
-    const filterSelect = document.getElementById('settlementFilter');
-    if (filterSelect) {
-        SETTLEMENTS.forEach(s => {
-            const option = document.createElement('option');
-            option.value = s;
-            option.textContent = s;
-            filterSelect.appendChild(option);
-        });
-        
-        filterSelect.addEventListener('change', (e) => {
-            const selectedSettlement = e.target.value === '' ? null : e.target.value;
-            if (window.isAdmin) {
-                window.fetchReports(selectedSettlement);
+// Центральная функция для получения отчетов
+window.fetchReports = async function(settlementFilter = null) {
+    if (!window.db) return;
+
+    let reportsRef = window.db.collection('reports');
+    let q;
+
+    try {
+        if (window.isAdmin) {
+            // Администратор: фильтр по НП (если выбран)
+            let queryConstraints = [window.firebase.firestore.orderBy('timestamp', 'desc')];
+            if (settlementFilter) {
+                 queryConstraints.unshift(window.firebase.firestore.where('settlement', '==', settlementFilter));
             }
+            q = reportsRef.limit(1000).where(...queryConstraints); // Используем where для фильтра, limit для разумного объема
+        } else {
+            // Агитатор: фильтр по user_id
+            q = reportsRef
+                .where('user_id', '==', window.userTelegramId)
+                .orderBy('timestamp', 'desc')
+                .limit(50); // Показываем только последние 50 отчетов агитатора
+        }
+        
+        // Отменяем предыдущую подписку, если она была (для избежания дублирования)
+        if (window.activeReportsQuery) {
+             window.activeReportsQuery();
+        }
+
+        // ⚠️ Используем onSnapshot для живого обновления данных
+        window.activeReportsQuery = q.onSnapshot((querySnapshot) => {
+            window.latestReportData = [];
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                window.latestReportData.push({ 
+                    id: doc.id,
+                    ...data,
+                    timestamp: data.timestamp ? data.timestamp.toDate() : new Date() // Конвертируем Firestore Timestamp
+                });
+            });
+
+            // Обновляем все UI-компоненты
+            if (window.isAdmin) {
+                 window.renderAdminUI();
+            } else {
+                 window.renderAgitatorReports(window.latestReportData);
+            }
+        }, (error) => {
+            console.error("Error listening to reports:", error);
+            window.showAlert('Ошибка загрузки', `Не удалось загрузить отчеты: ${error.message}`);
         });
+
+    } catch (error) {
+        console.error("Error setting up reports query:", error);
+        window.showAlert('Ошибка', `Не удалось настроить запрос: ${error.message}`);
     }
-});
+}
+
+// Рендер UI для Администратора (Карта, Статистика)
+window.renderAdminUI = function() {
+    const currentSection = document.querySelector('.content-section:not(.hidden)')?.id;
+    
+    // 1. Рендер Графиков
+    if (currentSection === 'stats' || currentSection === 'raw-data') {
+         renderLoyaltyChart(window.latestReportData);
+         renderActionChart(window.latestReportData);
+    }
+    
+    // 2. Рендер Карты
+    if (currentSection === 'map-view' && typeof ymaps !== 'undefined') {
+        window.renderMap(window.latestReportData);
+    }
+    
+    // 3. Обновление статуса
+    const reportStatus = document.getElementById('reportStatus');
+    if (reportStatus) {
+        reportStatus.textContent = `Загружено отчетов: ${window.latestReportData.length} (Обновляется в реальном времени)`;
+        document.getElementById('exportCsvButton').disabled = window.latestReportData.length === 0;
+    }
+}
+
+// Рендер UI для Агитатора (Список Отчетов)
+window.renderAgitatorReports = function(reports) {
+    const listContainer = document.getElementById('agitatorReportsList');
+    if (!listContainer) return;
+
+    listContainer.innerHTML = ''; // Очистка
+    
+    if (reports.length === 0) {
+         listContainer.innerHTML = `<p class="text-center text-gray-500 p-4">У вас пока нет сохраненных отчетов.</p>`;
+         return;
+    }
+
+    const now = new Date();
+
+    reports.forEach(report => {
+        const reportTime = report.timestamp instanceof Date ? report.timestamp : new Date();
+        // 30 минут = 30 * 60 * 1000 миллисекунд
+        const isEditable = (now.getTime() - reportTime.getTime()) < (30 * 60 * 1000); 
+
+        const loyaltyMap = {
+            strong: 'Сильная поддержка',
+            moderate: 'Умеренная поддержка',
+            neutral: 'Нейтрально',
+            against: 'Против'
+        };
+        const actionMap = {
+            conversation: 'Разговор',
+            handout: 'Вручение материала',
+            visit: 'Посещение'
+        };
+
+        const loyaltyColor = report.loyalty === 'strong' ? 'bg-green-100 text-green-800' :
+                             report.loyalty === 'moderate' ? 'bg-blue-100 text-blue-800' :
+                             report.loyalty === 'neutral' ? 'bg-yellow-100 text-yellow-800' :
+                             'bg-red-100 text-red-800';
+
+        const item = document.createElement('div');
+        item.className = 'p-4 border border-gray-200 rounded-lg shadow-sm bg-white hover:shadow-md transition-shadow';
+        item.innerHTML = `
+            <div class="flex justify-between items-start mb-2">
+                <h4 class="text-lg font-semibold text-gray-900">${report.settlement} - ${report.address}</h4>
+                <span class="text-sm font-medium ${loyaltyColor} px-3 py-1 rounded-full">${loyaltyMap[report.loyalty] || report.loyalty}</span>
+            </div>
+            <p class="text-sm text-gray-600 mb-1">Действие: <strong>${actionMap[report.action] || report.action}</strong></p>
+            <p class="text-xs text-gray-500 mb-2">
+                ${reportTime.toLocaleDateString()} ${reportTime.toLocaleTimeString()} 
+                ${report.comment ? ' | Комментарий: ' + report.comment.substring(0, 50) + (report.comment.length > 50 ? '...' : '') : ''}
+            </p>
+            <div class="mt-3 text-right">
+                ${isEditable 
+                    ? `<button onclick="window.editReport('${report.id}')" class="text-sm bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded-md transition duration-150">
+                           <span data-lucide="edit-3" class="w-4 h-4 inline mr-1"></span> Редактировать
+                       </button>`
+                    : `<span class="text-sm text-gray-400">Редактирование блокировано</span>`
+                }
+            </div>
+        `;
+        listContainer.appendChild(item);
+    });
+    
+    // Обновляем иконки после добавления в DOM
+    if (typeof lucide !== 'undefined') {
+         lucide.createIcons();
+    }
+}
+
+// Функция для подготовки данных отчета к редактированию
+window.editReport = function(docId) {
+    const report = window.latestReportData.find(r => r.id === docId);
+    if (!report) {
+        window.showAlert('Ошибка', 'Отчет для редактирования не найден.');
+        return;
+    }
+
+    // Заполнение формы
+    document.getElementById('settlement').value = report.settlement;
+    document.getElementById('address').value = report.address;
+    document.querySelector(`input[name="loyalty"][value="${report.loyalty}"]`).checked = true;
+    document.querySelector(`input[name="action"][value="${report.action}"]`).checked = true;
+    document.getElementById('comment').value = report.comment;
+    
+    // Устанавливаем координаты для сохранения (если GPS были)
+    window.currentLatitude = report.latitude;
+    window.currentLongitude = report.longitude;
+    document.getElementById('geoStatus').textContent = report.latitude && report.longitude 
+        ? `✅ GPS (из отчета): ${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}` 
+        : 'Геолокация: ❓ Не получена';
+        
+    // Привязываем функцию сохранения к редактированию
+    document.getElementById('reportForm').onsubmit = function(event) {
+        event.preventDefault();
+        window.saveReport(docId); // Вызываем saveReport с ID документа
+    };
+
+    // Обновляем кнопку
+    document.getElementById('saveButton').innerHTML = '<span data-lucide="save" class="w-5 h-5 mr-2"></span> Обновить Отчет (Редактирование)';
+    document.getElementById('saveButton').classList.remove('bg-indigo-600');
+    document.getElementById('saveButton').classList.add('bg-yellow-600');
+    
+    // Переключаемся на вкладку формы
+    window.showSection('form-view');
+    lucide.createIcons();
+}
+
+// ----------------------------------------------------------------------------------
+// ЭКСПОРТ
+// ----------------------------------------------------------------------------------
+
+window.exportToCsv = function() {
+    if (window.latestReportData.length === 0) {
+        window.showAlert('Ошибка', 'Нет данных для экспорта.');
+        return;
+    }
+
+    const headers = [
+        'ID', 'Дата', 'Агитатор', 'Telegram ID', 'НП', 'Адрес', 'Лояльность', 'Действие', 'Комментарий', 'Широта', 'Долгота'
+    ];
+
+    const rows = window.latestReportData.map(r => [
+        r.id,
+        r.timestamp.toISOString(),
+        r.username,
+        r.user_id,
+        r.settlement,
+        r.address,
+        r.loyalty,
+        r.action,
+        r.comment.replace(/"/g, '""'), // Экранируем кавычки для CSV
+        r.latitude || '',
+        r.longitude || ''
+    ]);
+
+    // Форматирование в CSV:
+    let csvContent = headers.join(';') + '\n';
+    rows.forEach(row => {
+        csvContent += row.map(cell => `"${cell}"`).join(';') + '\n';
+    });
+
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' }); // Добавляем BOM для кириллицы
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `reports_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+// Добавляем обработчик для фильтра НП (только для Админа)
+const settlementFilter = document.getElementById('settlementFilter');
+if (settlementFilter) {
+    // Заполняем список НП
+    SETTLEMENTS.forEach(settlement => {
+        const option = document.createElement('option');
+        option.value = settlement;
+        option.textContent = settlement;
+        settlementFilter.appendChild(option);
+    });
+    
+    settlementFilter.addEventListener('change', () => {
+        // Перезагружаем отчеты с новым фильтром
+        if (window.isAdmin && typeof window.fetchReports === 'function') {
+            window.fetchReports(settlementFilter.value || null);
+        }
+    });
+}
