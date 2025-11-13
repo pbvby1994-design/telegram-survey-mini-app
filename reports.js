@@ -24,7 +24,7 @@ function renderLoyaltyChart(reportList) {
     
     const loyaltyCounts = { strong: 0, moderate: 0, neutral: 0, against: 0 };
     reportList.forEach(r => {
-        if (loyaltyCounts.hasOwnProperty(r.loyalty)) {
+        if (r.loyalty && loyaltyCounts.hasOwnProperty(r.loyalty)) {
             loyaltyCounts[r.loyalty]++;
         }
     });
@@ -91,7 +91,7 @@ function renderActionChart(reportList) {
 
 
 // ----------------------------------------------------------------------------------
-// 2. ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ (Решает проблему "нет данных")
+// 2. ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ
 // ----------------------------------------------------------------------------------
 
 /**
@@ -99,14 +99,15 @@ function renderActionChart(reportList) {
  * @param {string | null} settlementFilter - Фильтр по населенному пункту
  */
 window.fetchReports = async function(settlementFilter = null) {
+    // Проверка, что пользователь администратор и база данных инициализирована
     if (!window.db || !window.isAdmin) {
+         document.getElementById('reportStatus').textContent = '❌ Доступ только для администраторов.';
          document.getElementById('mapLoading').classList.add('hidden'); 
          return;
     }
 
     document.getElementById('reportStatus').textContent = '⏳ Загрузка данных...';
     document.getElementById('exportCsvButton').disabled = true;
-    
     document.getElementById('mapLoading').classList.remove('hidden');
 
     try {
@@ -118,6 +119,7 @@ window.fetchReports = async function(settlementFilter = null) {
         
         q = q.orderBy('timestamp', 'desc');
 
+        // Улучшение: Можно добавить .limit(1000) для ограничения большого объема данных
         const querySnapshot = await q.get();
         window.latestReportData = [];
         
@@ -134,17 +136,15 @@ window.fetchReports = async function(settlementFilter = null) {
         // Обновление карты, если она инициализирована
         if (window.mapInstance && typeof ymaps !== 'undefined') {
             window.initMapMarkers(window.latestReportData);
+        } else {
+            document.getElementById('mapLoading').classList.add('hidden'); 
         }
 
     } catch (error) {
         console.error("Ошибка при загрузке отчетов: ", error);
         window.showAlert('ОШИБКА ДАННЫХ', `Не удалось загрузить отчеты: ${error.message}. Проверьте правила доступа в Firestore.`);
         document.getElementById('reportStatus').textContent = '❌ Ошибка загрузки данных';
-    } finally {
-        // mapLoading скрывается внутри initMapMarkers, если карта не может быть отображена
-        if (!window.mapInstance) { 
-            document.getElementById('mapLoading').classList.add('hidden');
-        }
+        document.getElementById('mapLoading').classList.add('hidden');
     }
 }
 
@@ -156,19 +156,11 @@ window.fetchReports = async function(settlementFilter = null) {
  * Инициализация Yandex Map. Вызывается один раз через 'onload' из HTML.
  */
 window.initMap = function() {
-    // Проверка, что Yandex Maps API загружен и карта еще не инициализирована
-    if (typeof ymaps === 'undefined') {
-        // Если API не загружен, ничего не делаем
+    if (typeof ymaps === 'undefined' || window.mapInstance) {
         return; 
     }
     
-    if (window.mapInstance) {
-         // Если карта уже инициализирована, просто обновляем данные, если они нужны
-         window.fetchReports(document.getElementById('settlementFilter').value || null);
-         return;
-    }
-    
-    // Стандартные координаты для центрирования (например, Сургутский район)
+    // Стандартные координаты для центрирования (Сургутский район)
     const defaultCoords = [61.644, 72.845]; 
     const defaultZoom = 8;
 
@@ -188,8 +180,12 @@ window.initMap = function() {
     
     window.mapInstance.geoObjects.add(window.clusterer);
 
-    // После инициализации карты загружаем данные
-    window.fetchReports();
+    // Только если пользователь админ, загружаем данные сразу
+    if (window.isAdmin) {
+        window.fetchReports();
+    } else {
+        document.getElementById('mapLoading').classList.add('hidden');
+    }
 }
 
 /**
@@ -199,6 +195,7 @@ window.initMapMarkers = function(reportList) {
     const mapContainer = document.getElementById('mapContainer');
     
     if (!window.mapInstance || !window.clusterer || typeof ymaps === 'undefined') {
+        mapContainer.style.height = '200px'; 
         mapContainer.innerHTML = `<div class="p-6 text-gray-500 text-center text-lg">Ошибка загрузки Yandex Карт.</div>`;
         document.getElementById('mapLoading').classList.add('hidden');
         return;
@@ -209,14 +206,13 @@ window.initMapMarkers = function(reportList) {
     let hasGeoData = false;
     
     mapContainer.style.height = '600px'; 
-    mapContainer.innerHTML = ''; // Очистка, если там было сообщение об ошибке
     
     reportList.forEach(r => {
-        const lat = r.latitude;
-        const lon = r.longitude;
+        const lat = parseFloat(r.latitude);
+        const lon = parseFloat(r.longitude);
         
-        // Важно: проверяем наличие координат, сохраненных Dadata
-        if (lat && lon) {
+        // Важно: проверяем, что Dadata вернула числовые координаты
+        if (!isNaN(lat) && !isNaN(lon) && lat && lon) {
             hasGeoData = true;
             
             const color = (r.loyalty === 'strong') ? '#10b981' : 
@@ -228,7 +224,7 @@ window.initMapMarkers = function(reportList) {
                            
             const placemark = new ymaps.Placemark([lat, lon], {
                 balloonContentHeader: `<b>${r.settlement}</b>`,
-                balloonContentBody: `Адрес: ${r.address}<br>Лояльность: ${r.loyalty}<br>Действие: ${r.action}<br>Дата: ${timestampText}`,
+                balloonContentBody: `Адрес: ${r.address}<br>Лояльность: ${r.loyalty}<br>Действие: ${r.action}<br>Дата: ${timestampText}<br>ID: ${r.telegramId}`,
                 hintContent: r.address 
             }, {
                 preset: 'islands#dotIcon',
@@ -241,16 +237,15 @@ window.initMapMarkers = function(reportList) {
     if (hasGeoData) {
         window.clusterer.add(geoObjects);
         try {
+            // Центрирование карты по границам всех маркеров
             window.mapInstance.setBounds(window.clusterer.getBounds(), {
                 checkZoomRange: true,
                 zoomMargin: 30
             });
         } catch (e) {
-            // Игнорируем ошибку, если кластеризатор не имеет границ
+             console.warn("Could not set bounds for map:", e);
         }
     } else {
-        // Если нет данных с гео-координатами
-        if (mapContainer.querySelector('#mapLoading')) mapContainer.querySelector('#mapLoading').remove();
         mapContainer.style.height = '200px'; 
         mapContainer.innerHTML = `<div class="p-6 text-gray-500 text-center text-lg">Нет данных с геолокацией для отображения на карте.</div>`;
     }
@@ -260,11 +255,19 @@ window.initMapMarkers = function(reportList) {
 
 
 // ----------------------------------------------------------------------------------
-// 4. ФУНКЦИЯ ЭКСПОРТА CSV
+// 4. ФУНКЦИЯ ЭКСПОРТА CSV (Улучшенная обработка)
 // ----------------------------------------------------------------------------------
 
+/**
+ * Экранирует строку для CSV (заменяет кавычки и оборачивает в кавычки, если есть разделитель)
+ */
+function safeCsvValue(v) {
+    const str = String(v || '').replace(/"/g, '""'); // Экранирование двойных кавычек
+    // Оборачиваем в кавычки, если есть разделитель (;) или перенос строки
+    return str.includes(';') || str.includes('\n') ? `"${str}"` : str;
+};
+
 window.exportToCsv = function() {
-    // ... (логика экспорта CSV - см. предыдущий ответ) ...
     const data = window.latestReportData;
     if (data.length === 0) {
         window.showAlert('ОШИБКА', 'Нет данных для экспорта.');
@@ -280,29 +283,26 @@ window.exportToCsv = function() {
     
     data.forEach(item => {
         const formattedTimestamp = item.timestamp ? new Date(item.timestamp.toDate()).toLocaleString('ru-RU') : '';
-        const safeValue = (v) => {
-            const str = String(v || '').replace(/"/g, '""');
-            return str.includes(';') || str.includes('\n') ? `"${str}"` : str;
-        };
         
         const values = [
-            safeValue(item.id),
-            safeValue(item.telegramId),
-            safeValue(formattedTimestamp),
-            safeValue(item.settlement),
-            safeValue(item.address),
-            safeValue(item.loyalty),
-            safeValue(item.action),
-            safeValue(item.comment),
-            safeValue(item.latitude),
-            safeValue(item.longitude),
-            safeValue(item.geo_lat_user),
-            safeValue(item.geo_lon_user)
+            safeCsvValue(item.id),
+            safeCsvValue(item.telegramId),
+            safeCsvValue(formattedTimestamp),
+            safeCsvValue(item.settlement),
+            safeCsvValue(item.address),
+            safeCsvValue(item.loyalty),
+            safeCsvValue(item.action),
+            safeCsvValue(item.comment),
+            safeCsvValue(item.latitude),
+            safeCsvValue(item.longitude),
+            safeCsvValue(item.geo_lat_user),
+            safeCsvValue(item.geo_lon_user)
         ];
         csvRows.push(values.join(';'));
     });
 
     const csvString = csvRows.join('\n');
+    // Добавление BOM для корректного отображения кириллицы в Excel
     const blob = new Blob(["\ufeff" + csvString], { type: 'text/csv;charset=utf-8;' }); 
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -330,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         filterSelect.addEventListener('change', (e) => {
             const selectedSettlement = e.target.value === '' ? null : e.target.value;
-            // Убеждаемся, что fetchReports вызывается только для админов
+            // Вызываем fetchReports только если админ
             if (window.isAdmin) {
                 window.fetchReports(selectedSettlement);
             }
