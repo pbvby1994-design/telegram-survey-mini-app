@@ -1,4 +1,4 @@
-// firebase-auth.js (ОБНОВЛЕННАЯ ВЕРСИЯ - СИНТАКСИС GLOBAL)
+// firebase-auth.js (ГЛОБАЛЬНАЯ ВЕРСИЯ - БЕЗ ИМПОРТОВ И ЭКСПОРТОВ)
 
 // --- Глобальные переменные (доступны в main.js через window.) ---
 let app = null;
@@ -7,12 +7,8 @@ window.auth = null;
 window.userTelegramId = null;
 window.userTelegramUsername = null;
 window.isAdmin = false;
-window.YMAPS_API_KEY = null;             // НОВЫЙ ГЛОБАЛЬНЫЙ КЛЮЧ
-window.DADATA_TOKEN = null;              // НОВЫЙ ГЛОБАЛЬНЫЙ КЛЮЧ
-window.DADATA_LOCATION_RESTRICTIONS = []; // НОВЫЙ ГЛОБАЛЬНЫЙ ФИЛЬТР
 
 let token = null;
-let firebaseConfig = null;
 
 // Функция для получения параметра из URL
 function getUrlParameter(name) {
@@ -30,7 +26,7 @@ window.initializeFirebase = function() {
         return false;
     }
     
-    // 1. Считывание и декодирование полной конфигурации Firebase и всех ключей
+    // 1. Считывание и декодирование конфигурации Firebase
     const configBase64 = getUrlParameter('firebase_config');
     token = getUrlParameter('token'); 
     
@@ -38,105 +34,92 @@ window.initializeFirebase = function() {
     window.userTelegramId = getUrlParameter('user_id');
     window.userTelegramUsername = getUrlParameter('username');
     
-    // Проверка наличия минимальных параметров
-    if (!configBase64 || !token || !window.userTelegramId) {
-         console.error("Не хватает параметров запуска Mini App.");
-         window.showAlert('ОШИБКА ЗАПУСКА', 'Не хватает параметров запуска. Запустите Web App из бота.');
-         return false;
+    // Также получаем роли (если они есть) - хотя основным источником прав является Firebase Custom Token
+    const adminUrlParam = getUrlParameter('is_admin');
+    if (adminUrlParam === 'true') {
+        window.isAdmin = true;
+    }
+    
+    if (!configBase64) {
+        console.error("Firebase config (firebase_config) not found in URL.");
+        // Сообщение об ошибке в index.html будет выведено вызывающей функцией.
+        return false;
     }
     
     try {
-        const configJsonString = atob(configBase64);
-        const fullConfig = JSON.parse(configJsonString);
-        
-        // --- Установка глобальных переменных из декодированной конфигурации ---
-        window.DADATA_TOKEN = fullConfig.dadataToken;
-        window.YMAPS_API_KEY = fullConfig.ymapsKey;
-        
-        // Формирование фильтра Dadata для Сургутского района
-        if (fullConfig.dadataFiasId) {
-             window.DADATA_LOCATION_RESTRICTIONS = [{ 'region_fias_id': fullConfig.dadataFiasId }];
-        } else {
-             window.DADATA_LOCATION_RESTRICTIONS = [];
-             console.warn("DADATA_LOCATION_FIAS_ID не передан. Фильтрация Dadata неактивна.");
-        }
-        
-        // Конфигурация Firebase для инициализации
-        firebaseConfig = {
-            apiKey: fullConfig.apiKey,
-            authDomain: fullConfig.authDomain,
-            projectId: fullConfig.projectId,
-            storageBucket: fullConfig.storageBucket,
-            messagingSenderId: fullConfig.messagingSenderId,
-            appId: fullConfig.appId,
-        };
-        
+        const configJson = atob(configBase64);
+        window.FIREBASE_CONFIG = JSON.parse(configJson);
     } catch (e) {
-        console.error("Ошибка декодирования или парсинга конфигурации:", e);
-        window.showAlert('ОШИБКА КОНФИГУРАЦИИ', 'Не удалось декодировать параметры запуска. Обратитесь к администратору.');
+        console.error("Failed to decode or parse Firebase config:", e);
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Не удалось декодировать конфигурацию Firebase из URL.');
         return false;
     }
-
-    // 2. Инициализация Firebase (v8 Syntax)
-    if (!firebase.apps.length) {
-        app = firebase.initializeApp(firebaseConfig);
-    } else {
-        app = firebase.app();
+    
+    // 2. Инициализация Firebase (v9 compatibility)
+    try {
+        app = firebase.initializeApp(window.FIREBASE_CONFIG);
+        window.db = firebase.firestore(app);
+        window.auth = firebase.auth(app);
+        console.log("Firebase initialized successfully.");
+        return true;
+    } catch (e) {
+        console.error("Firebase initialization failed:", e);
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось инициализировать Firebase: ${e.message}`);
+        return false;
     }
-    
-    window.db = firebase.firestore();
-    window.auth = firebase.auth();
-    
-    // Включение Offline Support (если требуется)
-    // window.db.enablePersistence()
-    //     .catch(err => {
-    //         if (err.code == 'failed-precondition') {
-    //             console.warn("Множественные вкладки не поддерживают оффлайн-доступ.");
-    //         } else if (err.code == 'unimplemented') {
-    //             console.warn("Браузер не поддерживает оффлайн-доступ.");
-    //         }
-    //     });
-        
-    return true;
-}
+};
 
 // ----------------------------------------------------------------------
-// АУТЕНТИФИКАЦИЯ
+// АУТЕНТИФИКАЦИЯ И ПРОВЕРКА СТАТУСА АДМИНА
 // ----------------------------------------------------------------------
 
 window.checkAdminStatus = async function() {
-    // 1. Проверка наличия Custom Token
     if (!token) {
         console.warn("Custom token not found in URL.");
         document.getElementById('saveButton')?.setAttribute('disabled', 'true');
-        document.getElementById('debugAdminStatus').textContent = "ОТКАЗ (Нет токена)";
-        return false;
+        
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ #1: Добавляем ?. для предотвращения TypeError
+        document.getElementById('debugAdminStatus')?.textContent = "ОТКАЗ (Нет токена)";
+        
+        // Если нет токена, мы не можем провести аутентификацию, но это не обязательно ошибка,
+        // если пользователь заходит как обычный агитатор.
+        return false; 
     }
     
     try {
-        // 2. Аутентификация с помощью Custom Token (v8 Syntax)
+        // 1. Аутентификация с помощью Custom Token (v8 Syntax)
         const userCredential = await window.auth.signInWithCustomToken(token);
         
-        // 3. Получение Claims (проверка флага админа из токена)
+        // 2. Получение Claims (проверка флага админа из токена)
         const idTokenResult = await userCredential.user.getIdTokenResult();
         
         // Перезаписываем isAdmin на основе Claims
         if (idTokenResult.claims && idTokenResult.claims.admin) {
              const tokenAdmin = idTokenResult.claims.admin;
-             // Сравниваем строго с true или 'true'
+             // Сравниваем строго с true или 'true' (так как claim может быть строкой или булевым значением)
              window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
         }
         
-        document.getElementById('debugAdminStatus').textContent = window.isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ #2: Добавляем ?. для предотвращения TypeError
+        document.getElementById('debugAdminStatus')?.textContent = window.isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
+        
         document.getElementById('saveButton')?.removeAttribute('disabled');
         
-        // Если авторизация прошла успешно, возвращаем true, чтобы продолжить загрузку
+        // Если мы находимся на index.html и это админ, показываем кнопку админа
+        if (window.isAdmin && document.getElementById('adminButton')) {
+             document.getElementById('adminButton').style.display = 'flex'; // или 'block'
+        }
+        
         return true;
     } catch (error) {
         console.error("Firebase Custom Token Auth failed:", error);
+        
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ #3: Добавляем ?. для предотвращения TypeError
+        document.getElementById('debugAdminStatus')?.textContent = 'ОШИБКА АУТЕНТИФИКАЦИИ';
+        
         window.showAlert('ОШИБКА АУТЕНТИФИКАЦИИ', `Не удалось войти: ${error.message}. Проверьте Custom Token.`);
         document.getElementById('saveButton')?.setAttribute('disabled', 'true');
-        document.getElementById('debugAdminStatus').textContent = "ОШИБКА";
+        
         return false;
     }
-}
+};
