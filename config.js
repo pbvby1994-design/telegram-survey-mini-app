@@ -11,7 +11,7 @@ export const FIREBASE_CONFIG = {
     appId: "1:518555352011:web:2b18d460a6fa4acb66944e"
 };
 
-// Публичный токен Dadata
+// Публичный токен Dadata (только для подсказок)
 export const DADATA_TOKEN = "29c85666d57139f459e452d1290dd73c23708472";
 
 // Параметры Dadata для фильтрации по регионам (ХМАО - KLADR 86)
