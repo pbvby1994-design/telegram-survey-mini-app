@@ -53,30 +53,27 @@
             align-items: center;
             position: relative; 
         }
-        /* Стиль для обязательных полей */
-        .required::after {
-            content: '*';
-            color: #ef4444; /* red-500 */
-            margin-left: 4px;
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <header class="mb-6 flex flex-col sm:flex-row justify-between items-center bg-white p-6 rounded-xl shadow">
-            <h1 class="text-2xl font-bold text-gray-900 flex items-center mb-4 sm:mb-0">
-                <span data-lucide="notebook-pen" class="w-7 h-7 mr-3 text-indigo-600"></span>
+        <header class="mb-6 flex justify-between items-center bg-white p-6 rounded-xl shadow">
+            <h1 class="text-3xl font-bold text-gray-900 flex items-center">
+                <span data-lucide="notebook-pen" class="w-8 h-8 mr-3 text-indigo-600"></span>
                 Блокнот Агитатора
             </h1>
             <div class="text-right">
-                <p class="text-sm font-medium text-gray-700">Статус Админа:</p>
+                <p class="text-sm font-medium text-gray-700">Ваш статус:</p>
                 <p id="debugAdminStatus" class="text-lg font-bold text-red-500">⏳</p>
             </div>
         </header>
 
-        <nav class="mb-8 p-3 bg-white rounded-xl shadow flex space-x-2 sm:space-x-4 overflow-x-auto">
-            <div id="btn-form-view" class="tab-button active" onclick="showSection('form-view')">
-                <span data-lucide="clipboard-list" class="w-5 h-5 mr-2"></span> Форма
+        <nav class="mb-8 p-3 bg-white rounded-xl shadow flex space-x-4">
+            <div id="btn-form-view" class="tab-button" onclick="showSection('form-view')">
+                <span data-lucide="notebook-pen" class="w-5 h-5 mr-2"></span> Форма
+            </div>
+            <div id="btn-my-reports-view" class="tab-button hidden" onclick="showSection('my-reports-view')">
+                <span data-lucide="list-checks" class="w-5 h-5 mr-2"></span> Мои Отчеты
             </div>
             <div id="btn-map-view" class="tab-button hidden" onclick="showSection('map-view')">
                 <span data-lucide="map-pin" class="w-5 h-5 mr-2"></span> Карта
@@ -85,7 +82,7 @@
                 <span data-lucide="line-chart" class="w-5 h-5 mr-2"></span> Статистика
             </div>
             <div id="btn-raw-data" class="tab-button hidden" onclick="showSection('raw-data')">
-                <span data-lucide="table-2" class="w-5 h-5 mr-2"></span> Данные
+                <span data-lucide="table-2" class="w-5 h-5 mr-2"></span> Сырые данные
             </div>
         </nav>
 
@@ -114,15 +111,15 @@
                             </select>
                         </div>
 
-                        <div class="relative">
+                        <div>
                             <label for="address" class="block text-sm font-medium text-gray-700 required">Адрес (Улица, Дом)</label>
                             <input type="text" id="address" name="address" required class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2" placeholder="Начните вводить адрес (ул. Ленина, 1)">
                             <ul id="suggestionsList" class="absolute z-10 bg-white border border-gray-300 w-full shadow-lg mt-1 rounded-md hidden">
                             </ul>
-                            <p class="text-xs text-red-500 mt-1" id="addressError" style="display:none;"></p>
+                            <p class="text-xs text-red-500 mt-1" id="addressError" style="display:none;">⚠️ Выберите адрес из списка Dadata!</p>
                         </div>
                         
-                        <div class="flex flex-wrap items-center space-x-4 p-3 bg-gray-100 rounded-md">
+                        <div class="flex items-center space-x-4 p-3 bg-gray-100 rounded-md">
                             <button type="button" onclick="window.getCurrentLocation()" class="flex items-center justify-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150">
                                 <span id="geoIcon" data-lucide="map-pin" class="w-5 h-5 mr-2"></span> Получить GPS
                             </button>
@@ -184,9 +181,24 @@
             </div>
         </section>
 
+        <section id="my-reports-view" class="content-section hidden">
+            <div class="bg-white p-6 rounded-xl shadow">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-6 flex items-center">
+                     <span data-lucide="list-checks" class="w-6 h-6 mr-2 text-indigo-600"></span>
+                     Мои Отчеты (Редактирование 30 минут)
+                </h2>
+                <div id="agitatorReportsList" class="space-y-4">
+                    <p class="text-center text-gray-500">Загрузка ваших отчетов...</p>
+                </div>
+                <p class="mt-4 text-sm text-gray-500">
+                    * Вы можете **редактировать** отчет, нажав "Редактировать", в течение **30 минут** после его сохранения. После этого срока функция редактирования блокируется.
+                </p>
+            </div>
+        </section>
+
         <section id="map-view" class="content-section hidden">
-            <div class="bg-white p-6 rounded-xl shadow mb-6 flex flex-col sm:flex-row justify-between items-center">
-                <h2 class="text-2xl font-semibold text-gray-800 mb-4 sm:mb-0">Карта опросов</h2>
+            <div class="bg-white p-6 rounded-xl shadow mb-6 flex justify-between items-center">
+                <h2 class="text-2xl font-semibold text-gray-800">Карта опросов</h2>
                 <div class="flex items-center space-x-3">
                     <label for="settlementFilter" class="text-gray-700">Фильтр по НП:</label>
                     <select id="settlementFilter" class="p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
@@ -208,14 +220,13 @@
         </section>
 
         <section id="stats" class="content-section hidden">
-            <div class="bg-white p-6 rounded-xl shadow mb-6">
-                <h2 class="text-2xl font-semibold text-gray-800">Статистика отчетов</h2>
-            </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-xl shadow">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-700">Лояльность (По всем отчетам)</h3>
                     <canvas id="loyaltyChart" class="w-full h-80"></canvas>
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-700">Действия (По всем отчетам)</h3>
                     <canvas id="actionChart" class="w-full h-80"></canvas>
                 </div>
             </div>
@@ -232,6 +243,13 @@
                 <div class="mt-4 text-gray-500">
                     <p>Для просмотра полных данных используйте кнопку "Экспорт в CSV".</p>
                 </div>
+            </div>
+            <div id="admin-upload-section" class="bg-gray-50 p-6 rounded-xl mt-6 shadow hidden">
+                 <h3 class="text-xl font-semibold text-gray-800 mb-4">Загрузка файла для Агитаторов</h3>
+                 <p class="text-sm text-gray-600 mb-4">Здесь будет реализован функционал для загрузки файлов (например, новых инструкций или опросов) для всех Агитаторов.</p>
+                 <button disabled class="bg-gray-400 text-white font-bold py-2 px-4 rounded-lg flex items-center">
+                    <span data-lucide="upload" class="w-5 h-5 mr-2"></span> Загрузить Файл (В разработке)
+                 </button>
             </div>
         </section>
     </div>
@@ -254,6 +272,7 @@
     <script>
         lucide.createIcons();
         
+        // Централизованная функция переключения разделов
         window.showSection = function(sectionId) {
             document.querySelectorAll('.content-section').forEach(section => {
                 section.classList.add('hidden');
@@ -263,36 +282,30 @@
             document.querySelectorAll('.tab-button').forEach(btn => {
                 btn.classList.remove('active');
             });
-            // Активируем кнопку "Форма" если выбран 'form-view', иначе ищем по ID
-            const sectionButton = (sectionId === 'form-view') 
-                ? document.getElementById(`btn-form-view`)
-                : document.getElementById(`btn-${sectionId}`);
-                
+            const sectionButton = document.getElementById(`btn-${sectionId}`);
             if (sectionButton) {
                 sectionButton.classList.add('active');
             }
 
-            if (sectionId === 'map-view') {
-                 // Если карта уже инициализирована, просто обновляем данные и центрируем
-                 if (window.mapInstance && typeof window.fetchReports === 'function') {
-                    window.fetchReports(document.getElementById('settlementFilter').value || null);
-                    window.mapInstance.container.fitToViewport();
-                 } else if (typeof window.initMap === 'function' && typeof ymaps !== 'undefined') {
-                    // Если карта не инициализирована, но API загружен (вызывается из onload)
-                    window.initMap(); 
-                 }
-            } else if (sectionId === 'stats' || sectionId === 'raw-data') {
-                 // Обновляем статистику/данные при переходе
-                 if (typeof window.fetchReports === 'function') {
-                    window.fetchReports(document.getElementById('settlementFilter').value || null);
-                 }
-                 document.getElementById('mapLoading').classList.add('hidden');
+            // Логика инициализации данных для Карт/Отчетов Агитатора
+            if (sectionId === 'map-view' || sectionId === 'stats' || sectionId === 'raw-data' || sectionId === 'my-reports-view') {
+                // Показываем индикатор загрузки (скрывается в reports.js после загрузки)
+                document.getElementById('mapLoading')?.classList.remove('hidden'); 
+                if (typeof window.fetchReports === 'function') {
+                    const settlementFilter = document.getElementById('settlementFilter')?.value || null;
+                    // fetchReports внутри себя фильтрует данные по роли (для агитатора по его ID, для админа по НП)
+                    window.fetchReports(window.isAdmin ? settlementFilter : null); 
+                }
+                if (window.mapInstance && sectionId === 'map-view') {
+                     window.mapInstance.container.fitToViewport();
+                }
             } else {
-                 document.getElementById('mapLoading').classList.add('hidden');
+                 document.getElementById('mapLoading')?.classList.add('hidden');
             }
+            
+            lucide.createIcons();
         }
         
-        // Функции showAlert и closeAlert
         window.showAlert = function(title, message) {
             document.getElementById('alertTitle').textContent = title;
             document.getElementById('alertMessage').textContent = message;
@@ -310,6 +323,7 @@
         }
         
         document.addEventListener('DOMContentLoaded', () => {
+            // Запуск всей логики аутентификации, проверки роли и отображения UI
             if (window.loadDashboard) {
                 window.loadDashboard();
             }
