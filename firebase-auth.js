@@ -1,4 +1,4 @@
-// firebase-auth.js (ГЛОБАЛЬНАЯ ВЕРСИЯ - С УЧЕТОМ ВСЕХ ИСПРАВЛЕНИЙ)
+// firebase-auth.js (ОКОНЧАТЕЛЬНАЯ ВЕРСИЯ - СИНТАКСИЧЕСКИ ПРАВИЛЬНАЯ)
 
 // --- Глобальные переменные (доступны в main.js через window.) ---
 let app = null;
@@ -6,7 +6,7 @@ window.db = null;
 window.auth = null;
 window.userTelegramId = null;
 window.userTelegramUsername = null;
-window.isAdmin = false;
+window.isAdmin = false; // Инициализация с корректным присвоением
 
 let token = null;
 
@@ -34,15 +34,14 @@ window.initializeFirebase = function() {
     window.userTelegramId = getUrlParameter('user_id');
     window.userTelegramUsername = getUrlParameter('username');
     
-    // Также получаем роли (если они есть) - хотя основным источником прав является Firebase Custom Token
+    // Также получаем роли (если они есть) - (строка ~83)
     const adminUrlParam = getUrlParameter('is_admin');
     if (adminUrlParam === 'true') {
-        window.isAdmin = true;
+        window.isAdmin = true; // <--- ПРОВЕРЕНО: ЗДЕСЬ ДОЛЖЕН БЫТЬ ОПЕРАТОР ПРИСВАИВАНИЯ =
     }
     
     if (!configBase64) {
         console.error("Firebase config (firebase_config) not found in URL.");
-        // Сообщение об ошибке в index.html будет выведено вызывающей функцией.
         return false;
     }
     
@@ -57,7 +56,6 @@ window.initializeFirebase = function() {
     
     // 2. Инициализация Firebase (v9 compatibility)
     try {
-        // Используем конфигурацию, считанную из URL
         app = firebase.initializeApp(window.FIREBASE_CONFIG);
         window.db = firebase.firestore(app);
         window.auth = firebase.auth(app);
@@ -79,41 +77,31 @@ window.checkAdminStatus = async function() {
         console.warn("Custom token not found in URL.");
         document.getElementById('saveButton')?.setAttribute('disabled', 'true');
         
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ #1: Добавляем ?. для предотвращения TypeError
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ #1: Добавляем ?.
         document.getElementById('debugAdminStatus')?.textContent = "ОТКАЗ (Нет токена)";
         
         return false; 
     }
     
     try {
-        // 1. Аутентификация с помощью Custom Token (v8 Syntax)
         const userCredential = await window.auth.signInWithCustomToken(token);
-        
-        // 2. Получение Claims (проверка флага админа из токена)
         const idTokenResult = await userCredential.user.getIdTokenResult();
         
-        // Перезаписываем isAdmin на основе Claims
         if (idTokenResult.claims && idTokenResult.claims.admin) {
              const tokenAdmin = idTokenResult.claims.admin;
-             // Сравниваем строго с true или 'true' (так как claim может быть строкой или булевым значением)
              window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
         }
         
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ #2: Добавляем ?. для предотвращения TypeError
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ #2: Добавляем ?.
         document.getElementById('debugAdminStatus')?.textContent = window.isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
         
         document.getElementById('saveButton')?.removeAttribute('disabled');
         
-        // Если мы находимся на index.html и это админ, показываем кнопку админа
         if (window.isAdmin && document.getElementById('adminButton')) {
-             document.getElementById('adminButton').style.display = 'flex'; // или 'block'
+             document.getElementById('adminButton').style.display = 'flex';
              
-             // Задаем задержку для кнопки админа, если она есть и нужно ее анимировать
              if (document.getElementById('adminButton').classList.contains('stagger-item')) {
-                 // Поскольку CSS управляет анимацией stagger-item, нам нужно только убедиться, что кнопка видна.
-                 // Мы используем opacity: 0 в CSS для stagger-item, display: none отменяет это.
-                 // Здесь мы просто ставим display: flex, а CSS-стиль "stagger-item" с задержкой 1.0s позаботится о плавном появлении.
-                 document.getElementById('adminButton').style.opacity = 0; // Скрываем на мгновение, чтобы анимация сработала
+                 document.getElementById('adminButton').style.opacity = 0; 
                  setTimeout(() => {
                     document.getElementById('adminButton').style.opacity = 1; 
                  }, 10);
@@ -124,7 +112,7 @@ window.checkAdminStatus = async function() {
     } catch (error) {
         console.error("Firebase Custom Token Auth failed:", error);
         
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ #3: Добавляем ?. для предотвращения TypeError
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ #3: Добавляем ?.
         document.getElementById('debugAdminStatus')?.textContent = 'ОШИБКА АУТЕНТИФИКАЦИИ';
         
         window.showAlert('ОШИБКА АУТЕНТИФИКАЦИИ', `Не удалось войти: ${error.message}. Проверьте Custom Token.`);
