@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Выбор Роли | Блокнот Агитатора</title>
+    <title>Добро пожаловать | Блокнот Агитатора</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -25,6 +25,7 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            overflow: hidden;
         }
         .card {
             background-color: #ffffff;
@@ -32,61 +33,85 @@
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
             padding: 40px;
             max-width: 500px;
-            width: 100%;
+            width: 90%;
             text-align: center;
+            /* Анимация появления */
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+        }
+        .card.loaded {
+            opacity: 1;
+            transform: translateY(0);
         }
         .btn-role {
             display: flex;
             align-items: center;
             justify-content: center;
             width: 100%;
-            padding: 16px 24px;
+            padding: 18px 24px;
             margin-bottom: 16px;
             font-size: 1.125rem;
             font-weight: 600;
-            border-radius: 12px;
-            transition: transform 0.1s ease-in-out, box-shadow 0.1s ease-in-out;
-            border: 2px solid transparent;
+            border-radius: 14px;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, opacity 0.2s;
+            border: 1px solid transparent;
         }
         .btn-role:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
         }
-        .btn-user {
+        .btn-agitator {
             background-color: #4f46e5;
             color: white;
         }
         .btn-admin {
-            background-color: #e5e7eb;
+            background-color: #f3f4f6;
             color: #1f2937;
+            border-color: #e5e7eb;
         }
         .btn-role:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
+
+        /* Анимация перехода */
+        .leaving {
+            animation: fadeOut 0.5s forwards;
+        }
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+        }
+        /* Медленная анимация иконки */
+        .animate-bounce-slow {
+            animation: bounce 2s infinite;
+        }
     </style>
 </head>
 <body>
-    <div class="card">
+    <div id="welcomeCard" class="card">
         <div class="flex flex-col items-center mb-8">
-            <span data-lucide="notebook-pen" class="w-12 h-12 text-indigo-600 mb-4"></span>
-            <h1 class="text-2xl font-bold text-gray-800">Блокнот Агитатора</h1>
-            <p class="text-gray-500 mt-1">Выберите свою роль</p>
+            <span data-lucide="sparkles" class="w-12 h-12 text-indigo-600 mb-4 animate-bounce-slow"></span>
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Добро пожаловать!</h1>
+            <p class="text-gray-500 mt-1">Выберите свой рабочий режим в Блокноте Агитатора</p>
         </div>
 
         <div class="mb-6">
-            <button id="userButton" class="btn-role btn-user" onclick="selectRole('user')" disabled>
-                <span data-lucide="clipboard-list" class="w-6 h-6 mr-3"></span>
-                Анкетирование (Пользователь)
+            <button id="agitatorButton" class="btn-role btn-agitator" onclick="window.selectRole('agitator')" disabled>
+                <span data-lucide="user" class="w-6 h-6 mr-3"></span>
+                Агитатор (Ввод данных)
             </button>
-            <button id="adminButton" class="btn-role btn-admin" onclick="selectRole('admin')" disabled>
-                <span data-lucide="bar-chart-3" class="w-6 h-6 mr-3"></span>
-                Отчеты и Карта (Администратор)
+            <button id="adminButton" class="btn-role btn-admin" onclick="window.selectRole('admin')" disabled>
+                <span data-lucide="shield" class="w-6 h-6 mr-3"></span>
+                Администратор (Отчеты и Карта)
             </button>
         </div>
 
         <div class="text-sm text-gray-500 bg-gray-100 p-3 rounded-lg">
-            <p id="telegramAuthInfo">⏳ Инициализация...</p>
+            <p id="telegramAuthInfo">⏳ Инициализация и проверка прав...</p>
         </div>
     </div>
 
@@ -104,13 +129,10 @@
     <script src="./firebase-auth.js"></script>
 
     <script>
-        // Placeholder для showAlert/closeAlert
+        // Placeholder для showAlert/closeAlert (для совместимости)
         window.closeAlert = function() {
-            const modalEl = document.getElementById('alertModal');
-            if (modalEl) {
-                modalEl.classList.add('hidden');
-                modalEl.classList.remove('flex');
-            }
+            document.getElementById('alertModal').classList.add('hidden');
+            document.getElementById('alertModal').classList.remove('flex');
         }
         window.showAlert = function(title, message) {
             document.getElementById('alertTitle').textContent = title;
@@ -119,37 +141,28 @@
             document.getElementById('alertModal').classList.add('flex');
             
             if (window.Telegram.WebApp && window.Telegram.WebApp.showAlert) {
-                 // Дополнительный показ через нативный Telegram alert
                  window.Telegram.WebApp.showAlert(`${title}: ${message}`);
             }
         }
         
-        // --- ФУНКЦИЯ ПЕРЕНАПРАВЛЕНИЯ ---
-        function selectRole(role) {
-            const searchParams = new URLSearchParams(window.location.search);
-            const hash = window.location.hash;
-            
-            let viewParam = (role === 'user') ? 'form-view' : 'map-view';
+        // --- ФУНКЦИЯ ПЕРЕНАПРАВЛЕНИЯ С АНИМАЦИЕЙ ---
+        window.selectRole = function(role) {
+            const card = document.getElementById('welcomeCard');
             
             if (role === 'admin' && !window.isAdmin) { 
                  window.showAlert('ДОСТУП ЗАПРЕЩЕН', 'У вас нет прав Администратора для доступа к отчетам.');
                  return;
             }
             
-            searchParams.set('view', viewParam);
+            card.classList.add('leaving');
+
+            const searchParams = new URLSearchParams(window.location.search);
+            const hash = window.location.hash;
+            searchParams.set('view', (role === 'agitator' ? 'form-view' : 'map-view'));
+            searchParams.set('role', role); // Передаем роль
 
             let targetPath = window.location.pathname.replace('index.html', 'admin_dashboard.html');
-
-            // Замена на admin_dashboard.html, если текущий URL index.html
-            if (window.location.pathname.endsWith('index.html')) {
-                targetPath = window.location.pathname.replace('index.html', 'admin_dashboard.html');
-            } else if (window.location.pathname.endsWith('/')) {
-                // Если открыт корень, добавляем admin_dashboard.html
-                targetPath += 'admin_dashboard.html';
-            } else {
-                 // Если открыт admin_dashboard.html? (редкий случай)
-                 targetPath = window.location.pathname; 
-            }
+            if (window.location.pathname.endsWith('/')) targetPath += 'admin_dashboard.html';
 
             const targetUrl = `${window.location.origin}${targetPath}?${searchParams.toString()}${hash}`;
             
@@ -157,13 +170,16 @@
                  window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
             }
             
-            window.location.href = targetUrl;
+            // Переход после завершения анимации
+            setTimeout(() => {
+                window.location.href = targetUrl;
+            }, 450);
         }
-        
-        window.selectRole = selectRole;
 
         window.onload = async () => {
             lucide.createIcons();
+            
+            document.getElementById('welcomeCard').classList.add('loaded');
             
             if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp.ready) {
                 window.Telegram.WebApp.ready();
@@ -172,7 +188,7 @@
             
             if (typeof window.initializeFirebase === 'function' && typeof window.FIREBASE_CONFIG !== 'undefined') {
                 if (window.initializeFirebase()) {
-                    await window.checkAdminStatus();
+                    await window.checkAdminStatus(); 
                 } else {
                      document.getElementById('telegramAuthInfo').textContent = '❌ Не удалось загрузить конфигурацию Firebase.';
                 }
@@ -180,7 +196,7 @@
                  document.getElementById('telegramAuthInfo').textContent = '❌ Скрипт Firebase или config.js не загружены.';
             }
             
-            document.getElementById('userButton').disabled = false;
+            document.getElementById('agitatorButton').disabled = false;
         };
     </script>
 </body>
