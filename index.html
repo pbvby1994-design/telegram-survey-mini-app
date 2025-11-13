@@ -107,13 +107,21 @@
         // Placeholder для showAlert/closeAlert
         window.closeAlert = function() {
             const modalEl = document.getElementById('alertModal');
-            if (modalEl) modalEl.classList.add('hidden');
+            if (modalEl) {
+                modalEl.classList.add('hidden');
+                modalEl.classList.remove('flex');
+            }
         }
         window.showAlert = function(title, message) {
             document.getElementById('alertTitle').textContent = title;
             document.getElementById('alertMessage').textContent = message;
             document.getElementById('alertModal').classList.remove('hidden');
             document.getElementById('alertModal').classList.add('flex');
+            
+            if (window.Telegram.WebApp && window.Telegram.WebApp.showAlert) {
+                 // Дополнительный показ через нативный Telegram alert
+                 window.Telegram.WebApp.showAlert(`${title}: ${message}`);
+            }
         }
         
         // --- ФУНКЦИЯ ПЕРЕНАПРАВЛЕНИЯ ---
@@ -121,25 +129,31 @@
             const searchParams = new URLSearchParams(window.location.search);
             const hash = window.location.hash;
             
-            let viewParam = '';
-
-            if (role === 'user') {
-                viewParam = 'form-view'; // ИЗМЕНЕНО: на 'form-view' для соответствия ID секции
-            } else if (role === 'admin') {
-                if (!window.isAdmin) { 
-                     window.showAlert('ДОСТУП ЗАПРЕЩЕН', 'У вас нет прав Администратора для доступа к отчетам. Перенаправление отменено.');
-                     return;
-                }
-                viewParam = 'map-view'; 
+            let viewParam = (role === 'user') ? 'form-view' : 'map-view';
+            
+            if (role === 'admin' && !window.isAdmin) { 
+                 window.showAlert('ДОСТУП ЗАПРЕЩЕН', 'У вас нет прав Администратора для доступа к отчетам.');
+                 return;
             }
             
             searchParams.set('view', viewParam);
 
             let targetPath = window.location.pathname.replace('index.html', 'admin_dashboard.html');
 
+            // Замена на admin_dashboard.html, если текущий URL index.html
+            if (window.location.pathname.endsWith('index.html')) {
+                targetPath = window.location.pathname.replace('index.html', 'admin_dashboard.html');
+            } else if (window.location.pathname.endsWith('/')) {
+                // Если открыт корень, добавляем admin_dashboard.html
+                targetPath += 'admin_dashboard.html';
+            } else {
+                 // Если открыт admin_dashboard.html? (редкий случай)
+                 targetPath = window.location.pathname; 
+            }
+
             const targetUrl = `${window.location.origin}${targetPath}?${searchParams.toString()}${hash}`;
             
-            if (window.Telegram.WebApp && window.Telegram.WebApp.isExpanded) {
+            if (window.Telegram.WebApp) {
                  window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
             }
             
@@ -156,7 +170,6 @@
                 window.Telegram.WebApp.expand();
             }
             
-            // Ждем, пока config.js загрузит константы в window и запустим инициализацию Firebase
             if (typeof window.initializeFirebase === 'function' && typeof window.FIREBASE_CONFIG !== 'undefined') {
                 if (window.initializeFirebase()) {
                     await window.checkAdminStatus();
@@ -167,7 +180,6 @@
                  document.getElementById('telegramAuthInfo').textContent = '❌ Скрипт Firebase или config.js не загружены.';
             }
             
-            // Кнопки по умолчанию отключаются в HTML и включаются только после успешной загрузки JS
             document.getElementById('userButton').disabled = false;
         };
     </script>
