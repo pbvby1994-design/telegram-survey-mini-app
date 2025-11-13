@@ -11,7 +11,7 @@ export const FIREBASE_CONFIG = {
     appId: "1:518555352011:web:2b18d460a6fa4acb66944e"
 };
 
-// Публичный токен Dadata (только для подсказок)
+// Публичный токен Dadata
 export const DADATA_TOKEN = "29c85666d57139f459e452d1290dd73c23708472";
 
 // Параметры Dadata для фильтрации по регионам (ХМАО - KLADR 86)
@@ -20,9 +20,9 @@ export const DADATA_LOCATION_RESTRICTIONS = [
 ];
 
 
-// --- КРИТИЧЕСКИЙ FIX ДЛЯ СОВМЕСТИМОСТИ ---
+// --- КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: ПЕРЕДАЧА В WINDOW ---
 // Назначение констант глобальному объекту window для доступа из немодульных скриптов
 window.FIREBASE_CONFIG = FIREBASE_CONFIG;
 window.DADATA_TOKEN = DADATA_TOKEN;
 window.DADATA_LOCATION_RESTRICTIONS = DADATA_LOCATION_RESTRICTIONS;
-// ------------------------------------------
+// ---------------------------------------------------
