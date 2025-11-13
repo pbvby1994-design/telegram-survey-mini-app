@@ -1,4 +1,4 @@
-// firebase-auth.js (ГЛОБАЛЬНАЯ ВЕРСИЯ - БЕЗ ИМПОРТОВ И ЭКСПОРТОВ)
+// firebase-auth.js (ОБНОВЛЕННАЯ ВЕРСИЯ - СИНТАКСИС GLOBAL)
 
 // --- Глобальные переменные (доступны в main.js через window.) ---
 let app = null;
@@ -7,8 +7,12 @@ window.auth = null;
 window.userTelegramId = null;
 window.userTelegramUsername = null;
 window.isAdmin = false;
+window.YMAPS_API_KEY = null;             // НОВЫЙ ГЛОБАЛЬНЫЙ КЛЮЧ
+window.DADATA_TOKEN = null;              // НОВЫЙ ГЛОБАЛЬНЫЙ КЛЮЧ
+window.DADATA_LOCATION_RESTRICTIONS = []; // НОВЫЙ ГЛОБАЛЬНЫЙ ФИЛЬТР
 
 let token = null;
+let firebaseConfig = null;
 
 // Функция для получения параметра из URL
 function getUrlParameter(name) {
@@ -26,7 +30,7 @@ window.initializeFirebase = function() {
         return false;
     }
     
-    // 1. Считывание и декодирование конфигурации Firebase
+    // 1. Считывание и декодирование полной конфигурации Firebase и всех ключей
     const configBase64 = getUrlParameter('firebase_config');
     token = getUrlParameter('token'); 
     
@@ -34,37 +38,74 @@ window.initializeFirebase = function() {
     window.userTelegramId = getUrlParameter('user_id');
     window.userTelegramUsername = getUrlParameter('username');
     
-    if (!configBase64) {
-        console.error("Firebase config not found in URL.");
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Конфигурация Firebase не найдена в URL. Запустите приложение через Telegram-бота.');
+    // Проверка наличия минимальных параметров
+    if (!configBase64 || !token || !window.userTelegramId) {
+         console.error("Не хватает параметров запуска Mini App.");
+         window.showAlert('ОШИБКА ЗАПУСКА', 'Не хватает параметров запуска. Запустите Web App из бота.');
+         return false;
+    }
+    
+    try {
+        const configJsonString = atob(configBase64);
+        const fullConfig = JSON.parse(configJsonString);
+        
+        // --- Установка глобальных переменных из декодированной конфигурации ---
+        window.DADATA_TOKEN = fullConfig.dadataToken;
+        window.YMAPS_API_KEY = fullConfig.ymapsKey;
+        
+        // Формирование фильтра Dadata для Сургутского района
+        if (fullConfig.dadataFiasId) {
+             window.DADATA_LOCATION_RESTRICTIONS = [{ 'region_fias_id': fullConfig.dadataFiasId }];
+        } else {
+             window.DADATA_LOCATION_RESTRICTIONS = [];
+             console.warn("DADATA_LOCATION_FIAS_ID не передан. Фильтрация Dadata неактивна.");
+        }
+        
+        // Конфигурация Firebase для инициализации
+        firebaseConfig = {
+            apiKey: fullConfig.apiKey,
+            authDomain: fullConfig.authDomain,
+            projectId: fullConfig.projectId,
+            storageBucket: fullConfig.storageBucket,
+            messagingSenderId: fullConfig.messagingSenderId,
+            appId: fullConfig.appId,
+        };
+        
+    } catch (e) {
+        console.error("Ошибка декодирования или парсинга конфигурации:", e);
+        window.showAlert('ОШИБКА КОНФИГУРАЦИИ', 'Не удалось декодировать параметры запуска. Обратитесь к администратору.');
         return false;
     }
 
-    try {
-        const configJson = atob(configBase64);
-        const FIREBASE_CONFIG = JSON.parse(configJson);
-        
-        // Инициализация Firebase (если не инициализировано)
-        if (!app) {
-            app = firebase.initializeApp(FIREBASE_CONFIG);
-            window.auth = app.auth();
-            window.db = app.firestore();
-        }
-        
-        return true;
-    } catch (e) {
-        console.error("Failed to decode or parse Firebase config:", e);
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Неверный формат конфигурации Firebase.');
-        return false;
+    // 2. Инициализация Firebase (v8 Syntax)
+    if (!firebase.apps.length) {
+        app = firebase.initializeApp(firebaseConfig);
+    } else {
+        app = firebase.app();
     }
+    
+    window.db = firebase.firestore();
+    window.auth = firebase.auth();
+    
+    // Включение Offline Support (если требуется)
+    // window.db.enablePersistence()
+    //     .catch(err => {
+    //         if (err.code == 'failed-precondition') {
+    //             console.warn("Множественные вкладки не поддерживают оффлайн-доступ.");
+    //         } else if (err.code == 'unimplemented') {
+    //             console.warn("Браузер не поддерживает оффлайн-доступ.");
+    //         }
+    //     });
+        
+    return true;
 }
 
 // ----------------------------------------------------------------------
-// АУТЕНТИФИКАЦИЯ И ПРОВЕРКА РОЛИ
+// АУТЕНТИФИКАЦИЯ
 // ----------------------------------------------------------------------
 
-window.authenticateUser = async function() {
-    
+window.checkAdminStatus = async function() {
+    // 1. Проверка наличия Custom Token
     if (!token) {
         console.warn("Custom token not found in URL.");
         document.getElementById('saveButton')?.setAttribute('disabled', 'true');
@@ -89,11 +130,13 @@ window.authenticateUser = async function() {
         document.getElementById('debugAdminStatus').textContent = window.isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
         document.getElementById('saveButton')?.removeAttribute('disabled');
         
+        // Если авторизация прошла успешно, возвращаем true, чтобы продолжить загрузку
         return true;
     } catch (error) {
         console.error("Firebase Custom Token Auth failed:", error);
         window.showAlert('ОШИБКА АУТЕНТИФИКАЦИИ', `Не удалось войти: ${error.message}. Проверьте Custom Token.`);
         document.getElementById('saveButton')?.setAttribute('disabled', 'true');
+        document.getElementById('debugAdminStatus').textContent = "ОШИБКА";
         return false;
     }
 }
