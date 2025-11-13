@@ -1,259 +1,282 @@
-// main.js (УЛУЧШЕННАЯ ВЕРСИЯ С РЕДАКТИРОВАНИЕМ И АДМИН-ФУНКЦИЯМИ)
+// main.js (ОБНОВЛЕННАЯ ВЕРСИЯ с исправлениями ошибок)
 
 // --- Глобальные переменные ---
+window.mapInstance = null; 
 let currentLatitude = null; 
 let currentLongitude = null;
 let dadataCoords = null;    
+
+// --- КОНФИГУРАЦИЯ DADATA ---
+const DADATA_API_KEY = '29c85666d57139f459e452d1290dd73c23708472'; 
 let selectedSuggestionData = null; 
-window.reportToEditId = null; // ID отчета для редактирования
 
 const addressInput = document.getElementById('address');
 const suggestionsList = document.getElementById('suggestionsList');
 
-// ... (1. ИНТЕГРАЦИЯ DADATA - код остается прежним, но с window.DADATA_TOKEN) ...
+/**
+ * Ручной обработчик ввода для Dadata
+ */
+if (addressInput) {
+    addressInput.addEventListener('input', async () => {
+        const query = addressInput.value.trim();
+        if (query.length < 3) {
+            suggestionsList.innerHTML = '';
+            suggestionsList.classList.add('hidden');
+            return;
+        }
+
+        try {
+            const response = await fetch('https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address', {
+                method: "POST",
+                mode: "cors",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "Authorization": "Token " + DADATA_API_KEY
+                },
+                body: JSON.stringify({
+                    query: query,
+                    locations: [
+                        { region_fias_id: "270529d3-d4d1-420a-8106-930b80693a8e" } // Сургутский район
+                    ]
+                })
+            });
+
+            const json = await response.json();
+            suggestionsList.innerHTML = '';
+            suggestionsList.classList.remove('hidden');
+
+            if (json.suggestions && json.suggestions.length > 0) {
+                json.suggestions.forEach(suggestion => {
+                    const li = document.createElement('li');
+                    li.textContent = suggestion.value;
+                    li.className = 'p-2 cursor-pointer hover:bg-indigo-100 transition-colors duration-150 text-gray-800';
+                    li.onclick = () => {
+                        addressInput.value = suggestion.value;
+                        selectedSuggestionData = suggestion.data;
+                        suggestionsList.classList.add('hidden');
+                        document.getElementById('addressError').style.display = 'none';
+                        
+                        // Сохранение координат Dadata
+                        dadataCoords = { 
+                            lat: selectedSuggestionData.geo_lat ? parseFloat(selectedSuggestionData.geo_lat) : null, 
+                            lon: selectedSuggestionData.geo_lon ? parseFloat(selectedSuggestionData.geo_lon) : null
+                        };
+                    };
+                    suggestionsList.appendChild(li);
+                });
+            } else {
+                const li = document.createElement('li');
+                li.textContent = 'Адреса не найдены';
+                li.className = 'p-2 text-gray-500 italic';
+                suggestionsList.appendChild(li);
+            }
+
+        } catch (error) {
+            console.error("Dadata error:", error);
+            suggestionsList.innerHTML = `<li class="p-2 text-red-500">Ошибка: ${error.message}</li>`;
+        }
+    });
+
+    // Скрытие списка при клике вне
+    document.addEventListener('click', (event) => {
+        if (!addressInput.contains(event.target) && !suggestionsList.contains(event.target)) {
+            suggestionsList.classList.add('hidden');
+        }
+    });
+}
+
 
 // ----------------------------------------------------------------------
-// 2. ГЕОЛОКАЦИЯ (ТОЛЬКО ПО НАЖАТИЮ)
+// 2. ГЕОЛОКАЦИЯ
 // ----------------------------------------------------------------------
 
 window.getCurrentLocation = function() {
-    const geoStatus = document.getElementById('geoStatus');
-    const geoIcon = document.getElementById('geoIcon');
-    
-    geoStatus.textContent = 'Геолокация: ⏳ Определение...';
-    geoIcon.setAttribute('data-lucide', 'loader'); 
-    lucide.createIcons();
-    
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                currentLatitude = position.coords.latitude;
-                currentLongitude = position.coords.longitude;
-                geoStatus.textContent = `Геолокация: ✅ Получено (${currentLatitude.toFixed(4)}, ${currentLongitude.toFixed(4)})`;
-                geoIcon.setAttribute('data-lucide', 'check-circle'); 
-                lucide.createIcons();
-            },
-            (error) => {
-                console.error("Geolocation error:", error);
-                geoStatus.textContent = 'Геолокация: ❌ Отказано в доступе или ошибка.';
-                geoIcon.setAttribute('data-lucide', 'x-circle'); 
-                currentLatitude = null;
-                currentLongitude = null;
-                lucide.createIcons();
-                window.showAlert('Геолокация', 'Не удалось получить GPS-координаты. Проверьте разрешения.');
-            },
-            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-        );
+    if ('geolocation' in navigator) {
+        document.getElementById('geoStatus').textContent = '🛰️ Поиск...';
+        document.getElementById('geoIcon').classList.add('animate-spin');
+        
+        navigator.geolocation.getCurrentPosition((position) => {
+            currentLatitude = position.coords.latitude;
+            currentLongitude = position.coords.longitude;
+            document.getElementById('geoStatus').textContent = `✅ GPS: ${currentLatitude.toFixed(4)}, ${currentLongitude.toFixed(4)}`;
+            document.getElementById('geoIcon').classList.remove('animate-spin');
+        }, (error) => {
+            console.error("Geolocation error:", error);
+            document.getElementById('geoStatus').textContent = '❌ Ошибка GPS: ' + error.message;
+            document.getElementById('geoIcon').classList.remove('animate-spin');
+            window.showAlert('Ошибка Геолокации', 'Не удалось получить GPS-координаты. Проверьте разрешения браузера.');
+            currentLatitude = null;
+            currentLongitude = null;
+        }, {
+            enableHighAccuracy: true,
+            timeout: 5000,
+            maximumAge: 0
+        });
     } else {
-        geoStatus.textContent = 'Геолокация: ❌ Не поддерживается.';
-        geoIcon.setAttribute('data-lucide', 'alert-triangle');
-        lucide.createIcons();
-        window.showAlert('Геолокация', 'Ваш браузер не поддерживает API геолокации.');
+        window.showAlert('Ошибка', 'Геолокация не поддерживается вашим устройством/браузером.');
     }
 }
 
-
 // ----------------------------------------------------------------------
-// 3. ЗАГРУЗКА ДАННЫХ ДЛЯ РЕДАКТИРОВАНИЯ
-// ----------------------------------------------------------------------
-
-window.loadReportForEdit = async function(reportId) {
-    if (!window.db) {
-        window.showAlert('Ошибка', 'Соединение с БД не установлено.');
-        return;
-    }
-    
-    // Сброс формы и статуса
-    document.getElementById('reportForm').reset();
-    window.reportToEditId = null;
-    document.getElementById('saveButton').textContent = 'Сохранить Отчет';
-    
-    try {
-        const docRef = window.db.collection("reports").doc(reportId);
-        const doc = await docRef.get();
-        
-        if (!doc.exists) {
-            window.showAlert('Ошибка', 'Отчет не найден.');
-            return;
-        }
-        
-        const data = doc.data();
-        const currentTime = new Date();
-        const reportTime = data.timestamp ? data.timestamp.toDate() : null;
-        const diffMinutes = reportTime ? (currentTime.getTime() - reportTime.getTime()) / (1000 * 60) : Infinity;
-
-        // 1. Проверка 30-минутного окна
-        if (!window.isAdmin && diffMinutes > 30) {
-            window.showAlert('Ошибка доступа', `Редактирование разрешено только в течение 30 минут. Прошло ${Math.ceil(diffMinutes)} мин.`);
-            return;
-        }
-        
-        // 2. Проверка владельца (для Агитатора)
-        if (!window.isAdmin && data.telegramId !== window.userTelegramId) {
-             window.showAlert('Ошибка доступа', 'Вы можете редактировать только свои отчеты.');
-             return;
-        }
-
-        // Заполнение формы
-        window.reportToEditId = reportId;
-        document.getElementById('saveButton').textContent = 'Обновить Отчет (Редактирование)';
-        
-        document.getElementById('settlement').value = data.settlement || '';
-        document.getElementById('address').value = data.address || '';
-        document.getElementById('comment').value = data.comment || '';
-        
-        if (data.loyalty) document.querySelector(`input[name="loyalty"][value="${data.loyalty}"]`).checked = true;
-        if (data.action) document.querySelector(`input[name="action"][value="${data.action}"]`).checked = true;
-        
-        // Восстановление Dadata/Geo-координат
-        dadataCoords = { latitude: data.latitude, longitude: data.longitude };
-        currentLatitude = data.geo_lat_user;
-        currentLongitude = data.geo_lon_user;
-        selectedSuggestionData = { value: data.address }; 
-        
-        // Обновление статуса геолокации
-        document.getElementById('geoStatus').textContent = currentLatitude 
-            ? `Геолокация: ✅ Получено (${currentLatitude.toFixed(4)}, ${currentLongitude.toFixed(4)})`
-            : 'Геолокация: ❓ Не получена';
-            
-        window.showSection('form-view');
-        window.showAlert('Редактирование', `Отчет ID: ${reportId} загружен для редактирования.`);
-        
-    } catch (e) {
-        console.error("Error loading document for edit: ", e);
-        window.showAlert('Ошибка загрузки', `Не удалось загрузить отчет: ${e.message}.`);
-    }
-}
-
-
-// ----------------------------------------------------------------------
-// 4. СОХРАНЕНИЕ/ОБНОВЛЕНИЕ ОТЧЕТА В FIRESTORE
+// 3. СОХРАНЕНИЕ ОТЧЕТА
 // ----------------------------------------------------------------------
 
-window.saveReport = async function() {
-    if (!window.db) {
-        window.showAlert('ОШИБКА FIRESTORE', 'Соединение с базой данных не установлено.');
-        return;
-    }
-    
-    // ... (ВАЛИДАЦИЯ - остается прежней) ...
-
+window.saveReport = async function(docId = null) {
+    // 1. Сбор данных
     const form = document.getElementById('reportForm');
     const formData = new FormData(form);
     
-    if (!selectedSuggestionData || addressInput.value !== selectedSuggestionData.value) {
-        document.getElementById('addressError').textContent = '⚠️ Выберите адрес из списка Dadata!';
-        document.getElementById('addressError').style.display = 'block';
-        window.showAlert('Ошибка формы', 'Необходимо выбрать корректный адрес из списка подсказок.');
-        return;
-    }
-    
-    if (!dadataCoords || !dadataCoords.latitude || !dadataCoords.longitude) {
-         window.showAlert('Ошибка формы', 'Выбранный адрес Dadata не содержит географических координат. Выберите другой адрес.');
+    // Проверка выбора Dadata
+    if (!selectedSuggestionData && dadataCoords === null) {
+         document.getElementById('addressError').style.display = 'block';
+         window.showAlert('Ошибка данных', 'Пожалуйста, выберите адрес из выпадающего списка Dadata.');
          return;
-    }
-    
-    if (!formData.get('loyalty') || !formData.get('action')) {
-        window.showAlert('Ошибка формы', 'Поля "Лояльность" и "Действие" обязательны.');
-        return;
     }
 
     const reportData = {
-        telegramId: window.userTelegramId || 'unknown_user',
         settlement: formData.get('settlement'),
-        address: selectedSuggestionData.value, 
-        latitude: dadataCoords.latitude,
-        longitude: dadataCoords.longitude,
-        geo_lat_user: currentLatitude,
-        geo_lon_user: currentLongitude,
+        address: formData.get('address'),
         loyalty: formData.get('loyalty'),
         action: formData.get('action'),
-        comment: formData.get('comment')
+        comment: formData.get('comment') || '',
+        // Координаты: GPS (если есть), иначе Dadata
+        latitude: currentLatitude || dadataCoords?.lat || null,
+        longitude: currentLongitude || dadataCoords?.lon || null,
+        user_id: window.userTelegramId,
+        username: window.userTelegramUsername || 'anonymous',
+        timestamp: firebase.firestore.FieldValue.serverTimestamp() // Firestore Timestamp
     };
 
     try {
-        let successMessage;
-        if (window.reportToEditId) {
-            // РЕЖИМ РЕДАКТИРОВАНИЯ
-            const docRef = window.db.collection("reports").doc(window.reportToEditId);
-            // Используем .set() с merge: true, чтобы не перезаписывать timestamp создания
-            await docRef.set(reportData, { merge: true }); 
-            successMessage = 'Отчет успешно ОБНОВЛЕН в базе данных.';
-        } else {
-            // РЕЖИМ СОЗДАНИЯ
-            reportData.timestamp = firebase.firestore.FieldValue.serverTimestamp();
-            await window.db.collection("reports").add(reportData);
-            successMessage = 'Новый отчет успешно СОХРАНЕН в базу данных.';
+        if (!window.db) {
+            throw new Error("Firestore is not initialized.");
         }
         
-        // Сброс формы и статусов
+        // 2. Сохранение в Firestore
+        if (docId) {
+             // Редактирование существующего
+             await window.db.collection("reports").doc(docId).update(reportData);
+             window.showAlert('Успешно', 'Отчет успешно обновлен!');
+             // При редактировании переключаемся на "Мои Отчеты"
+             window.showSection('my-reports-view'); 
+
+        } else {
+             // Новый отчет
+             await window.db.collection("reports").add(reportData);
+             window.showAlert('Успешно', 'Отчет успешно сохранен!');
+             // При сохранении нового отчета переключаемся на "Мои Отчеты"
+             window.showSection('my-reports-view');
+        }
+
+        // 3. Очистка формы (кроме НП)
         form.reset();
-        window.reportToEditId = null;
-        document.getElementById('saveButton').textContent = 'Сохранить Отчет';
+        document.getElementById('settlement').value = reportData.settlement;
+        document.getElementById('geoStatus').textContent = 'Геолокация: ❓ Не получена';
+        selectedSuggestionData = null;
         currentLatitude = null;
         currentLongitude = null;
-        selectedSuggestionData = null;
         dadataCoords = null;
-        document.getElementById('geoStatus').textContent = 'Геолокация: ❓ Не получена';
-        lucide.createIcons();
-        
-        window.showAlert('УСПЕХ', successMessage);
-        
-    } catch (e) {
-        console.error("Error saving document: ", e);
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось сохранить отчет: ${e.message}.`);
+        document.getElementById('addressError').style.display = 'none';
+
+    } catch (error) {
+        console.error("Error saving report:", error);
+        window.showAlert('Ошибка сохранения', `Не удалось сохранить отчет: ${error.message}`);
     }
 }
 
+// ----------------------------------------------------------------------
+// 4. ИНИЦИАЛИЗАЦИЯ КАРТЫ (ИСПРАВЛЕНИЕ: ПЕРЕНЕСЕНО СЮДА ИЗ reports.js)
+// ----------------------------------------------------------------------
+
+window.initMap = function() {
+    console.log("Yandex Map API: initMap called.");
+    
+    if (window.mapInstance) return; // Карта уже инициализирована
+    if (typeof ymaps === 'undefined') {
+         // Может произойти, если API загрузился, но ymaps еще не определен
+         console.warn("ymaps is not defined yet."); 
+         return; 
+    }
+
+    // Инициализация карты
+    window.mapInstance = new ymaps.Map("mapContainer", {
+        center: [60.7259, 73.1345], // Центр Сургутского района
+        zoom: 8,
+        controls: ['zoomControl', 'fullscreenControl']
+    });
+
+    // После инициализации карты, сразу загружаем данные, если мы админ и находимся на вкладке карты
+    const currentSection = document.querySelector('.content-section:not(.hidden)')?.id;
+    if (window.isAdmin && (currentSection === 'map-view' || currentSection === 'raw-data' || currentSection === 'stats') && typeof window.fetchReports === 'function') {
+        window.fetchReports(document.getElementById('settlementFilter')?.value || null);
+    }
+}
 
 // ----------------------------------------------------------------------
-// 5. ЛОГИКА ЗАГРУЗКИ ДАШБОРДА (БЕЗ АВТО-GPS)
+// 5. ЛОГИКА ЗАГРУЗКИ ДАШБОРДА (ИСПРАВЛЕНИЕ: Безопасный доступ к DOM)
 // ----------------------------------------------------------------------
 
 window.loadDashboard = async function() {
+    // ⚠️ ИСПРАВЛЕНИЕ ОШИБКИ: Безопасный доступ к DOM (Null Error Fix)
+    document.getElementById('mapLoading')?.classList.add('hidden'); 
     
-    if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp.ready) {
-        window.Telegram.WebApp.ready();
-        window.Telegram.WebApp.expand();
+    document.getElementById('saveButton').disabled = true;
+
+    if (typeof initializeFirebase === 'undefined' || typeof authenticateUser === 'undefined') {
+         window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Проверьте подключение Firebase в HTML. Скрипты не найдены.');
+         return;
     }
     
-    const saveButton = document.getElementById('saveButton');
-    if (saveButton) saveButton.disabled = true;
-
     if (!window.initializeFirebase()) {
-         window.showSection('form-view');
          return;
     }
 
     const isAuthenticated = await window.authenticateUser();
     
-    // 2. Настройка UI по ролям
     if (isAuthenticated) {
-         if (window.isAdmin) {
-             document.getElementById('btn-map-view').classList.remove('hidden');
-             document.getElementById('btn-stats').classList.remove('hidden');
-             document.getElementById('btn-raw-data').classList.remove('hidden');
-             document.getElementById('admin-upload-section').classList.remove('hidden');
-             document.getElementById('btn-my-reports').classList.add('hidden'); // Админ не видит 'Мои Отчеты'
-         } else {
-             document.getElementById('btn-my-reports').classList.remove('hidden');
-             document.getElementById('admin-upload-section').classList.add('hidden');
-         }
-         
-         // 3. Выбор начального раздела
-         const urlParams = new URLSearchParams(window.location.search);
-         const initialView = urlParams.get('view') || 'form-view';
-         
-         let startSection = initialView;
-         if (!window.isAdmin && (initialView === 'map-view' || initialView === 'stats' || initialView === 'raw-data')) {
-             startSection = 'form-view'; 
-         }
-         
-         window.showSection(startSection);
-         if (saveButton) saveButton.disabled = false;
-         
+        
+        // 1. Проверка роли
+        const isAgitator = !window.isAdmin;
+        
+        // 2. Определение начального вида
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlRole = urlParams.get('role'); // Роль, которую выбрал пользователь на index.html
+        const initialView = urlParams.get('view') || 'form-view'; 
+
+        // 3. Обновление статуса
+        document.getElementById('debugAdminStatus').textContent = window.isAdmin ? 'ДА (Админ)' : 'НЕТ (Агитатор)';
+        
+        // 4. Управление видимостью кнопок
+        if (window.isAdmin) {
+            document.getElementById('btn-map-view')?.classList.remove('hidden');
+            document.getElementById('btn-stats')?.classList.remove('hidden');
+            document.getElementById('btn-raw-data')?.classList.remove('hidden');
+            document.getElementById('btn-my-reports-view')?.classList.add('hidden');
+        } else {
+            // Агитатор видит только Форму и Мои Отчеты
+            document.getElementById('btn-map-view')?.classList.add('hidden');
+            document.getElementById('btn-stats')?.classList.add('hidden');
+            document.getElementById('btn-raw-data')?.classList.add('hidden');
+            document.getElementById('btn-my-reports-view')?.classList.remove('hidden');
+        }
+
+        // 5. Выбор начального раздела
+        let startSection = initialView;
+        
+        // Если пользователь выбрал роль Администратора, убедимся, что он видит карту (по умолчанию)
+        if (urlRole === 'admin' && startSection === 'form-view') {
+             startSection = 'map-view';
+        }
+
+        // 6. Отображение
+        window.showSection(startSection);
+        document.getElementById('saveButton').disabled = false;
+        
     } else {
+         // Не удалось аутентифицировать или получить токен
          window.showSection('form-view');
-         if (saveButton) saveButton.disabled = true;
+         document.getElementById('saveButton').disabled = true;
+         window.showAlert('Доступ ограничен', 'Не удалось пройти аутентификацию. Используйте ссылку из Telegram-бота.');
     }
 }
