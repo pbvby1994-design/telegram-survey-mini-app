@@ -20,8 +20,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <link rel="manifest" href="./manifest.json">
-
     <style>
         body { 
             font-family: 'Jost', sans-serif; 
@@ -55,13 +53,19 @@
             align-items: center;
             position: relative; 
         }
+        /* Стиль для обязательных полей */
+        .required::after {
+            content: '*';
+            color: #ef4444; /* red-500 */
+            margin-left: 4px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <header class="mb-6 flex justify-between items-center bg-white p-6 rounded-xl shadow">
-            <h1 class="text-3xl font-bold text-gray-900 flex items-center">
-                <span data-lucide="notebook-pen" class="w-8 h-8 mr-3 text-indigo-600"></span>
+        <header class="mb-6 flex flex-col sm:flex-row justify-between items-center bg-white p-6 rounded-xl shadow">
+            <h1 class="text-2xl font-bold text-gray-900 flex items-center mb-4 sm:mb-0">
+                <span data-lucide="notebook-pen" class="w-7 h-7 mr-3 text-indigo-600"></span>
                 Блокнот Агитатора
             </h1>
             <div class="text-right">
@@ -70,7 +74,10 @@
             </div>
         </header>
 
-        <nav class="mb-8 p-3 bg-white rounded-xl shadow flex space-x-4">
+        <nav class="mb-8 p-3 bg-white rounded-xl shadow flex space-x-2 sm:space-x-4 overflow-x-auto">
+            <div id="btn-form-view" class="tab-button active" onclick="showSection('form-view')">
+                <span data-lucide="clipboard-list" class="w-5 h-5 mr-2"></span> Форма
+            </div>
             <div id="btn-map-view" class="tab-button hidden" onclick="showSection('map-view')">
                 <span data-lucide="map-pin" class="w-5 h-5 mr-2"></span> Карта
             </div>
@@ -78,7 +85,7 @@
                 <span data-lucide="line-chart" class="w-5 h-5 mr-2"></span> Статистика
             </div>
             <div id="btn-raw-data" class="tab-button hidden" onclick="showSection('raw-data')">
-                <span data-lucide="table-2" class="w-5 h-5 mr-2"></span> Сырые данные
+                <span data-lucide="table-2" class="w-5 h-5 mr-2"></span> Данные
             </div>
         </nav>
 
@@ -112,10 +119,10 @@
                             <input type="text" id="address" name="address" required class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2" placeholder="Начните вводить адрес (ул. Ленина, 1)">
                             <ul id="suggestionsList" class="absolute z-10 bg-white border border-gray-300 w-full shadow-lg mt-1 rounded-md hidden">
                             </ul>
-                            <p class="text-xs text-red-500 mt-1" id="addressError" style="display:none;">⚠️ Выберите адрес из списка Dadata!</p>
+                            <p class="text-xs text-red-500 mt-1" id="addressError" style="display:none;"></p>
                         </div>
                         
-                        <div class="flex items-center space-x-4 p-3 bg-gray-100 rounded-md">
+                        <div class="flex flex-wrap items-center space-x-4 p-3 bg-gray-100 rounded-md">
                             <button type="button" onclick="window.getCurrentLocation()" class="flex items-center justify-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150">
                                 <span id="geoIcon" data-lucide="map-pin" class="w-5 h-5 mr-2"></span> Получить GPS
                             </button>
@@ -178,8 +185,8 @@
         </section>
 
         <section id="map-view" class="content-section hidden">
-            <div class="bg-white p-6 rounded-xl shadow mb-6 flex justify-between items-center">
-                <h2 class="text-2xl font-semibold text-gray-800">Карта опросов</h2>
+            <div class="bg-white p-6 rounded-xl shadow mb-6 flex flex-col sm:flex-row justify-between items-center">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4 sm:mb-0">Карта опросов</h2>
                 <div class="flex items-center space-x-3">
                     <label for="settlementFilter" class="text-gray-700">Фильтр по НП:</label>
                     <select id="settlementFilter" class="p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
@@ -201,6 +208,9 @@
         </section>
 
         <section id="stats" class="content-section hidden">
+            <div class="bg-white p-6 rounded-xl shadow mb-6">
+                <h2 class="text-2xl font-semibold text-gray-800">Статистика отчетов</h2>
+            </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-xl shadow">
                     <canvas id="loyaltyChart" class="w-full h-80"></canvas>
@@ -253,26 +263,36 @@
             document.querySelectorAll('.tab-button').forEach(btn => {
                 btn.classList.remove('active');
             });
-            const sectionButton = document.getElementById(`btn-${sectionId}`);
+            // Активируем кнопку "Форма" если выбран 'form-view', иначе ищем по ID
+            const sectionButton = (sectionId === 'form-view') 
+                ? document.getElementById(`btn-form-view`)
+                : document.getElementById(`btn-${sectionId}`);
+                
             if (sectionButton) {
                 sectionButton.classList.add('active');
             }
 
             if (sectionId === 'map-view') {
-                 // Если initMap уже сработал через onload Яндекса, вызываем fetchReports
-                 if (typeof window.mapInstance !== 'undefined' && typeof window.fetchReports === 'function') {
+                 // Если карта уже инициализирована, просто обновляем данные и центрируем
+                 if (window.mapInstance && typeof window.fetchReports === 'function') {
                     window.fetchReports(document.getElementById('settlementFilter').value || null);
-                    // Важно: адаптируем карту к размеру viewport
-                    if (window.mapInstance) window.mapInstance.container.fitToViewport();
+                    window.mapInstance.container.fitToViewport();
                  } else if (typeof window.initMap === 'function' && typeof ymaps !== 'undefined') {
-                    // Если карта не инициализирована, но API загружен
+                    // Если карта не инициализирована, но API загружен (вызывается из onload)
                     window.initMap(); 
                  }
+            } else if (sectionId === 'stats' || sectionId === 'raw-data') {
+                 // Обновляем статистику/данные при переходе
+                 if (typeof window.fetchReports === 'function') {
+                    window.fetchReports(document.getElementById('settlementFilter').value || null);
+                 }
+                 document.getElementById('mapLoading').classList.add('hidden');
             } else {
                  document.getElementById('mapLoading').classList.add('hidden');
             }
         }
         
+        // Функции showAlert и closeAlert
         window.showAlert = function(title, message) {
             document.getElementById('alertTitle').textContent = title;
             document.getElementById('alertMessage').textContent = message;
