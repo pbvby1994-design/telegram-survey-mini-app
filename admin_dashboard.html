@@ -27,33 +27,35 @@
     <link rel="manifest" href="manifest.json">
 
     <style>
+        /* ИСПРАВЛЕНИЕ: ПЕРЕОПРЕДЕЛЕНИЕ СТИЛЕЙ ТЕЛЕГРАММ ДЛЯ СВЕТЛОЙ ТЕМЫ */
         body { 
             font-family: 'Jost', sans-serif;
-            background-color: var(--tg-theme-bg-color, #f4f6f9);
-            color: var(--tg-theme-text-color, #212121);
+            /* Принудительно устанавливаем светлый фон */
+            background-color: #f4f6f9 !important; 
+            color: #212121 !important;
             transition: background-color 0.3s;
         }
-        /* ... Остальные стили ... */
         .tab-button.active {
-            color: var(--tg-theme-button-color, #4f46e5);
-            border-bottom: 2px solid var(--tg-theme-button-color, #4f46e5);
+            color: #4f46e5;
+            border-bottom: 2px solid #4f46e5;
         }
         #reportForm input[type="text"], 
         #reportForm select, 
         #reportForm textarea {
-            border: 1px solid var(--tg-theme-hint-color, #d1d5db);
-            background-color: var(--tg-theme-secondary-bg-color, #ffffff);
-            color: var(--tg-theme-text-color, #212121);
+            border: 1px solid #d1d5db;
+            background-color: #ffffff; 
+            color: #212121;
         }
         .suggestion-item {
-            background-color: var(--tg-theme-secondary-bg-color, #ffffff);
-            color: var(--tg-theme-text-color, #212121);
+            background-color: #ffffff;
+            color: #212121;
         }
         .suggestion-item:hover {
-            background-color: var(--tg-theme-hint-color, #f3f4f6);
+            background-color: #f3f4f6;
         }
-        /* Стиль для анимации загрузки */
-        #mapLoading svg {
+        /* ИСПРАВЛЕНИЕ АНИМАЦИИ: Принудительный keyframe spin */
+        #mapLoading i {
+             /* animate-spin из Tailwind, но на случай сбоя - добавляем свой класс */
              animation: spin 1s linear infinite;
         }
         @keyframes spin {
@@ -70,10 +72,10 @@
             <button id="btn-form" class="tab-button active flex-1 p-3 text-center text-sm font-medium hover:text-indigo-700 transition" onclick="showSection('form')">
                 <i data-lucide="file-text" class="w-4 h-4 inline-block mr-2"></i>Отчет
             </button>
-            <button id="btn-map-view" class="tab-button flex-1 p-3 text-center text-sm font-medium text-gray-500 hover:text-indigo-700 transition hidden" onclick="showSection('map-view')">
+            <button id="btn-map-view" class="tab-button flex-1 p-3 text-center text-sm font-medium text-gray-500 hover:text-indigo-700 transition" onclick="showSection('map-view')">
                 <i data-lucide="map" class="w-4 h-4 inline-block mr-2"></i>Карта
             </button>
-            <button id="btn-report-view" class="tab-button flex-1 p-3 text-center text-sm font-medium text-gray-500 hover:text-indigo-700 transition hidden" onclick="showSection('report-view')">
+            <button id="btn-report-view" class="tab-button flex-1 p-3 text-center text-sm font-medium text-gray-500 hover:text-indigo-700 transition" onclick="showSection('report-view')">
                 <i data-lucide="bar-chart-4" class="w-4 h-4 inline-block mr-2"></i>Сводка
             </button>
         </div>
@@ -176,7 +178,7 @@
             </div>
             <div id="mapContainer" class="w-full h-96 bg-gray-200 rounded-lg shadow-inner relative">
                 <div id="mapLoading" class="absolute inset-0 flex items-center justify-center bg-gray-100 bg-opacity-75 z-10 hidden">
-                    <i data-lucide="loader-circle" class="w-8 h-8 text-indigo-600 animate-spin"></i>
+                    <i data-lucide="loader-circle" class="w-8 h-8 text-indigo-600"></i>
                     <span class="ml-2 text-indigo-600">Загрузка данных карты...</span>
                 </div>
                 </div>
@@ -195,12 +197,53 @@
         </div>
     </div>
 
-    <script src="firebase-auth.js"></script>
-    <script src="reports.js"></script>
+    <script src="config.js"></script> <script src="firebase-auth.js"></script> <script src="reports.js"></script>
     <script src="main.js"></script>
 
     <script>
         // ... (Глобальные функции showSection, showAlert, closeAlert - без изменений)
+        // ВНИМАНИЕ: Если вы ранее добавляли функцию showSection в main.js, удалите ее из main.js
+        window.showSection = function(sectionId) {
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.classList.add('hidden');
+            });
+            document.getElementById(sectionId).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            const sectionButton = document.getElementById(`btn-${sectionId}`);
+            if (sectionButton) {
+                sectionButton.classList.add('active');
+            }
+
+            if (sectionId === 'map-view') {
+                 // ПЕРЕКЛЮЧЕНИЕ НА КАРТУ - ЗАПУСК ИНИЦИАЛИЗАЦИИ
+                 document.getElementById('mapLoading').classList.remove('hidden');
+                 if (typeof window.initMap === 'function') {
+                    window.initMap(); 
+                 }
+            }
+        }
+        
+        window.showAlert = function(title, message) {
+            document.getElementById('alertTitle').textContent = title;
+            document.getElementById('alertMessage').textContent = message;
+            document.getElementById('alertModal').classList.remove('hidden');
+            document.getElementById('alertModal').classList.add('flex');
+        }
+
+        window.closeAlert = function() {
+            document.getElementById('alertModal').classList.add('hidden');
+            document.getElementById('alertModal').classList.remove('flex');
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+             // Инициализация при загрузке DOM
+            if (window.loadDashboard) {
+                window.loadDashboard();
+            }
+        });
     </script>
 </body>
 </html>
