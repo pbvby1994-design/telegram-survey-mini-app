@@ -2,8 +2,6 @@
 
 // --- Глобальные переменные ---
 window.mapInstance = null; 
-let currentLatitude = null; 
-let currentLongitude = null;
 let dadataCoords = null;    
 
 // --- КОНФИГУРАЦИЯ DADATA ---
@@ -44,7 +42,7 @@ addressInput.addEventListener('input', async () => {
             },
             body: JSON.stringify({
                 query: query,
-                count: 5 // Ограничим до 5 подсказок
+                count: 5 
             })
         });
 
@@ -72,6 +70,7 @@ addressInput.addEventListener('input', async () => {
                     const data = selectedSuggestionData;
                     
                     // Регион, Район, Город/Поселок
+                    // Используем fallbacks, чтобы заполнить поля максимально
                     if (document.getElementById('region_field')) {
                         document.getElementById('region_field').value = data.region_with_type || data.region || '';
                     }
@@ -121,7 +120,7 @@ document.addEventListener('click', (event) => {
 });
 
 // ----------------------------------------------------------------------
-// 2. ОТПРАВКА ДАННЫХ В FIREBASE (Обновлена для новых полей)
+// 2. ОТПРАВКА ДАННЫХ В FIREBASE 
 // ----------------------------------------------------------------------
 
 document.getElementById('reportForm').addEventListener('submit', async function(e) {
@@ -142,11 +141,6 @@ document.getElementById('reportForm').addEventListener('submit', async function(
     const form = e.target;
     const data = new FormData(form);
     
-    // Проверка наличия геоданных для карты (опционально)
-    if (!dadataCoords || !dadataCoords.lat) {
-         console.warn("Отчет отправляется без геоданных.");
-    }
-
     const report = {
         telegram_id: window.userTelegramId,
         timestamp: new Date(),
@@ -158,13 +152,13 @@ document.getElementById('reportForm').addEventListener('submit', async function(
         loyalty: data.get('loyalty'),
         action: data.get('action'),
         
-        // Добавленные структурированные поля Dadata
-        region: data.get('region_field'),             // Регион
-        area: data.get('area_field'),                 // Район
-        city_settlement: data.get('city_settlement_field'), // Город/Поселок
-        street: data.get('street_field'),             // Улица
-        house: data.get('house_field'),               // Дом
-        flat: data.get('flat_field'),                 // Квартира
+        // Структурированные поля Dadata (ГАРАНТИРОВАННО СЮДА ПОПАДАЮТ)
+        region: data.get('region_field'),             
+        area: data.get('area_field'),                 
+        city_settlement: data.get('city_settlement_field'), 
+        street: data.get('street_field'),             
+        house: data.get('house_field'),               
+        flat: data.get('flat_field'),                 
 
         // Геоданные
         latitude: dadataCoords ? dadataCoords.lat : null,
@@ -174,27 +168,23 @@ document.getElementById('reportForm').addEventListener('submit', async function(
     try {
         if (!window.db) throw new Error("Firestore не инициализирован.");
         
-        // Отправка в коллекцию 'reports'
         await window.db.collection('reports').add(report);
         
-        // Уведомление Telegram
         if (window.Telegram.WebApp) {
              window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-             window.Telegram.WebApp.close(); // Закрываем приложение
+             // window.Telegram.WebApp.close(); // Отключено для тестирования
         }
 
-        // Сброс формы и уведомление
         form.reset();
         selectedSuggestionData = null; 
         dadataCoords = null; 
         addressInput.value = ''; 
-        showAlert('Успех', 'Отчет успешно сохранен! (Приложение будет закрыто)');
+        showAlert('Успех', 'Отчет успешно сохранен!');
 
     } catch (error) {
         console.error("Ошибка при сохранении в Firestore: ", error);
         showAlert('Ошибка', `Не удалось сохранить отчет: ${error.message}`);
     } finally {
-        // Разблокируем кнопку
         document.getElementById('saveButton').disabled = false;
         document.getElementById('saveButtonText').textContent = 'Сохранить Отчет';
     }
@@ -205,7 +195,6 @@ document.getElementById('reportForm').addEventListener('submit', async function(
 // ----------------------------------------------------------------------
 
 window.loadDashboard = async function() {
-    // Включаем иконки
     lucide.createIcons();
     
     // Заполняем список населенных пунктов
@@ -226,6 +215,7 @@ window.loadDashboard = async function() {
         window.Telegram.WebApp.expand();
     }
     
+    // Временно отключаем кнопку до аутентификации
     document.getElementById('saveButton').disabled = true;
 
     if (!window.initializeFirebase()) {
@@ -236,22 +226,21 @@ window.loadDashboard = async function() {
     const isAuthenticated = await window.authenticateUser();
     
     if (isAuthenticated) {
-         // Отображение статуса
          document.getElementById('debugUserId').textContent = window.userTelegramId;
 
-         if (window.isAdmin) {
-             document.getElementById('btn-map-view').classList.remove('hidden');
-             document.getElementById('btn-report-view').classList.remove('hidden');
-         }
+         // Отображаем кнопки (теперь они всегда видны в HTML, но логика позволяет выбрать секцию)
          
          const urlParams = new URLSearchParams(window.location.search);
          const initialView = urlParams.get('view');
          
          let startSection = 'form';
-         if (window.isAdmin && (initialView === 'map' || initialView === 'map-view')) {
-             startSection = 'map-view';
-         } else if (window.isAdmin && initialView === 'report-view') {
-             startSection = 'report-view';
+         if (window.isAdmin) {
+             // Если админ, по умолчанию переходим на карту (если нет другого view)
+             if (initialView === 'map' || initialView === 'map-view' || !initialView) {
+                 startSection = 'map-view';
+             } else if (initialView === 'report-view') {
+                 startSection = 'report-view';
+             }
          }
          
          window.showSection(startSection);
