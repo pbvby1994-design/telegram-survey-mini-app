@@ -1,19 +1,17 @@
 // main.js (ИСПРАВЛЕННАЯ ВЕРСИЯ)
 
 // --- Глобальные переменные ---
-// mapInstance, currentLatitude, currentLongitude, dadataCoords, selectedSuggestionData остаются
-window.mapInstance = null; 
 let currentLatitude = null; 
 let currentLongitude = null;
 let dadataCoords = null;    
 let selectedSuggestionData = null; 
 
+const addressInput = document.getElementById('address');
+const suggestionsList = document.getElementById('suggestionsList');
+
 // ----------------------------------------------------------------------
 // 1. ИНТЕГРАЦИЯ DADATA (Fetch API)
 // ----------------------------------------------------------------------
-
-const addressInput = document.getElementById('address');
-const suggestionsList = document.getElementById('suggestionsList');
 
 /**
  * Ручной обработчик ввода для Dadata
@@ -83,7 +81,7 @@ addressInput.addEventListener('input', async () => {
 function selectSuggestion(suggestion) {
     addressInput.value = suggestion.value;
     suggestionsList.classList.add('hidden');
-    selectedSuggestionData = suggestion.data;
+    selectedSuggestionData = suggestion; // Сохраняем весь объект
     
     // Сохраняем координаты Dadata
     dadataCoords = {
@@ -103,7 +101,8 @@ window.getCurrentLocation = function() {
     const geoIcon = document.getElementById('geoIcon');
     
     geoStatus.textContent = 'Геолокация: ⏳ Определение...';
-    geoIcon.setAttribute('data-lucide', 'map-pin'); 
+    geoIcon.setAttribute('data-lucide', 'loader'); 
+    lucide.createIcons();
     
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -121,7 +120,7 @@ window.getCurrentLocation = function() {
                 currentLatitude = null;
                 currentLongitude = null;
                 lucide.createIcons();
-                window.showAlert('Геолокация', 'Не удалось получить GPS-координаты. Проверьте разрешения в браузере или Telegram.');
+                window.showAlert('Геолокация', 'Не удалось получить GPS-координаты. Проверьте разрешения.');
             },
             { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
         );
@@ -176,7 +175,6 @@ window.saveReport = async function() {
 
     try {
         const docRef = await window.db.collection("reports").add(reportData);
-        console.log("Document written with ID: ", docRef.id);
         
         // Сброс формы и статусов
         form.reset();
@@ -186,6 +184,7 @@ window.saveReport = async function() {
         dadataCoords = null;
         document.getElementById('geoStatus').textContent = 'Геолокация: ❓ Не получена';
         document.getElementById('geoIcon').setAttribute('data-lucide', 'map-pin');
+        document.getElementById('addressError').style.display = 'none'; // Скрываем ошибку после успешного сохранения
         lucide.createIcons();
 
         window.showAlert('УСПЕХ', 'Отчет успешно сохранен в базу данных.');
@@ -218,6 +217,7 @@ window.loadDashboard = async function() {
     const saveButton = document.getElementById('saveButton');
     if (saveButton) saveButton.disabled = true;
 
+    // Инициализация Firebase (требует, чтобы config.js уже отработал)
     if (!window.initializeFirebase()) {
          window.showSection('form-view');
          return;
