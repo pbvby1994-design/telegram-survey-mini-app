@@ -49,23 +49,22 @@
             height: 600px; 
             width: 100%; 
             border-radius: 12px;
-            /* Placeholder background */
             background-color: #e5e7eb; 
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 1.5rem;
-            color: #4b5563;
-            position: relative; /* Для позиционирования спиннера */
+            position: relative; 
         }
+        /* Стиль для индикатора загрузки Dadata в main.js */
+        /* .loading-spinner { ... } */
     </style>
 </head>
 <body>
     <div class="container">
         <header class="mb-6 flex justify-between items-center bg-white p-6 rounded-xl shadow">
             <h1 class="text-3xl font-bold text-gray-900 flex items-center">
-                <span data-lucide="bar-chart-3" class="w-8 h-8 mr-3 text-indigo-600"></span>
-                Панель Администратора
+                <span data-lucide="notebook-pen" class="w-8 h-8 mr-3 text-indigo-600"></span>
+                Блокнот Агитатора
             </h1>
             <div class="text-right">
                 <p class="text-sm font-medium text-gray-700">Статус Админа:</p>
@@ -74,18 +73,113 @@
         </header>
 
         <nav class="mb-8 p-3 bg-white rounded-xl shadow flex space-x-4">
-            <div id="btn-map-view" class="tab-button active" onclick="showSection('map-view')">
+            <div id="btn-map-view" class="tab-button hidden" onclick="showSection('map-view')">
                 <span data-lucide="map-pin" class="w-5 h-5 mr-2"></span> Карта
             </div>
-            <div id="btn-stats" class="tab-button" onclick="showSection('stats')">
+            <div id="btn-stats" class="tab-button hidden" onclick="showSection('stats')">
                 <span data-lucide="line-chart" class="w-5 h-5 mr-2"></span> Статистика
             </div>
-            <div id="btn-raw-data" class="tab-button" onclick="showSection('raw-data')">
+            <div id="btn-raw-data" class="tab-button hidden" onclick="showSection('raw-data')">
                 <span data-lucide="table-2" class="w-5 h-5 mr-2"></span> Сырые данные
             </div>
         </nav>
 
-        <section id="map-view" class="content-section">
+        <section id="form-view" class="content-section">
+            <div class="bg-white p-6 rounded-xl shadow">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-6">Форма анкетирования</h2>
+                <form id="reportForm" onsubmit="event.preventDefault(); window.saveReport();">
+                    <div class="space-y-4">
+                        <div>
+                            <label for="settlement" class="block text-sm font-medium text-gray-700 required">Населенный пункт</label>
+                            <select id="settlement" name="settlement" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                <option value="">Выберите НП</option>
+                                <option value="г.п. Лянтор">г.п. Лянтор</option>
+                                <option value="с.п. Русскинская">с.п. Русскинская</option>
+                                <option value="г.п. Федоровский">г.п. Федоровский</option>
+                                <option value="г.п. Барсово">г.п. Барсово</option>
+                                <option value="г.п. Белый Яр">г.п. Белый Яр</option>
+                                <option value="с.п. Лямина">с.п. Лямина</option>
+                                <option value="с.п. Сытомино">с.п. Сытомино</option>
+                                <option value="с.п. Угут">с.п. Угут</option>
+                                <option value="с.п. Ульт-Ягун">с.п. Ульт-Ягун</option>
+                                <option value="с.п. Солнечный">с.п. Солнечный</option>
+                                <option value="с.п. Нижнесортымский">с.п. Нижнесортымский</option>
+                                <option value="с.п. Тундрино">с.п. Тундрино</option>
+                                <option value="с.п. Локосово">с.п. Локосово</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="address" class="block text-sm font-medium text-gray-700 required">Адрес (Улица, Дом)</label>
+                            <input type="text" id="address" name="address" required class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2" placeholder="Начните вводить адрес (ул. Ленина, 1)">
+                            <ul id="suggestionsList" class="absolute z-10 bg-white border border-gray-300 w-full shadow-lg mt-1 rounded-md hidden">
+                            </ul>
+                            <p class="text-xs text-red-500 mt-1" id="addressError" style="display:none;">⚠️ Выберите адрес из списка Dadata!</p>
+                        </div>
+                        
+                        <div class="flex items-center space-x-4 p-3 bg-gray-100 rounded-md">
+                            <button type="button" onclick="window.getCurrentLocation()" class="flex items-center justify-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150">
+                                <span id="geoIcon" data-lucide="map-pin" class="w-5 h-5 mr-2"></span> Получить GPS
+                            </button>
+                            <p id="geoStatus" class="text-sm font-medium text-gray-600">Геолокация: ❓ Не получена</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2 required">Лояльность</label>
+                            <div class="flex flex-wrap gap-4">
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="loyalty" value="strong" class="form-radio text-green-600" required>
+                                    <span class="ml-2">Сильная поддержка</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="loyalty" value="moderate" class="form-radio text-blue-600">
+                                    <span class="ml-2">Умеренная поддержка</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="loyalty" value="neutral" class="form-radio text-yellow-600">
+                                    <span class="ml-2">Нейтрально</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="loyalty" value="against" class="form-radio text-red-600">
+                                    <span class="ml-2">Против</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2 required">Совершенное действие</label>
+                            <div class="flex flex-wrap gap-4">
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="action" value="conversation" class="form-radio text-indigo-600" required>
+                                    <span class="ml-2">Разговор</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="action" value="handout" class="form-radio text-indigo-600">
+                                    <span class="ml-2">Вручение материала</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="action" value="visit" class="form-radio text-indigo-600">
+                                    <span class="ml-2">Посещение</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="comment" class="block text-sm font-medium text-gray-700">Комментарий</label>
+                            <textarea id="comment" name="comment" rows="3" class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="mt-6">
+                        <button id="saveButton" type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition duration-150">
+                            <span data-lucide="save" class="w-5 h-5 mr-2"></span> Сохранить Отчет
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <section id="map-view" class="content-section hidden">
             <div class="bg-white p-6 rounded-xl shadow mb-6 flex justify-between items-center">
                 <h2 class="text-2xl font-semibold text-gray-800">Карта опросов</h2>
                 <div class="flex items-center space-x-3">
@@ -150,10 +244,7 @@
     <script src="./main.js"></script>
 
     <script>
-        // Инициализация Lucide Icons
         lucide.createIcons();
-        
-        // --- ГЛОБАЛЬНЫЕ ФУНКЦИИ UI ---
         
         window.showSection = function(sectionId) {
             document.querySelectorAll('.content-section').forEach(section => {
@@ -169,30 +260,25 @@
                 sectionButton.classList.add('active');
             }
 
-            // Инициализация карты
             if (sectionId === 'map-view') {
-                // Показываем спиннер, пока карта загружает данные
                 document.getElementById('mapLoading').classList.remove('hidden'); 
-                 if (typeof ymaps !== 'undefined' && typeof window.initMap === 'function') {
-                    // Если API загрузилось, но карта еще не инициализирована - запускаем.
-                    // Если уже инициализирована, reports.js вызовет fetchReports, который обновит маркеры.
-                    window.initMap(); 
+                 // initMap вызывается при загрузке API Яндекса (onload=initMap)
+                 if (typeof window.mapInstance !== 'undefined' && typeof window.fetchReports === 'function') {
+                    // Если карта уже инициализирована, просто обновляем данные
+                    window.fetchReports(document.getElementById('settlementFilter').value || null);
+                    if (window.mapInstance) window.mapInstance.container.fitToViewport();
                  }
-                 // Если карта уже была, но её нужно обновить/перерисовать 
-                 if (window.mapInstance) window.mapInstance.container.fitToViewport();
             } else {
                  document.getElementById('mapLoading').classList.add('hidden');
             }
         }
         
-        // Общая функция для вывода модальных сообщений
         window.showAlert = function(title, message) {
             document.getElementById('alertTitle').textContent = title;
             document.getElementById('alertMessage').textContent = message;
             document.getElementById('alertModal').classList.remove('hidden');
             document.getElementById('alertModal').classList.add('flex');
             
-            // УЛУЧШЕНИЕ: Уведомление Telegram
             if (window.Telegram.WebApp && window.Telegram.WebApp.showAlert) {
                  window.Telegram.WebApp.showAlert(`${title}: ${message}`);
             }
@@ -203,18 +289,7 @@
             document.getElementById('alertModal').classList.remove('flex');
         }
         
-        // --- ИНИЦИАЛИЗАЦИЯ ---
-        
         document.addEventListener('DOMContentLoaded', () => {
-             // Инициализация Telegram WebApp
-            if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp.ready) {
-                window.Telegram.WebApp.ready();
-                window.Telegram.WebApp.expand();
-                window.Telegram.WebApp.setHeaderColor('bg_color'); 
-                window.Telegram.WebApp.setBackgroundColor('bg_color');
-            }
-            
-            // Запуск аутентификации (из main.js)
             if (window.loadDashboard) {
                 window.loadDashboard();
             }
