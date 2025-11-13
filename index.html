@@ -35,12 +35,13 @@
             max-width: 500px;
             width: 90%;
             text-align: center;
-            /* Анимация появления */
+            /* АНИМАЦИЯ: Изначальное состояние */
             opacity: 0;
-            transform: translateY(20px);
-            transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+            transform: translateY(30px); /* Усилим сдвиг */
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out; /* Замедлим для плавности */
         }
         .card.loaded {
+            /* АНИМАЦИЯ: Конечное состояние */
             opacity: 1;
             transform: translateY(0);
         }
@@ -88,6 +89,16 @@
         /* Медленная анимация иконки */
         .animate-bounce-slow {
             animation: bounce 2s infinite;
+        }
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(-8%); /* Усилим подпрыгивание */
+                animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+            }
+            50% {
+                transform: translateY(0);
+                animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+            }
         }
     </style>
 </head>
@@ -158,9 +169,11 @@
 
             const searchParams = new URLSearchParams(window.location.search);
             const hash = window.location.hash;
+            // Устанавливаем начальный вид для дашборда
             searchParams.set('view', (role === 'agitator' ? 'form-view' : 'map-view'));
             searchParams.set('role', role); // Передаем роль
 
+            // Корректный переход на admin_dashboard.html
             let targetPath = window.location.pathname.replace('index.html', 'admin_dashboard.html');
             if (window.location.pathname.endsWith('/')) targetPath += 'admin_dashboard.html';
 
@@ -173,12 +186,13 @@
             // Переход после завершения анимации
             setTimeout(() => {
                 window.location.href = targetUrl;
-            }, 450);
+            }, 550); // Увеличил задержку для плавной анимации
         }
 
         window.onload = async () => {
             lucide.createIcons();
             
+            // Показываем карточку с анимацией
             document.getElementById('welcomeCard').classList.add('loaded');
             
             if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp.ready) {
@@ -196,6 +210,7 @@
                  document.getElementById('telegramAuthInfo').textContent = '❌ Скрипт Firebase или config.js не загружены.';
             }
             
+            // Включаем кнопку Агитатора, так как доступ есть у всех
             document.getElementById('agitatorButton').disabled = false;
         };
     </script>
