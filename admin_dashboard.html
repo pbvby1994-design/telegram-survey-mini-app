@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Блокнот Агитатора | Панель</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+    <script src="https://api-maps.yandex.ru/2.1/?apikey=35d34bfb-514d-42c1-b37d-cb751ea4793e&lang=ru_RU&onload=initMap" type="text/javascript" async></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <link rel="manifest" href="/manifest.json">
+
+    <style>
+        body { 
+            font-family: 'Jost', sans-serif;
+            background-color: var(--tg-theme-bg-color, #f4f6f9);
+            color: var(--tg-theme-text-color, #212121);
+            transition: background-color 0.3s;
+        }
+        /* ... Остальные стили ... */
+        /* Добавляем стили для активной вкладки */
+        .tab-button.active {
+            color: var(--tg-theme-button-color, #4f46e5);
+            border-bottom: 2px solid var(--tg-theme-button-color, #4f46e5);
+        }
+        /* Стили для формы */
+        #reportForm input[type="text"], 
+        #reportForm select, 
+        #reportForm textarea {
+            border: 1px solid var(--tg-theme-hint-color, #d1d5db);
+            background-color: var(--tg-theme-secondary-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #212121);
+        }
+        .suggestion-item {
+            background-color: var(--tg-theme-secondary-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #212121);
+        }
+        .suggestion-item:hover {
+            background-color: var(--tg-theme-hint-color, #f3f4f6);
+        }
+    </style>
+</head>
+<body>
+    <div class="container mx-auto p-4 max-w-2xl">
+        <h1 class="text-2xl font-bold mb-6 text-center text-gray-800">Блокнот Агитатора</h1>
+        
+        <div class="flex border-b border-gray-200 mb-6 sticky top-0 bg-white z-10">
+            <button id="btn-form" class="tab-button active flex-1 p-3 text-center text-sm font-medium hover:text-indigo-700 transition" onclick="showSection('form')">
+                <i data-lucide="file-text" class="w-4 h-4 inline-block mr-2"></i>Отчет
+            </button>
+            <button id="btn-map-view" class="tab-button flex-1 p-3 text-center text-sm font-medium text-gray-500 hover:text-indigo-700 transition hidden" onclick="showSection('map-view')">
+                <i data-lucide="map" class="w-4 h-4 inline-block mr-2"></i>Карта
+            </button>
+            <button id="btn-report-view" class="tab-button flex-1 p-3 text-center text-sm font-medium text-gray-500 hover:text-indigo-700 transition hidden" onclick="showSection('report-view')">
+                <i data-lucide="bar-chart-4" class="w-4 h-4 inline-block mr-2"></i>Отчет
+            </button>
+        </div>
+
+        <div id="form" class="content-section">
+            <form id="reportForm" class="space-y-6">
+                
+                <div class="bg-indigo-50 p-4 rounded-lg">
+                    <p class="text-sm font-medium text-indigo-700">Статус: <span id="debugAdminStatus" class="font-bold">...</span></p>
+                    <p class="text-xs text-indigo-600">ID: <span id="debugUserId">...</span></p>
+                </div>
+
+                <div>
+                    <label for="settlement" class="block text-sm font-medium text-gray-700">Населенный пункт</label>
+                    <select id="settlement" name="settlement" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                        <option value="">Выберите...</option>
+                        </select>
+                </div>
+
+                <div class="relative">
+                    <label for="address" class="block text-sm font-medium text-gray-700">Адрес (Дом, Улица)</label>
+                    <input type="text" id="address" name="address" required 
+                           class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2" 
+                           placeholder="Начните вводить адрес...">
+                    
+                    <div id="addressError" class="text-red-500 text-sm mt-1 hidden">Необходимо выбрать адрес из списка подсказок.</div>
+                    
+                    <ul id="suggestionsList" class="absolute z-20 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto hidden">
+                        </ul>
+                </div>
+
+                <div class="hidden">
+                    <input type="hidden" id="street_field" name="street_field">
+                    <input type="hidden" id="house_field" name="house_field">
+                    <input type="hidden" id="flat_field" name="flat_field">
+                </div>
+
+                <div>
+                    <label for="comment" class="block text-sm font-medium text-gray-700">Комментарий</label>
+                    <textarea id="comment" name="comment" rows="3" class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Лояльность избирателя</label>
+                    <div id="loyaltyGroup" class="flex flex-wrap gap-2">
+                        <label class="flex items-center space-x-2 p-2 border rounded-md cursor-pointer bg-green-100 text-green-800">
+                            <input type="radio" name="loyalty" value="strong" required class="form-radio text-green-600">
+                            <span class="text-sm">За (Сильная)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 border rounded-md cursor-pointer bg-lime-100 text-lime-800">
+                            <input type="radio" name="loyalty" value="moderate" class="form-radio text-lime-600">
+                            <span class="text-sm">За (Умеренная)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 border rounded-md cursor-pointer bg-yellow-100 text-yellow-800">
+                            <input type="radio" name="loyalty" value="neutral" class="form-radio text-yellow-600">
+                            <span class="text-sm">Нейтрально</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 border rounded-md cursor-pointer bg-red-100 text-red-800">
+                            <input type="radio" name="loyalty" value="against" class="form-radio text-red-600">
+                            <span class="text-sm">Против</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Требуется действие</label>
+                    <div id="actionGroup" class="flex flex-wrap gap-2">
+                        <label class="flex items-center space-x-2 p-2 border rounded-md cursor-pointer bg-blue-100 text-blue-800">
+                            <input type="radio" name="action" value="no" required class="form-radio text-blue-600">
+                            <span class="text-sm">Не требуется</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 border rounded-md cursor-pointer bg-orange-100 text-orange-800">
+                            <input type="radio" name="action" value="visit" class="form-radio text-orange-600">
+                            <span class="text-sm">Повторный визит</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 border rounded-md cursor-pointer bg-purple-100 text-purple-800">
+                            <input type="radio" name="action" value="help" class="form-radio text-purple-600">
+                            <span class="text-sm">Требуется помощь</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" id="saveButton" disabled 
+                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    <span id="saveButtonText">Сохранить Отчет</span>
+                </button>
+            </form>
+        </div>
+
+        <div id="map-view" class="content-section hidden">
+            <h2 class="text-xl font-bold mb-4">Карта с отчетами</h2>
+             <div class="mb-4">
+                <label for="settlementFilter" class="block text-sm font-medium text-gray-700">Фильтр по нас. пункту</label>
+                <select id="settlementFilter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                    <option value="">Все пункты</option>
+                    </select>
+            </div>
+            <div id="mapContainer" class="w-full h-96 bg-gray-200 rounded-lg shadow-inner relative">
+                <div id="mapLoading" class="absolute inset-0 flex items-center justify-center bg-gray-100 bg-opacity-75 z-10">
+                    <i data-lucide="loader-circle" class="w-8 h-8 text-indigo-600 animate-spin"></i>
+                    <span class="ml-2 text-indigo-600">Загрузка данных карты...</span>
+                </div>
+            </div>
+        </div>
+        
+        <div id="report-view" class="content-section hidden">
+            <h2 class="text-xl font-bold mb-4">Сводка отчетов</h2>
+
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <p class="text-sm font-medium text-gray-500">Всего отчетов</p>
+                    <p id="statTotalReports" class="text-2xl font-bold text-indigo-600">0</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <p class="text-sm font-medium text-gray-500">С геоданными</p>
+                    <p id="statGeoReports" class="text-2xl font-bold text-green-600">0</p>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-lg shadow mb-6">
+                <h3 class="text-lg font-medium mb-3">Распределение лояльности</h3>
+                <canvas id="loyaltyChart"></canvas>
+            </div>
+            
+             <div class="bg-white p-4 rounded-lg shadow mb-6">
+                <h3 class="text-lg font-medium mb-3">Требуемые действия</h3>
+                <canvas id="actionChart"></canvas>
+            </div>
+            
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h3 class="text-lg font-medium mb-3">Последние 10 отчетов</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Адрес</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Лояльность</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действие</th>
+                            </tr>
+                        </thead>
+                        <tbody id="latestReportsBody" class="bg-white divide-y divide-gray-200">
+                            <tr><td colspan="3" class="px-3 py-2 text-center text-gray-500">Нет данных.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+        </div>
+        
+    </div>
+
+    <div id="alertModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black bg-opacity-50 transition-opacity duration-300">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 m-4 text-center">
+            <h3 id="alertTitle" class="text-xl font-bold mb-3 text-red-600">Ошибка</h3>
+            <p id="alertMessage" class="text-gray-700 mb-6">Произошла неизвестная ошибка.</p>
+            <button onclick="closeAlert()" class="w-full py-2 px-4 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition">Закрыть</button>
+        </div>
+    </div>
+
+    <script src="firebase-auth.js"></script>
+    <script src="reports.js"></script>
+    <script src="main.js"></script>
+
+    <script>
+        // Инициализация Lucide Icons
+        document.addEventListener('DOMContentLoaded', () => {
+             lucide.createIcons();
+        });
+
+        // Глобальные функции (для вызова из onclick)
+        window.changeView = function(viewName) {
+            const searchParams = new URLSearchParams(window.location.search);
+            const hash = window.location.hash;
+            searchParams.set('view', viewName);
+            window.location.href = `${window.location.pathname}?${searchParams.toString()}${hash}`;
+        }
+        
+        window.showSection = function(sectionId) {
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.classList.add('hidden');
+            });
+            document.getElementById(sectionId).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            const sectionButton = document.getElementById(`btn-${sectionId}`);
+            if (sectionButton) {
+                sectionButton.classList.add('active');
+            }
+
+            // Инициализация или обновление карты при переходе
+            if (sectionId === 'map-view' && window.isAdmin) {
+                 // Показываем индикатор загрузки
+                 document.getElementById('mapLoading').classList.remove('hidden');
+                 
+                 // Проверка, что reports.js загружен и initMap доступен (для Yandex Maps)
+                 if (typeof window.initMap === 'function' && typeof window.fetchReports === 'function') {
+                    // Если карта уже инициализирована, просто обновляем данные
+                    window.fetchReports(document.getElementById('settlementFilter').value || null);
+                    if (window.mapInstance) window.mapInstance.container.fitToViewport();
+                 }
+            } else {
+                 document.getElementById('mapLoading').classList.add('hidden');
+            }
+        }
+        
+        window.showAlert = function(title, message) {
+            document.getElementById('alertTitle').textContent = title;
+            document.getElementById('alertMessage').textContent = message;
+            document.getElementById('alertModal').classList.remove('hidden');
+            document.getElementById('alertModal').classList.add('flex');
+            
+            if (window.Telegram.WebApp && window.Telegram.WebApp.showAlert) {
+                 window.Telegram.WebApp.showAlert(`${title}: ${message}`);
+            }
+        }
+
+        window.closeAlert = function() {
+            document.getElementById('alertModal').classList.add('hidden');
+            document.getElementById('alertModal').classList.remove('flex');
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.loadDashboard) {
+                window.loadDashboard();
+            }
+        });
+    </script>
+</body>
+</html>
