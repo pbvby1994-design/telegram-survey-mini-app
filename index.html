@@ -18,7 +18,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <style>
-        /* ... (CSS остается прежним) ... */
         body { 
             font-family: 'Jost', sans-serif;
             background-color: #f4f6f9;
@@ -107,7 +106,8 @@
     <script>
         // Placeholder для closeAlert, если модал не загружен. Полная функция в admin_dashboard.html
         window.closeAlert = function() {
-            document.getElementById('alertModal').classList.add('hidden');
+            const modalEl = document.getElementById('alertModal');
+            if (modalEl) modalEl.classList.add('hidden');
         }
         
         // --- ФУНКЦИЯ ПЕРЕНАПРАВЛЕНИЯ ---
@@ -151,19 +151,19 @@
                 window.Telegram.WebApp.expand();
             }
             
-            // Ждем, пока config.js загрузит константы в window
-            if (typeof window.initializeFirebase === 'function') {
+            // Ждем, пока config.js загрузит константы в window и запустим инициализацию Firebase
+            if (typeof window.initializeFirebase === 'function' && typeof window.FIREBASE_CONFIG !== 'undefined') {
                 if (window.initializeFirebase()) {
                     await window.checkAdminStatus();
                 } else {
                      document.getElementById('telegramAuthInfo').textContent = '❌ Не удалось загрузить конфигурацию Firebase.';
                 }
             } else {
-                 document.getElementById('telegramAuthInfo').textContent = '❌ Скрипт Firebase не загружен.';
+                 document.getElementById('telegramAuthInfo').textContent = '❌ Скрипт Firebase или config.js не загружены.';
             }
             
             document.getElementById('userButton').disabled = false;
-            document.getElementById('adminButton').disabled = false;
+            // Кнопка Админа будет включена после проверки checkAdminStatus
         };
     </script>
 </body>
