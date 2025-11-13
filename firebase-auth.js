@@ -1,13 +1,12 @@
 // firebase-auth.js (ИСПРАВЛЕННАЯ ВЕРСИЯ)
 
-// --- Глобальные переменные (доступны в main.js через window.) ---
+// --- Глобальные переменные ---
 let app = null;
 window.db = null;
 window.auth = null;
 window.userTelegramId = null;
 window.isAdmin = false;
-
-let token = null;
+let customAuthToken = null; // Переименовано, чтобы избежать конфликта с token в getUrlParameter
 
 // Функция для получения параметра из URL
 function getUrlParameter(name) {
@@ -16,26 +15,27 @@ function getUrlParameter(name) {
 }
 
 // ----------------------------------------------------------------------
-// ИНИЦИАЛИЗАЦИЯ И ПОЛУЧЕНИЕ ПАРАМЕТРОВ
+// ИНИЦИАЛИЗАЦИЯ
 // ----------------------------------------------------------------------
 
 window.initializeFirebase = function() {
-    // Проверка наличия глобального объекта Firebase
+    // 1. Проверка наличия SDK
     if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
         window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Firebase SDK не загружен. Проверьте подключение CDN в HTML.');
         return false;
     }
     
-    // 1. Считывание конфигурации Firebase - БЕРЕМ ИЗ window.FIREBASE_CONFIG
+    // 2. Считывание конфигурации из config.js
     if (typeof window.FIREBASE_CONFIG === 'undefined' || !window.FIREBASE_CONFIG.apiKey) {
          window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Конфигурация Firebase не загружена. Проверьте config.js.');
          return false;
     }
     
-    token = getUrlParameter('token'); 
-    window.userTelegramId = getUrlParameter('user_id'); // Получение user_id
+    // 3. Получение параметров из URL
+    customAuthToken = getUrlParameter('token'); 
+    window.userTelegramId = getUrlParameter('user_id'); 
 
-    // 2. Инициализация Firebase (v8 Syntax)
+    // 4. Инициализация Firebase
     if (!app) {
         app = firebase.initializeApp(window.FIREBASE_CONFIG);
         window.db = app.firestore();
@@ -51,27 +51,23 @@ window.initializeFirebase = function() {
 
 window.authenticateUser = async function() {
     // 1. Проверка наличия токена
-    if (!token) {
-        console.warn("Custom token not found in URL.");
-        // Предполагаем, что saveButton существует только в admin_dashboard.html
-        const saveButton = document.getElementById('saveButton');
-        if(saveButton) saveButton.disabled = true;
-        
+    if (!customAuthToken) {
+        console.warn("Custom token not found in URL. Admin features disabled.");
         const debugStatus = document.getElementById('debugAdminStatus');
         if (debugStatus) debugStatus.textContent = "ОТКАЗ (Нет токена)";
         return false;
     }
     
     try {
-        // 2. Аутентификация с помощью Custom Token (v8 Syntax)
-        const userCredential = await window.auth.signInWithCustomToken(token);
+        // 2. Аутентификация
+        const userCredential = await window.auth.signInWithCustomToken(customAuthToken);
         
         // 3. Получение Claims (проверка флага админа из токена)
         const idTokenResult = await userCredential.user.getIdTokenResult();
         
-        // Перезаписываем isAdmin на основе Claims
         if (idTokenResult.claims && idTokenResult.claims.admin) {
              const tokenAdmin = idTokenResult.claims.admin;
+             // Приводим значение к булеву типу, учитывая возможную передачу строки 'true'
              window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
         }
         
@@ -97,6 +93,11 @@ window.authenticateUser = async function() {
 // ПРОВЕРКА СТАТУСА АДМИНА (Для index.html)
 // ----------------------------------------------------------------------
 window.checkAdminStatus = async function() {
+    if (!window.userTelegramId) {
+         document.getElementById('telegramAuthInfo').textContent = '❌ ID пользователя Telegram не найден в URL.';
+         return false;
+    }
+    
     const isAuthenticated = await window.authenticateUser();
     
     document.getElementById('telegramAuthInfo').textContent = isAuthenticated 
@@ -107,7 +108,7 @@ window.checkAdminStatus = async function() {
     if (adminButton) adminButton.disabled = !window.isAdmin; 
     
     const userButton = document.getElementById('userButton');
-    if (userButton) userButton.disabled = false;
+    if (userButton) userButton.disabled = false; // Пользовательская кнопка всегда активна
     
     return window.isAdmin;
 }
