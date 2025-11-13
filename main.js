@@ -1,4 +1,4 @@
-// main.js (ВЕРСИЯ С DADATA FETCH API И ПАРСИНГОМ)
+// main.js (ВЕРСИЯ С ПОЛНЫМ ПАРСИНГОМ DADATA)
 
 // --- Глобальные переменные ---
 window.mapInstance = null; 
@@ -7,7 +7,7 @@ let currentLongitude = null;
 let dadataCoords = null;    
 
 // --- КОНФИГУРАЦИЯ DADATA ---
-// ИСПОЛЬЗУЙТЕ СВОЙ DADATA_TOKEN ИЗ .env
+// ВАЖНО: Установите ваш публичный токен DADATA
 const DADATA_API_KEY = '29c85666d57139f459e452d1290dd73c23708472'; 
 let selectedSuggestionData = null; 
 
@@ -22,6 +22,10 @@ const suggestionsList = document.getElementById('suggestionsList');
  * Ручной обработчик ввода для Dadata
  */
 addressInput.addEventListener('input', async () => {
+    // Сбрасываем данные при новом вводе
+    selectedSuggestionData = null; 
+    document.getElementById('addressError').style.display = 'none';
+
     const query = addressInput.value.trim();
     if (query.length < 3) {
         suggestionsList.innerHTML = '';
@@ -40,8 +44,6 @@ addressInput.addEventListener('input', async () => {
             },
             body: JSON.stringify({
                 query: query,
-                // Дополнительный фильтр по населенному пункту, если выбран
-                // locations: [{ city: document.getElementById('settlement').value || '*' }],
                 count: 5 // Ограничим до 5 подсказок
             })
         });
@@ -66,11 +68,22 @@ addressInput.addEventListener('input', async () => {
                     suggestionsList.classList.add('hidden');
                     document.getElementById('addressError').style.display = 'none';
 
-                    // 2. --- АВТОМАТИЧЕСКИЙ ПАРСИНГ АДРЕСА ---
+                    // 2. --- АВТОМАТИЧЕСКИЙ ПАРСИНГ ВСЕХ КОМПОНЕНТОВ АДРЕСА ---
                     const data = selectedSuggestionData;
                     
-                    // Заполнение скрытых полей (если они существуют в HTML)
-                    // Используем оператор || для fallback на пустую строку, если компонент отсутствует
+                    // Регион, Район, Город/Поселок
+                    if (document.getElementById('region_field')) {
+                        document.getElementById('region_field').value = data.region_with_type || data.region || '';
+                    }
+                    if (document.getElementById('area_field')) {
+                        document.getElementById('area_field').value = data.area_with_type || data.area || '';
+                    }
+                    if (document.getElementById('city_settlement_field')) {
+                        // Используем Город (city) или Поселение (settlement)
+                        document.getElementById('city_settlement_field').value = data.city_with_type || data.settlement_with_type || data.city || data.settlement || '';
+                    }
+                    
+                    // Улица, Дом, Квартира
                     if (document.getElementById('street_field')) {
                         document.getElementById('street_field').value = data.street_with_type || data.street || '';
                     }
@@ -96,7 +109,6 @@ addressInput.addEventListener('input', async () => {
         }
     } catch (error) {
         console.error('Dadata Fetch Error:', error);
-        // Не показываем ошибку пользователю, просто скрываем подсказки
         suggestionsList.classList.add('hidden');
     }
 });
@@ -108,41 +120,33 @@ document.addEventListener('click', (event) => {
     }
 });
 
-/**
- * Валидация: Проверка, что адрес выбран из подсказки
- */
-document.getElementById('reportForm').addEventListener('submit', function(event) {
-    // Проверка, что выбранный адрес соответствует подсказке Dadata
-    // Если selectedSuggestionData не установлен (т.е. адрес введен вручную и не выбран из списка)
-    if (!selectedSuggestionData || selectedSuggestionData.value !== addressInput.value.trim()) {
-        if (addressInput.value.trim().length > 0) {
-            // Если что-то введено, но не выбрано
-            document.getElementById('addressError').style.display = 'block';
-            event.preventDefault();
-            showAlert('Ошибка ввода', 'Пожалуйста, выберите адрес из выпадающего списка Dadata.');
-        } else {
-            // Если поле пустое (запрещено required в HTML)
-            document.getElementById('addressError').style.display = 'none';
-        }
-    } else {
-        document.getElementById('addressError').style.display = 'none';
-    }
-});
-
-
 // ----------------------------------------------------------------------
-// 2. ОТПРАВКА ДАННЫХ В FIREBASE
+// 2. ОТПРАВКА ДАННЫХ В FIREBASE (Обновлена для новых полей)
 // ----------------------------------------------------------------------
 
 document.getElementById('reportForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     
-    // Блокируем кнопку
+    // Валидация Dadata (проверка, что адрес выбран из списка)
+    if (!selectedSuggestionData || selectedSuggestionData.value !== addressInput.value.trim()) {
+        if (addressInput.value.trim().length > 0) {
+            document.getElementById('addressError').style.display = 'block';
+            showAlert('Ошибка ввода', 'Пожалуйста, выберите адрес из выпадающего списка Dadata.');
+            return;
+        }
+    }
+
     document.getElementById('saveButton').disabled = true;
     document.getElementById('saveButtonText').textContent = 'Сохранение...';
 
     const form = e.target;
     const data = new FormData(form);
+    
+    // Проверка наличия геоданных для карты (опционально)
+    if (!dadataCoords || !dadataCoords.lat) {
+         console.warn("Отчет отправляется без геоданных.");
+    }
+
     const report = {
         telegram_id: window.userTelegramId,
         timestamp: new Date(),
@@ -155,9 +159,12 @@ document.getElementById('reportForm').addEventListener('submit', async function(
         action: data.get('action'),
         
         // Добавленные структурированные поля Dadata
-        street: data.get('street_field'), // Улица
-        house: data.get('house_field'),   // Дом
-        flat: data.get('flat_field'),     // Квартира
+        region: data.get('region_field'),             // Регион
+        area: data.get('area_field'),                 // Район
+        city_settlement: data.get('city_settlement_field'), // Город/Поселок
+        street: data.get('street_field'),             // Улица
+        house: data.get('house_field'),               // Дом
+        flat: data.get('flat_field'),                 // Квартира
 
         // Геоданные
         latitude: dadataCoords ? dadataCoords.lat : null,
@@ -170,17 +177,18 @@ document.getElementById('reportForm').addEventListener('submit', async function(
         // Отправка в коллекцию 'reports'
         await window.db.collection('reports').add(report);
         
-        // 1. Уведомление Telegram
+        // Уведомление Telegram
         if (window.Telegram.WebApp) {
              window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
              window.Telegram.WebApp.close(); // Закрываем приложение
         }
 
-        // 2. Сброс формы и уведомление
+        // Сброс формы и уведомление
         form.reset();
-        selectedSuggestionData = null; // Сброс данных Dadata
-        addressInput.value = ''; // Очистка поля адреса
-        showAlert('Успех', 'Отчет успешно сохранен!');
+        selectedSuggestionData = null; 
+        dadataCoords = null; 
+        addressInput.value = ''; 
+        showAlert('Успех', 'Отчет успешно сохранен! (Приложение будет закрыто)');
 
     } catch (error) {
         console.error("Ошибка при сохранении в Firestore: ", error);
@@ -216,39 +224,30 @@ window.loadDashboard = async function() {
     if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp) {
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
-        // window.Telegram.WebApp.setHeaderColor('bg_color'); // Используем цвет фона
-        // window.Telegram.WebApp.setBackgroundColor('#f4f6f9');
     }
     
     document.getElementById('saveButton').disabled = true;
 
-    if (typeof initializeFirebase === 'undefined' || typeof authenticateUser === 'undefined') {
-         window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Проверьте подключение Firebase в HTML. Скрипты не найдены.');
-         window.showSection('form');
-         return;
-    }
-    
-    if (!initializeFirebase()) {
+    if (!window.initializeFirebase()) {
          window.showSection('form');
          return;
     }
 
-    const isAuthenticated = await authenticateUser();
+    const isAuthenticated = await window.authenticateUser();
     
     if (isAuthenticated) {
          // Отображение статуса
          document.getElementById('debugUserId').textContent = window.userTelegramId;
 
          if (window.isAdmin) {
-             document.getElementById('btn-map-view').style.display = 'inline-block';
-             document.getElementById('btn-report-view').style.display = 'inline-block';
+             document.getElementById('btn-map-view').classList.remove('hidden');
+             document.getElementById('btn-report-view').classList.remove('hidden');
          }
          
          const urlParams = new URLSearchParams(window.location.search);
          const initialView = urlParams.get('view');
          
          let startSection = 'form';
-         // Администратор по умолчанию видит карту
          if (window.isAdmin && (initialView === 'map' || initialView === 'map-view')) {
              startSection = 'map-view';
          } else if (window.isAdmin && initialView === 'report-view') {
@@ -258,16 +257,8 @@ window.loadDashboard = async function() {
          window.showSection(startSection);
          document.getElementById('saveButton').disabled = false;
          
-         // Инициализация карты, если это админ и начальная секция - карта
-         if (startSection === 'map-view' && window.isAdmin && typeof window.initMap === 'function') {
-             // initMap будет вызвана в showSection, если она еще не инициализирована
-         }
-         
     } else {
          window.showSection('form');
          document.getElementById('saveButton').disabled = true;
     }
 };
-
-// Запуск дашборда при загрузке документа (перенесено в admin_dashboard.html)
-// document.addEventListener('DOMContentLoaded', window.loadDashboard);
