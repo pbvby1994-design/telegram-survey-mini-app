@@ -16,7 +16,7 @@ function getUrlParameter(name) {
 }
 
 // ----------------------------------------------------------------------
-// ИНИЦИАЛИЗАЦИЯ И ПОЛУЧЕНИЕ ПАРАМЕТРОВ ИЗ URL
+// ИНИЦИАЛИЗАЦИЯ И ПОЛУЧЕНИЕ ПАРАМЕТРОВ
 // ----------------------------------------------------------------------
 
 window.initializeFirebase = function() {
@@ -26,7 +26,7 @@ window.initializeFirebase = function() {
         return false;
     }
     
-    // 1. Считывание конфигурации Firebase - БЕРЕМ ИЗ window, а не из URL
+    // 1. Считывание конфигурации Firebase - БЕРЕМ ИЗ window.FIREBASE_CONFIG
     if (typeof window.FIREBASE_CONFIG === 'undefined' || !window.FIREBASE_CONFIG.apiKey) {
          window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Конфигурация Firebase не загружена. Проверьте config.js.');
          return false;
@@ -37,7 +37,7 @@ window.initializeFirebase = function() {
 
     // 2. Инициализация Firebase (v8 Syntax)
     if (!app) {
-        app = firebase.initializeApp(window.FIREBASE_CONFIG); // <-- ИСПРАВЛЕНО
+        app = firebase.initializeApp(window.FIREBASE_CONFIG);
         window.db = app.firestore();
         window.auth = app.auth();
     }
@@ -46,7 +46,7 @@ window.initializeFirebase = function() {
 }
 
 // ----------------------------------------------------------------------
-// АУТЕНТИФИКАЦИЯ (Использует токен из URL)
+// АУТЕНТИФИКАЦИЯ
 // ----------------------------------------------------------------------
 
 window.authenticateUser = async function() {
@@ -56,7 +56,9 @@ window.authenticateUser = async function() {
         // Предполагаем, что saveButton существует только в admin_dashboard.html
         const saveButton = document.getElementById('saveButton');
         if(saveButton) saveButton.disabled = true;
-        // ... (обновление статуса)
+        
+        const debugStatus = document.getElementById('debugAdminStatus');
+        if (debugStatus) debugStatus.textContent = "ОТКАЗ (Нет токена)";
         return false;
     }
     
@@ -99,10 +101,13 @@ window.checkAdminStatus = async function() {
     
     document.getElementById('telegramAuthInfo').textContent = isAuthenticated 
         ? `✅ Успешная аутентификация. ID: ${window.userTelegramId}. ${window.isAdmin ? 'Администратор.' : 'Пользователь.'}`
-        : '❌ Аутентификация не удалась.';
+        : '❌ Аутентификация не удалась. Сохранение отчетов недоступно.';
         
-    document.getElementById('adminButton').disabled = !window.isAdmin; 
-    document.getElementById('userButton').disabled = false;
+    const adminButton = document.getElementById('adminButton');
+    if (adminButton) adminButton.disabled = !window.isAdmin; 
+    
+    const userButton = document.getElementById('userButton');
+    if (userButton) userButton.disabled = false;
     
     return window.isAdmin;
 }
