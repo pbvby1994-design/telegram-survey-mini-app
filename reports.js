@@ -141,7 +141,10 @@ window.fetchReports = async function(settlementFilter = null) {
         window.showAlert('ОШИБКА ДАННЫХ', `Не удалось загрузить отчеты: ${error.message}. Проверьте правила доступа в Firestore.`);
         document.getElementById('reportStatus').textContent = '❌ Ошибка загрузки данных';
     } finally {
-        document.getElementById('mapLoading').classList.add('hidden');
+        // mapLoading скрывается внутри initMapMarkers, если карта не может быть отображена
+        if (!window.mapInstance) { 
+            document.getElementById('mapLoading').classList.add('hidden');
+        }
     }
 }
 
@@ -154,9 +157,15 @@ window.fetchReports = async function(settlementFilter = null) {
  */
 window.initMap = function() {
     // Проверка, что Yandex Maps API загружен и карта еще не инициализирована
-    if (typeof ymaps === 'undefined' || window.mapInstance) {
-        if (window.mapInstance) window.fetchReports(document.getElementById('settlementFilter').value || null);
+    if (typeof ymaps === 'undefined') {
+        // Если API не загружен, ничего не делаем
         return; 
+    }
+    
+    if (window.mapInstance) {
+         // Если карта уже инициализирована, просто обновляем данные, если они нужны
+         window.fetchReports(document.getElementById('settlementFilter').value || null);
+         return;
     }
     
     // Стандартные координаты для центрирования (например, Сургутский район)
@@ -187,15 +196,21 @@ window.initMap = function() {
  * Добавляет метки на Yandex Map, используя кластеризатор.
  */
 window.initMapMarkers = function(reportList) {
-    if (!window.mapInstance || !window.clusterer) return;
+    const mapContainer = document.getElementById('mapContainer');
+    
+    if (!window.mapInstance || !window.clusterer || typeof ymaps === 'undefined') {
+        mapContainer.innerHTML = `<div class="p-6 text-gray-500 text-center text-lg">Ошибка загрузки Yandex Карт.</div>`;
+        document.getElementById('mapLoading').classList.add('hidden');
+        return;
+    }
 
     window.clusterer.removeAll(); // Очистка старых меток
     const geoObjects = [];
     let hasGeoData = false;
     
-    const mapContainer = document.getElementById('mapContainer');
     mapContainer.style.height = '600px'; 
-
+    mapContainer.innerHTML = ''; // Очистка, если там было сообщение об ошибке
+    
     reportList.forEach(r => {
         const lat = r.latitude;
         const lon = r.longitude;
@@ -234,9 +249,13 @@ window.initMapMarkers = function(reportList) {
             // Игнорируем ошибку, если кластеризатор не имеет границ
         }
     } else {
-        mapContainer.innerHTML = `<div class="p-6 text-gray-500 text-center text-lg">Нет данных с геолокацией для отображения на карте. Убедитесь, что в базе есть записи с полями "latitude" и "longitude".</div>`;
+        // Если нет данных с гео-координатами
+        if (mapContainer.querySelector('#mapLoading')) mapContainer.querySelector('#mapLoading').remove();
         mapContainer.style.height = '200px'; 
+        mapContainer.innerHTML = `<div class="p-6 text-gray-500 text-center text-lg">Нет данных с геолокацией для отображения на карте.</div>`;
     }
+    
+    document.getElementById('mapLoading').classList.add('hidden');
 }
 
 
@@ -246,7 +265,6 @@ window.initMapMarkers = function(reportList) {
 
 window.exportToCsv = function() {
     // ... (логика экспорта CSV - см. предыдущий ответ) ...
-    // [Остальной код CSV экспорта]
     const data = window.latestReportData;
     if (data.length === 0) {
         window.showAlert('ОШИБКА', 'Нет данных для экспорта.');
@@ -312,7 +330,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         filterSelect.addEventListener('change', (e) => {
             const selectedSettlement = e.target.value === '' ? null : e.target.value;
-            window.fetchReports(selectedSettlement);
+            // Убеждаемся, что fetchReports вызывается только для админов
+            if (window.isAdmin) {
+                window.fetchReports(selectedSettlement);
+            }
         });
     }
 });
