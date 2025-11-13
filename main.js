@@ -17,9 +17,11 @@ const suggestionsList = document.getElementById('suggestionsList');
  * Ручной обработчик ввода для Dadata
  */
 addressInput.addEventListener('input', async () => {
-    // Используем window.DADATA_TOKEN, который должен быть в config.js
-    if (typeof window.DADATA_TOKEN === 'undefined') {
-        window.showAlert('ОШИБКА DADATA', 'Токен Dadata не загружен. Проверьте config.js.');
+    // Используем window.DADATA_TOKEN
+    if (typeof window.DADATA_TOKEN === 'undefined' || !window.DADATA_TOKEN) {
+        // Не показываем showAlert на каждый ввод, если токена нет
+        document.getElementById('addressError').textContent = '⚠️ Токен Dadata не загружен.';
+        document.getElementById('addressError').style.display = 'block';
         return;
     }
     
@@ -30,6 +32,10 @@ addressInput.addEventListener('input', async () => {
         return;
     }
 
+    // Сброс выбранных данных при вводе
+    selectedSuggestionData = null; 
+    dadataCoords = null; 
+
     try {
         const response = await fetch('https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address', {
             method: 'POST',
@@ -37,17 +43,17 @@ addressInput.addEventListener('input', async () => {
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'Authorization': `Token ${window.DADATA_TOKEN}`, // <-- ИСПРАВЛЕНО
+                'Authorization': `Token ${window.DADATA_TOKEN}`, 
             },
             body: JSON.stringify({
                 query: query,
-                // Используем глобальные ограничения из config.js
                 locations: window.DADATA_LOCATION_RESTRICTIONS || [], 
             }),
         });
         
         if (!response.ok) {
-            throw new Error(`Dadata API error: ${response.status}`);
+            // КОД 401: Unauthorized - Проверьте публичный ключ Dadata!
+            throw new Error(`Dadata API error: ${response.status} (${response.statusText})`);
         }
 
         const data = await response.json();
@@ -65,12 +71,14 @@ addressInput.addEventListener('input', async () => {
 
         if (data.suggestions.length === 0) {
             suggestionsList.classList.add('hidden');
+        } else {
+            document.getElementById('addressError').style.display = 'none'; // Скрываем ошибку, если есть подсказки
         }
 
     } catch (error) {
         console.error('Ошибка Dadata:', error);
         suggestionsList.classList.add('hidden');
-        document.getElementById('addressError').textContent = '⚠️ Ошибка Dadata: Проверьте токен или сеть.';
+        document.getElementById('addressError').textContent = `⚠️ Ошибка Dadata: ${error.message}.`;
         document.getElementById('addressError').style.display = 'block';
     }
 });
@@ -81,9 +89,8 @@ addressInput.addEventListener('input', async () => {
 function selectSuggestion(suggestion) {
     addressInput.value = suggestion.value;
     suggestionsList.classList.add('hidden');
-    selectedSuggestionData = suggestion; // Сохраняем весь объект
+    selectedSuggestionData = suggestion; 
     
-    // Сохраняем координаты Dadata
     dadataCoords = {
         latitude: parseFloat(suggestion.data.geo_lat),
         longitude: parseFloat(suggestion.data.geo_lon)
@@ -143,26 +150,39 @@ window.saveReport = async function() {
         return;
     }
     
-    // Валидация адреса (проверка, был ли адрес выбран из списка Dadata)
+    // --- УСИЛЕННАЯ ВАЛИДАЦИЯ ---
     if (!selectedSuggestionData || addressInput.value !== selectedSuggestionData.value) {
         document.getElementById('addressError').textContent = '⚠️ Выберите адрес из списка Dadata!';
         document.getElementById('addressError').style.display = 'block';
         window.showAlert('Ошибка формы', 'Необходимо выбрать корректный адрес из списка подсказок.');
         return;
     }
+    
+    // Проверка, что Dadata вернула координаты
+    if (!dadataCoords || !dadataCoords.latitude || !dadataCoords.longitude) {
+         window.showAlert('Ошибка формы', 'Выбранный адрес Dadata не содержит географических координат. Выберите другой адрес.');
+         return;
+    }
 
     const form = document.getElementById('reportForm');
     const formData = new FormData(form);
+    
+    // Проверка, что поля Лояльность и Действие выбраны
+    if (!formData.get('loyalty') || !formData.get('action')) {
+        window.showAlert('Ошибка формы', 'Поля "Лояльность" и "Действие" обязательны для заполнения.');
+        return;
+    }
+    // ----------------------------
 
     const reportData = {
         telegramId: window.userTelegramId || 'unknown_user',
         timestamp: firebase.firestore.FieldValue.serverTimestamp(),
         settlement: formData.get('settlement'),
-        address: selectedSuggestionData.value, // Адрес Dadata
+        address: selectedSuggestionData.value, 
         
-        // Координаты Dadata
-        latitude: dadataCoords ? dadataCoords.latitude : null,
-        longitude: dadataCoords ? dadataCoords.longitude : null,
+        // Координаты Dadata (для отображения на карте)
+        latitude: dadataCoords.latitude,
+        longitude: dadataCoords.longitude,
 
         // Координаты GPS пользователя (если получены)
         geo_lat_user: currentLatitude,
@@ -184,12 +204,14 @@ window.saveReport = async function() {
         dadataCoords = null;
         document.getElementById('geoStatus').textContent = 'Геолокация: ❓ Не получена';
         document.getElementById('geoIcon').setAttribute('data-lucide', 'map-pin');
-        document.getElementById('addressError').style.display = 'none'; // Скрываем ошибку после успешного сохранения
+        document.getElementById('addressError').style.display = 'none';
         lucide.createIcons();
+        
+        // Повторный запрос GPS после сброса (для следующего отчета)
+        window.getCurrentLocation(); 
 
         window.showAlert('УСПЕХ', 'Отчет успешно сохранен в базу данных.');
         
-        // Отправка подтверждения в Telegram (опционально)
         if (window.Telegram.WebApp) {
             window.Telegram.WebApp.sendData(JSON.stringify({ status: 'success', docId: docRef.id }));
             window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
@@ -198,7 +220,7 @@ window.saveReport = async function() {
     } catch (e) {
         console.error("Error adding document: ", e);
         window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось сохранить отчет: ${e.message}. Проверьте правила записи Firestore.`);
-        window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
+        if (window.Telegram.WebApp) window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
     }
 }
 
@@ -217,7 +239,6 @@ window.loadDashboard = async function() {
     const saveButton = document.getElementById('saveButton');
     if (saveButton) saveButton.disabled = true;
 
-    // Инициализация Firebase (требует, чтобы config.js уже отработал)
     if (!window.initializeFirebase()) {
          window.showSection('form-view');
          return;
@@ -225,6 +246,15 @@ window.loadDashboard = async function() {
 
     const isAuthenticated = await window.authenticateUser();
     
+    // Автоматический запрос GPS, если это форма
+    if (document.getElementById('form-view')) {
+         window.getCurrentLocation();
+    }
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialView = urlParams.get('view');
+    let startSection = 'form-view'; // По умолчанию - форма
+
     if (isAuthenticated) {
          // 2. Настройка админских вкладок
          if (window.isAdmin) {
@@ -234,18 +264,11 @@ window.loadDashboard = async function() {
          }
          
          // 3. Выбор начального раздела
-         const urlParams = new URLSearchParams(window.location.search);
-         const initialView = urlParams.get('view');
-         
-         let startSection = 'form-view'; // По умолчанию - форма
-         
-         if (window.isAdmin && (initialView === 'map-view' || initialView === 'map' || !initialView)) {
+         if (window.isAdmin && (initialView === 'map-view' || initialView === 'map')) {
              startSection = 'map-view';
          }
 
-         // Показываем секцию
          window.showSection(startSection);
-         
          if (saveButton) saveButton.disabled = false;
          
     } else {
