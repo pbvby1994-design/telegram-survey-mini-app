@@ -1,4 +1,4 @@
-// firebase-auth.js (ГЛОБАЛЬНАЯ ВЕРСИЯ - БЕЗ ИМПОРТОВ И ЭКСПОРТОВ)
+// firebase-auth.js (ГЛОБАЛЬНАЯ ВЕРСИЯ - С УЧЕТОМ ВСЕХ ИСПРАВЛЕНИЙ)
 
 // --- Глобальные переменные (доступны в main.js через window.) ---
 let app = null;
@@ -57,6 +57,7 @@ window.initializeFirebase = function() {
     
     // 2. Инициализация Firebase (v9 compatibility)
     try {
+        // Используем конфигурацию, считанную из URL
         app = firebase.initializeApp(window.FIREBASE_CONFIG);
         window.db = firebase.firestore(app);
         window.auth = firebase.auth(app);
@@ -81,8 +82,6 @@ window.checkAdminStatus = async function() {
         // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ #1: Добавляем ?. для предотвращения TypeError
         document.getElementById('debugAdminStatus')?.textContent = "ОТКАЗ (Нет токена)";
         
-        // Если нет токена, мы не можем провести аутентификацию, но это не обязательно ошибка,
-        // если пользователь заходит как обычный агитатор.
         return false; 
     }
     
@@ -108,6 +107,17 @@ window.checkAdminStatus = async function() {
         // Если мы находимся на index.html и это админ, показываем кнопку админа
         if (window.isAdmin && document.getElementById('adminButton')) {
              document.getElementById('adminButton').style.display = 'flex'; // или 'block'
+             
+             // Задаем задержку для кнопки админа, если она есть и нужно ее анимировать
+             if (document.getElementById('adminButton').classList.contains('stagger-item')) {
+                 // Поскольку CSS управляет анимацией stagger-item, нам нужно только убедиться, что кнопка видна.
+                 // Мы используем opacity: 0 в CSS для stagger-item, display: none отменяет это.
+                 // Здесь мы просто ставим display: flex, а CSS-стиль "stagger-item" с задержкой 1.0s позаботится о плавном появлении.
+                 document.getElementById('adminButton').style.opacity = 0; // Скрываем на мгновение, чтобы анимация сработала
+                 setTimeout(() => {
+                    document.getElementById('adminButton').style.opacity = 1; 
+                 }, 10);
+             }
         }
         
         return true;
