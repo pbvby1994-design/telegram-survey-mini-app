@@ -55,8 +55,6 @@
             align-items: center;
             position: relative; 
         }
-        /* Стиль для индикатора загрузки Dadata в main.js */
-        /* .loading-spinner { ... } */
     </style>
 </head>
 <body>
@@ -109,7 +107,7 @@
                             </select>
                         </div>
 
-                        <div>
+                        <div class="relative">
                             <label for="address" class="block text-sm font-medium text-gray-700 required">Адрес (Улица, Дом)</label>
                             <input type="text" id="address" name="address" required class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2" placeholder="Начните вводить адрес (ул. Ленина, 1)">
                             <ul id="suggestionsList" class="absolute z-10 bg-white border border-gray-300 w-full shadow-lg mt-1 rounded-md hidden">
@@ -261,12 +259,14 @@
             }
 
             if (sectionId === 'map-view') {
-                document.getElementById('mapLoading').classList.remove('hidden'); 
-                 // initMap вызывается при загрузке API Яндекса (onload=initMap)
+                 // Если initMap уже сработал через onload Яндекса, вызываем fetchReports
                  if (typeof window.mapInstance !== 'undefined' && typeof window.fetchReports === 'function') {
-                    // Если карта уже инициализирована, просто обновляем данные
                     window.fetchReports(document.getElementById('settlementFilter').value || null);
+                    // Важно: адаптируем карту к размеру viewport
                     if (window.mapInstance) window.mapInstance.container.fitToViewport();
+                 } else if (typeof window.initMap === 'function' && typeof ymaps !== 'undefined') {
+                    // Если карта не инициализирована, но API загружен
+                    window.initMap(); 
                  }
             } else {
                  document.getElementById('mapLoading').classList.add('hidden');
