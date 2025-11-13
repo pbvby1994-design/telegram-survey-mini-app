@@ -41,9 +41,28 @@
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
-        /* Стили для модального окна, которого нет в tailwind по умолчанию */
+        /* Стили для модального окна */
         .modal {
             background-color: rgba(0, 0, 0, 0.5);
+        }
+        
+        /* НОВАЯ АНИМАЦИЯ: Плавное появление снизу */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Класс, который будет добавляться к анимируемым элементам */
+        .stagger-item {
+            opacity: 0;
+            /* Базовая длительность анимации */
+            animation: fadeInUp 0.6s ease-out forwards;
         }
     </style>
 
@@ -54,17 +73,19 @@
 
     <div id="welcomeCard" class="card w-full max-w-sm rounded-lg p-6 space-y-6">
         <div class="flex flex-col items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-600 mb-2" data-lucide="notebook-pen"><path d="M15 10l-4 4l4-4Z"/><path d="M12 20h.01"/><path d="M17 21v-3.64c0-.36-.17-.7-.46-.96L10.3 10.3 8.2 12.42 14.04 18.2c.26.29.6.46.96.46H17V21"/><path d="M15 21v-3.64c0-.36-.17-.7-.46-.96L10.3 10.3 8.2 12.42 14.04 18.2c.26.29.6.46.96.46H15z" stroke-dasharray="0 0 0 0"/><path d="M4 12v.01"/><path d="M18 7v-3.64c0-.36-.17-.7-.46-.96L7.3 1.3 5.2 3.42 11.04 9.2c.26.29.6.46.96.46H13V7"/><path d="M12 2v.01"/><path d="M10 2v.01"/><path d="M8 2v.01"/><path d="M6 2v.01"/></svg>
-            <h1 class="text-2xl font-semibold text-zinc-800">Блокнот Агитатора</h1>
-            <p class="text-sm text-zinc-500 mt-1" id="telegramAuthInfo">Загрузка данных...</p>
+            <svg id="icon-stagger" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-600 mb-2 stagger-item" style="animation-delay: 0.2s;" data-lucide="notebook-pen"><path d="M15 10l-4 4l4-4Z"/><path d="M12 20h.01"/><path d="M17 21v-3.64c0-.36-.17-.7-.46-.96L10.3 10.3 8.2 12.42 14.04 18.2c.26.29.6.46.96.46H17V21"/><path d="M15 21v-3.64c0-.36-.17-.7-.46-.96L10.3 10.3 8.2 12.42 14.04 18.2c.26.29.6.46.96.46H15z" stroke-dasharray="0 0 0 0"/><path d="M4 12v.01"/><path d="M18 7v-3.64c0-.36-.17-.7-.46-.96L7.3 1.3 5.2 3.42 11.04 9.2c.26.29.6.46.96.46H13V7"/><path d="M12 2v.01"/><path d="M10 2v.01"/><path d="M8 2v.01"/><path d="M6 2v.01"/></svg>
+            
+            <h1 id="title-stagger" class="text-2xl font-semibold text-zinc-800 stagger-item" style="animation-delay: 0.4s;">Блокнот Агитатора</h1>
+            
+            <p id="telegramAuthInfo" class="text-sm text-zinc-500 mt-1 stagger-item" style="animation-delay: 0.6s;">Загрузка данных...</p>
         </div>
 
-        <button id="agitatorButton" disabled onclick="window.animateAndRedirect('./admin_dashboard.html?role=agitator')" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 transition duration-150 flex items-center justify-center space-x-2 disabled:bg-indigo-300">
+        <button id="agitatorButton" disabled onclick="window.animateAndRedirect('./admin_dashboard.html?role=agitator')" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 transition duration-150 flex items-center justify-center space-x-2 disabled:bg-indigo-300 stagger-item" style="animation-delay: 0.8s;">
             <svg data-lucide="clipboard-pen" class="w-5 h-5"></svg>
             <span>Начать работу</span>
         </button>
 
-        <button id="adminButton" style="display: none;" onclick="window.animateAndRedirect('./admin_dashboard.html?role=admin')" class="w-full bg-emerald-600 text-white py-3 rounded-lg font-medium hover:bg-emerald-700 transition duration-150 flex items-center justify-center space-x-2">
+        <button id="adminButton" style="display: none; animation-delay: 1.0s;" onclick="window.animateAndRedirect('./admin_dashboard.html?role=admin')" class="w-full bg-emerald-600 text-white py-3 rounded-lg font-medium hover:bg-emerald-700 transition duration-150 flex items-center justify-center space-x-2 stagger-item">
             <svg data-lucide="shield-check" class="w-5 h-5"></svg>
             <span>Панель администратора</span>
         </button>
@@ -81,15 +102,13 @@
     </div>
 
     <script>
-        // --- ФУНКЦИИ ОПОВЕЩЕНИЯ (НОВЫЙ БЛОК) ---
-        // Эти функции необходимы, чтобы firebase-auth.js не вызывал TypeError
+        // --- ФУНКЦИИ ОПОВЕЩЕНИЯ (Устранение TypeError: window.showAlert) ---
         window.showAlert = function(title, message) {
             document.getElementById('alertTitle').textContent = title;
             document.getElementById('alertMessage').textContent = message;
             document.getElementById('alertModal').classList.remove('hidden');
             document.getElementById('alertModal').classList.add('flex');
             
-            // Также используем нативный Telegram WebApp.showAlert, если доступен
             if (window.Telegram.WebApp && window.Telegram.WebApp.showAlert) {
                  window.Telegram.WebApp.showAlert(`${title}: ${message}`);
             }
@@ -103,6 +122,7 @@
 
         // Функция для анимации и перехода
         window.animateAndRedirect = function(targetUrl) {
+            // Удаляем класс 'loaded', чтобы карточка исчезла
             document.getElementById('welcomeCard').classList.remove('loaded');
             document.getElementById('welcomeCard').classList.add('animate-pulse-once');
             
@@ -118,6 +138,7 @@
         window.onload = async () => {
             lucide.createIcons();
             
+            // 1. Плавное появление всей карточки
             document.getElementById('welcomeCard').classList.add('loaded');
             
             if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp.ready) {
@@ -125,18 +146,21 @@
                 window.Telegram.WebApp.expand();
             }
             
-            // ИСПРАВЛЕНИЕ #1: Убрана проверка на window.FIREBASE_CONFIG
+            // 2. Инициализация Firebase и проверка статуса (устранение ошибки config.js)
             if (typeof window.initializeFirebase === 'function') {
                 if (window.initializeFirebase()) {
                     await window.checkAdminStatus(); 
                 } else {
-                     document.getElementById('telegramAuthInfo').textContent = '❌ Не удалось загрузить конфигурацию Firebase (нет параметра в URL).';
+                     document.getElementById('telegramAuthInfo').textContent = '❌ Не удалось загрузить конфигурацию Firebase.';
                 }
             } else {
                  document.getElementById('telegramAuthInfo').textContent = '❌ Скрипт firebase-auth.js не загружен.';
             }
             
-            // Включаем кнопку Агитатора, так как доступ есть у всех
+            // 3. Активация кнопок и анимация (добавляем класс, который запускает CSS-анимацию)
+            // Мы добавили CSS-классы `stagger-item` и `style="animation-delay: X"` к самим элементам в HTML.
+            
+            // Включаем кнопку Агитатора (поскольку она анимирована через CSS, она сразу включится)
             document.getElementById('agitatorButton').disabled = false;
         };
     </script>
