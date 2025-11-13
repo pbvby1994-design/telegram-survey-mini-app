@@ -104,10 +104,16 @@
     <script src="./firebase-auth.js"></script>
 
     <script>
-        // Placeholder для closeAlert, если модал не загружен. Полная функция в admin_dashboard.html
+        // Placeholder для showAlert/closeAlert
         window.closeAlert = function() {
             const modalEl = document.getElementById('alertModal');
             if (modalEl) modalEl.classList.add('hidden');
+        }
+        window.showAlert = function(title, message) {
+            document.getElementById('alertTitle').textContent = title;
+            document.getElementById('alertMessage').textContent = message;
+            document.getElementById('alertModal').classList.remove('hidden');
+            document.getElementById('alertModal').classList.add('flex');
         }
         
         // --- ФУНКЦИЯ ПЕРЕНАПРАВЛЕНИЯ ---
@@ -118,9 +124,8 @@
             let viewParam = '';
 
             if (role === 'user') {
-                viewParam = 'form';
+                viewParam = 'form-view'; // ИЗМЕНЕНО: на 'form-view' для соответствия ID секции
             } else if (role === 'admin') {
-                // ИСПОЛЬЗУЕМ window.showAlert() ВМЕСТО NATIVE ALERT
                 if (!window.isAdmin) { 
                      window.showAlert('ДОСТУП ЗАПРЕЩЕН', 'У вас нет прав Администратора для доступа к отчетам. Перенаправление отменено.');
                      return;
@@ -162,8 +167,8 @@
                  document.getElementById('telegramAuthInfo').textContent = '❌ Скрипт Firebase или config.js не загружены.';
             }
             
+            // Кнопки по умолчанию отключаются в HTML и включаются только после успешной загрузки JS
             document.getElementById('userButton').disabled = false;
-            // Кнопка Админа будет включена после проверки checkAdminStatus
         };
     </script>
 </body>
