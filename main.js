@@ -1,4 +1,4 @@
-// main.js (ОБНОВЛЕННАЯ ВЕРСИЯ с исправлениями ошибок)
+// main.js (ФИНАЛЬНАЯ ВЕРСИЯ)
 
 // --- Глобальные переменные ---
 window.mapInstance = null; 
@@ -94,17 +94,17 @@ if (addressInput) {
 window.getCurrentLocation = function() {
     if ('geolocation' in navigator) {
         document.getElementById('geoStatus').textContent = '🛰️ Поиск...';
-        document.getElementById('geoIcon').classList.add('animate-spin');
+        document.getElementById('geoIcon')?.classList.add('animate-spin');
         
         navigator.geolocation.getCurrentPosition((position) => {
             currentLatitude = position.coords.latitude;
             currentLongitude = position.coords.longitude;
             document.getElementById('geoStatus').textContent = `✅ GPS: ${currentLatitude.toFixed(4)}, ${currentLongitude.toFixed(4)}`;
-            document.getElementById('geoIcon').classList.remove('animate-spin');
+            document.getElementById('geoIcon')?.classList.remove('animate-spin');
         }, (error) => {
             console.error("Geolocation error:", error);
             document.getElementById('geoStatus').textContent = '❌ Ошибка GPS: ' + error.message;
-            document.getElementById('geoIcon').classList.remove('animate-spin');
+            document.getElementById('geoIcon')?.classList.remove('animate-spin');
             window.showAlert('Ошибка Геолокации', 'Не удалось получить GPS-координаты. Проверьте разрешения браузера.');
             currentLatitude = null;
             currentLongitude = null;
@@ -128,7 +128,7 @@ window.saveReport = async function(docId = null) {
     const formData = new FormData(form);
     
     // Проверка выбора Dadata
-    if (!selectedSuggestionData && dadataCoords === null) {
+    if (!selectedSuggestionData && dadataCoords === null && !docId) { 
          document.getElementById('addressError').style.display = 'block';
          window.showAlert('Ошибка данных', 'Пожалуйста, выберите адрес из выпадающего списка Dadata.');
          return;
@@ -145,7 +145,8 @@ window.saveReport = async function(docId = null) {
         longitude: currentLongitude || dadataCoords?.lon || null,
         user_id: window.userTelegramId,
         username: window.userTelegramUsername || 'anonymous',
-        timestamp: firebase.firestore.FieldValue.serverTimestamp() // Firestore Timestamp
+        // Используем глобальный firebase
+        timestamp: firebase.firestore.FieldValue.serverTimestamp() 
     };
 
     try {
@@ -158,14 +159,12 @@ window.saveReport = async function(docId = null) {
              // Редактирование существующего
              await window.db.collection("reports").doc(docId).update(reportData);
              window.showAlert('Успешно', 'Отчет успешно обновлен!');
-             // При редактировании переключаемся на "Мои Отчеты"
              window.showSection('my-reports-view'); 
 
         } else {
              // Новый отчет
              await window.db.collection("reports").add(reportData);
              window.showAlert('Успешно', 'Отчет успешно сохранен!');
-             // При сохранении нового отчета переключаемся на "Мои Отчеты"
              window.showSection('my-reports-view');
         }
 
@@ -178,6 +177,13 @@ window.saveReport = async function(docId = null) {
         currentLongitude = null;
         dadataCoords = null;
         document.getElementById('addressError').style.display = 'none';
+        
+        // Сброс кнопки сохранения
+        document.getElementById('saveButton').innerHTML = '<span data-lucide="save" class="w-5 h-5 mr-2"></span> Сохранить Отчет';
+        document.getElementById('saveButton').classList.remove('bg-yellow-600');
+        document.getElementById('saveButton').classList.add('bg-indigo-600');
+        if (typeof lucide !== 'undefined') lucide.createIcons(); // Обновление иконки
+        
 
     } catch (error) {
         console.error("Error saving report:", error);
@@ -186,18 +192,19 @@ window.saveReport = async function(docId = null) {
 }
 
 // ----------------------------------------------------------------------
-// 4. ИНИЦИАЛИЗАЦИЯ КАРТЫ (ИСПРАВЛЕНИЕ: ПЕРЕНЕСЕНО СЮДА ИЗ reports.js)
+// 4. ИНИЦИАЛИЗАЦИЯ КАРТЫ (ГЛОБАЛЬНАЯ)
 // ----------------------------------------------------------------------
 
 window.initMap = function() {
     console.log("Yandex Map API: initMap called.");
     
-    if (window.mapInstance) return; // Карта уже инициализирована
+    // Проверка на ymaps, который должен быть глобально доступен после загрузки API
     if (typeof ymaps === 'undefined') {
-         // Может произойти, если API загрузился, но ymaps еще не определен
          console.warn("ymaps is not defined yet."); 
          return; 
     }
+    
+    if (window.mapInstance) return; // Карта уже инициализирована
 
     // Инициализация карты
     window.mapInstance = new ymaps.Map("mapContainer", {
@@ -206,7 +213,7 @@ window.initMap = function() {
         controls: ['zoomControl', 'fullscreenControl']
     });
 
-    // После инициализации карты, сразу загружаем данные, если мы админ и находимся на вкладке карты
+    // После инициализации карты, сразу загружаем данные, если мы на вкладке карты
     const currentSection = document.querySelector('.content-section:not(.hidden)')?.id;
     if (window.isAdmin && (currentSection === 'map-view' || currentSection === 'raw-data' || currentSection === 'stats') && typeof window.fetchReports === 'function') {
         window.fetchReports(document.getElementById('settlementFilter')?.value || null);
@@ -214,16 +221,15 @@ window.initMap = function() {
 }
 
 // ----------------------------------------------------------------------
-// 5. ЛОГИКА ЗАГРУЗКИ ДАШБОРДА (ИСПРАВЛЕНИЕ: Безопасный доступ к DOM)
+// 5. ЛОГИКА ЗАГРУЗКИ ДАШБОРДА
 // ----------------------------------------------------------------------
 
 window.loadDashboard = async function() {
-    // ⚠️ ИСПРАВЛЕНИЕ ОШИБКИ: Безопасный доступ к DOM (Null Error Fix)
+    // ⚠️ ИСПРАВЛЕНИЕ: Безопасный доступ к DOM (Null Error Fix)
     document.getElementById('mapLoading')?.classList.add('hidden'); 
-    
-    document.getElementById('saveButton').disabled = true;
+    document.getElementById('saveButton')?.setAttribute('disabled', 'true');
 
-    if (typeof initializeFirebase === 'undefined' || typeof authenticateUser === 'undefined') {
+    if (typeof window.initializeFirebase !== 'function' || typeof window.authenticateUser !== 'function') {
          window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Проверьте подключение Firebase в HTML. Скрипты не найдены.');
          return;
     }
@@ -241,7 +247,7 @@ window.loadDashboard = async function() {
         
         // 2. Определение начального вида
         const urlParams = new URLSearchParams(window.location.search);
-        const urlRole = urlParams.get('role'); // Роль, которую выбрал пользователь на index.html
+        const urlRole = urlParams.get('role'); 
         const initialView = urlParams.get('view') || 'form-view'; 
 
         // 3. Обновление статуса
@@ -264,19 +270,22 @@ window.loadDashboard = async function() {
         // 5. Выбор начального раздела
         let startSection = initialView;
         
-        // Если пользователь выбрал роль Администратора, убедимся, что он видит карту (по умолчанию)
-        if (urlRole === 'admin' && startSection === 'form-view') {
+        // Если пользователь Админ, то по умолчанию показываем карту
+        if (window.isAdmin && (urlRole === 'admin' || startSection === 'form-view')) {
              startSection = 'map-view';
+        }
+        // Если Агитатор пришел на панель Админа, то принудительно показываем форму/отчеты
+        if (!window.isAdmin && (startSection === 'map-view' || startSection === 'stats' || startSection === 'raw-data')) {
+             startSection = 'form-view';
         }
 
         // 6. Отображение
         window.showSection(startSection);
-        document.getElementById('saveButton').disabled = false;
+        document.getElementById('saveButton')?.removeAttribute('disabled');
         
     } else {
-         // Не удалось аутентифицировать или получить токен
          window.showSection('form-view');
-         document.getElementById('saveButton').disabled = true;
+         document.getElementById('saveButton')?.setAttribute('disabled', 'true');
          window.showAlert('Доступ ограничен', 'Не удалось пройти аутентификацию. Используйте ссылку из Telegram-бота.');
     }
 }
