@@ -1,39 +1,36 @@
-// main.js (ВЕРСИЯ С DADATA FETCH API и УЛУЧШЕННЫМ UX/UI)
+// main.js (ИСПРАВЛЕННАЯ ВЕРСИЯ)
 
 // --- Глобальные переменные ---
+// mapInstance, currentLatitude, currentLongitude, dadataCoords, selectedSuggestionData остаются
+window.mapInstance = null; 
 let currentLatitude = null; 
 let currentLongitude = null;
 let dadataCoords = null;    
-
-// --- КОНФИГУРАЦИЯ DADATA (Получение из config.js) ---
-const DADATA_TOKEN = window.DADATA_TOKEN; 
-const DADATA_LOCATION_RESTRICTIONS = window.DADATA_LOCATION_RESTRICTIONS;
 let selectedSuggestionData = null; 
-
-const addressInput = document.getElementById('address');
-const suggestionsList = document.getElementById('suggestionsList');
-const saveButton = document.getElementById('saveButton'); // Кнопка из HTML
-const reportForm = document.getElementById('reportForm');
 
 // ----------------------------------------------------------------------
 // 1. ИНТЕГРАЦИЯ DADATA (Fetch API)
 // ----------------------------------------------------------------------
 
+const addressInput = document.getElementById('address');
+const suggestionsList = document.getElementById('suggestionsList');
+
 /**
  * Ручной обработчик ввода для Dadata
  */
 addressInput.addEventListener('input', async () => {
-    const query = addressInput.value.trim();
-    suggestionsList.innerHTML = '';
-    selectedSuggestionData = null; // Сбрасываем при вводе
+    // Используем window.DADATA_TOKEN, который должен быть в config.js
+    if (typeof window.DADATA_TOKEN === 'undefined') {
+        window.showAlert('ОШИБКА DADATA', 'Токен Dadata не загружен. Проверьте config.js.');
+        return;
+    }
     
+    const query = addressInput.value.trim();
     if (query.length < 3) {
+        suggestionsList.innerHTML = '';
         suggestionsList.classList.add('hidden');
         return;
     }
-
-    // --- УЛУЧШЕНИЕ: ИНДИКАТОР ЗАГРУЗКИ ---
-    addressInput.classList.add('loading-spinner');
 
     try {
         const response = await fetch('https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address', {
@@ -42,277 +39,218 @@ addressInput.addEventListener('input', async () => {
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'Authorization': `Token ${DADATA_TOKEN}`
+                'Authorization': `Token ${window.DADATA_TOKEN}`, // <-- ИСПРАВЛЕНО
             },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
                 query: query,
-                locations: DADATA_LOCATION_RESTRICTIONS, 
-                count: 10
-            })
+                // Используем глобальные ограничения из config.js
+                locations: window.DADATA_LOCATION_RESTRICTIONS || [], 
+            }),
         });
-
+        
         if (!response.ok) {
-            throw new Error(`Dadata API error: ${response.statusText}`);
+            throw new Error(`Dadata API error: ${response.status}`);
         }
 
         const data = await response.json();
+        
+        suggestionsList.innerHTML = '';
+        suggestionsList.classList.remove('hidden');
 
-        if (data.suggestions && data.suggestions.length > 0) {
-            suggestionsList.classList.remove('hidden');
-            data.suggestions.forEach(suggestion => {
-                const li = document.createElement('li');
-                li.className = 'p-3 hover:bg-indigo-50 cursor-pointer';
-                li.textContent = suggestion.value;
-                li.addEventListener('click', () => {
-                    addressInput.value = suggestion.value;
-                    selectedSuggestionData = suggestion.data; // Сохраняем выбранные данные Dadata
-                    dadataCoords = { 
-                        latitude: parseFloat(suggestion.data.geo_lat), 
-                        longitude: parseFloat(suggestion.data.geo_lon) 
-                    };
-                    suggestionsList.innerHTML = '';
-                    suggestionsList.classList.add('hidden');
-                });
-                suggestionsList.appendChild(li);
-            });
-        } else {
+        data.suggestions.slice(0, 5).forEach(suggestion => {
+            const li = document.createElement('li');
+            li.textContent = suggestion.value;
+            li.className = 'p-2 cursor-pointer hover:bg-indigo-100 border-b border-gray-100';
+            li.onclick = () => selectSuggestion(suggestion);
+            suggestionsList.appendChild(li);
+        });
+
+        if (data.suggestions.length === 0) {
             suggestionsList.classList.add('hidden');
         }
 
     } catch (error) {
-        console.error('Dadata lookup failed:', error);
-        suggestionsList.classList.add('hidden'); 
-    } finally {
-        // Убрано: addressInput.classList.remove('loading-spinner'); (нужно реализовать CSS-класс)
-    }
-});
-
-// Скрытие списка при потере фокуса
-addressInput.addEventListener('blur', () => {
-    setTimeout(() => {
+        console.error('Ошибка Dadata:', error);
         suggestionsList.classList.add('hidden');
-    }, 200); 
-});
-
-addressInput.addEventListener('focus', () => {
-    if (suggestionsList.innerHTML !== '') {
-        suggestionsList.classList.remove('hidden');
+        document.getElementById('addressError').textContent = '⚠️ Ошибка Dadata: Проверьте токен или сеть.';
+        document.getElementById('addressError').style.display = 'block';
     }
 });
+
+/**
+ * Выбор адреса из списка подсказок
+ */
+function selectSuggestion(suggestion) {
+    addressInput.value = suggestion.value;
+    suggestionsList.classList.add('hidden');
+    selectedSuggestionData = suggestion.data;
+    
+    // Сохраняем координаты Dadata
+    dadataCoords = {
+        latitude: parseFloat(suggestion.data.geo_lat),
+        longitude: parseFloat(suggestion.data.geo_lon)
+    };
+    document.getElementById('addressError').style.display = 'none';
+}
 
 
 // ----------------------------------------------------------------------
 // 2. ГЕОЛОКАЦИЯ
 // ----------------------------------------------------------------------
 
-/**
- * Получает текущую геолокацию пользователя (Fallbacks на браузерный API).
- */
 window.getCurrentLocation = function() {
-    
-    if (!navigator.geolocation) {
-        window.showAlert('ОШИБКА', 'Ваш браузер не поддерживает геолокацию или она отключена.');
-        document.getElementById('geoStatus').textContent = 'Геолокация: ❌ Не поддерживается';
-        return;
-    }
-    
-    // --- ИНДИКАТОР ЗАГРУЗКИ ---
+    const geoStatus = document.getElementById('geoStatus');
     const geoIcon = document.getElementById('geoIcon');
-    geoIcon.innerHTML = `<svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>`;
     
-    // Временно отключаем кнопку сохранения
-    if (window.Telegram.WebApp && window.Telegram.WebApp.MainButton.isVisible) {
-         window.Telegram.WebApp.MainButton.showProgress();
-    } else if (saveButton) {
-        saveButton.disabled = true;
+    geoStatus.textContent = 'Геолокация: ⏳ Определение...';
+    geoIcon.setAttribute('data-lucide', 'map-pin'); 
+    
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                currentLatitude = position.coords.latitude;
+                currentLongitude = position.coords.longitude;
+                geoStatus.textContent = `Геолокация: ✅ Получено (${currentLatitude.toFixed(4)}, ${currentLongitude.toFixed(4)})`;
+                geoIcon.setAttribute('data-lucide', 'check-circle'); 
+                lucide.createIcons();
+            },
+            (error) => {
+                console.error("Geolocation error:", error);
+                geoStatus.textContent = 'Геолокация: ❌ Отказано в доступе или ошибка.';
+                geoIcon.setAttribute('data-lucide', 'x-circle'); 
+                currentLatitude = null;
+                currentLongitude = null;
+                lucide.createIcons();
+                window.showAlert('Геолокация', 'Не удалось получить GPS-координаты. Проверьте разрешения в браузере или Telegram.');
+            },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+    } else {
+        geoStatus.textContent = 'Геолокация: ❌ Не поддерживается.';
+        geoIcon.setAttribute('data-lucide', 'alert-triangle');
+        lucide.createIcons();
+        window.showAlert('Геолокация', 'Ваш браузер не поддерживает API геолокации.');
     }
-
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            currentLatitude = position.coords.latitude;
-            currentLongitude = position.coords.longitude;
-            window.showAlert('УСПЕХ', `Геолокация получена: ${currentLatitude.toFixed(4)}, ${currentLongitude.toFixed(4)}`);
-            document.getElementById('geoStatus').textContent = 'Геолокация: ✅ ОК';
-        },
-        (error) => {
-            console.error("Geolocation error:", error);
-            window.showAlert('ОШИБКА ГЕОЛОКАЦИИ', `Не удалось получить координаты: ${error.message}`);
-            document.getElementById('geoStatus').textContent = 'Геолокация: ❌ Ошибка';
-        },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-    ).finally(() => {
-        // Восстановление кнопки
-        geoIcon.innerHTML = `<span data-lucide="map-pin" class="w-5 h-5"></span>`;
-        if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
-        
-        if (window.Telegram.WebApp && window.Telegram.WebApp.MainButton.isVisible) {
-             window.Telegram.WebApp.MainButton.hideProgress();
-        } else if (saveButton) {
-            saveButton.disabled = false;
-        }
-    });
-}
-
-// ----------------------------------------------------------------------
-// 3. ОТПРАВКА ДАННЫХ В FIRESTORE
-// ----------------------------------------------------------------------
-
-/**
- * Валидация формы перед отправкой
- */
-function validateForm() {
-    const settlement = document.getElementById('settlement').value;
-    const address = addressInput.value.trim();
-    const loyalty = document.querySelector('input[name="loyalty"]:checked');
-    const action = document.querySelector('input[name="action"]:checked');
-    
-    if (!settlement || !address || !loyalty || !action) {
-        window.showAlert('ОШИБКА ВАЛИДАЦИИ', 'Пожалуйста, заполните все обязательные поля (НП, Адрес, Лояльность, Действие).');
-        return false;
-    }
-    
-    if (selectedSuggestionData === null) {
-        window.showAlert('ОШИБКА АДРЕСА', 'Пожалуйста, выберите адрес из выпадающего списка Dadata для обеспечения точности данных.');
-        return false;
-    }
-    
-    return true;
 }
 
 
-/**
- * Обработчик кнопки сохранения
- */
+// ----------------------------------------------------------------------
+// 3. СОХРАНЕНИЕ ОТЧЕТА В FIRESTORE
+// ----------------------------------------------------------------------
+
 window.saveReport = async function() {
-    if (!validateForm() || !window.db) {
-        if (window.Telegram.WebApp) window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
+    if (!window.db) {
+        window.showAlert('ОШИБКА FIRESTORE', 'Соединение с базой данных не установлено.');
+        return;
+    }
+    
+    // Валидация адреса (проверка, был ли адрес выбран из списка Dadata)
+    if (!selectedSuggestionData || addressInput.value !== selectedSuggestionData.value) {
+        document.getElementById('addressError').textContent = '⚠️ Выберите адрес из списка Dadata!';
+        document.getElementById('addressError').style.display = 'block';
+        window.showAlert('Ошибка формы', 'Необходимо выбрать корректный адрес из списка подсказок.');
         return;
     }
 
-    // --- ИНДИКАТОР ЗАГРУЗКИ ---
-    if (window.Telegram.WebApp) {
-        window.Telegram.WebApp.MainButton.showProgress();
-    } else if (saveButton) {
-        saveButton.disabled = true;
-        saveButton.innerHTML = `<svg class="animate-spin h-5 w-5 mr-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                             </svg> Сохранение...`;
-    }
-    
-    // --- ПРИГОТОВЛЕНИЕ ДАННЫХ ---
+    const form = document.getElementById('reportForm');
+    const formData = new FormData(form);
+
     const reportData = {
-        telegramId: window.userTelegramId,
+        telegramId: window.userTelegramId || 'unknown_user',
         timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-        settlement: document.getElementById('settlement').value,
-        address: addressInput.value.trim(),
-        loyalty: document.querySelector('input[name="loyalty"]:checked').value,
-        action: document.querySelector('input[name="action"]:checked').value,
-        comment: document.getElementById('comment').value.trim(),
+        settlement: formData.get('settlement'),
+        address: selectedSuggestionData.value, // Адрес Dadata
         
+        // Координаты Dadata
         latitude: dadataCoords ? dadataCoords.latitude : null,
         longitude: dadataCoords ? dadataCoords.longitude : null,
-        
+
+        // Координаты GPS пользователя (если получены)
         geo_lat_user: currentLatitude,
         geo_lon_user: currentLongitude,
+        
+        loyalty: formData.get('loyalty'),
+        action: formData.get('action'),
+        comment: formData.get('comment')
     };
 
     try {
-        await window.db.collection('reports').add(reportData);
-
-        // --- УСПЕХ ---
-        if (window.Telegram.WebApp) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-        window.showAlert('УСПЕХ', 'Отчет успешно сохранен!');
+        const docRef = await window.db.collection("reports").add(reportData);
+        console.log("Document written with ID: ", docRef.id);
         
-        // Очистка формы
-        reportForm.reset();
-        selectedSuggestionData = null;
+        // Сброс формы и статусов
+        form.reset();
         currentLatitude = null;
         currentLongitude = null;
+        selectedSuggestionData = null;
         dadataCoords = null;
         document.getElementById('geoStatus').textContent = 'Геолокация: ❓ Не получена';
+        document.getElementById('geoIcon').setAttribute('data-lucide', 'map-pin');
+        lucide.createIcons();
+
+        window.showAlert('УСПЕХ', 'Отчет успешно сохранен в базу данных.');
         
-    } catch (error) {
-        // --- ОШИБКА ---
-        if (window.Telegram.WebApp) window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
-        console.error("Ошибка сохранения отчета:", error);
-        window.showAlert('ОШИБКА СОХРАНЕНИЯ', `Не удалось сохранить отчет: ${error.message}`);
-        
-    } finally {
-        // --- ВОССТАНОВЛЕНИЕ КНОПКИ ---
+        // Отправка подтверждения в Telegram (опционально)
         if (window.Telegram.WebApp) {
-             window.Telegram.WebApp.MainButton.hideProgress();
-        } else if (saveButton) {
-            saveButton.innerHTML = `<span data-lucide="save" class="w-5 h-5 mr-2"></span> Сохранить Отчет`;
-            saveButton.disabled = false;
-            if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+            window.Telegram.WebApp.sendData(JSON.stringify({ status: 'success', docId: docRef.id }));
+            window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
         }
+        
+    } catch (e) {
+        console.error("Error adding document: ", e);
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось сохранить отчет: ${e.message}. Проверьте правила записи Firestore.`);
+        window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
     }
 }
 
 
 // ----------------------------------------------------------------------
-// 4. ИНИЦИАЛИЗАЦИЯ
+// 4. ИНИЦИАЛИЗАЦИЯ ДАШБОРДА (admin_dashboard.html)
 // ----------------------------------------------------------------------
 
 window.loadDashboard = async function() {
-    // 1. Инициализация Telegram Web App
+    // 1. Инициализация Telegram WebApp
     if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp.ready) {
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
-        window.Telegram.WebApp.setHeaderColor('bg_color');
-        window.Telegram.WebApp.setBackgroundColor('bg_color');
-        
-        // --- UX УЛУЧШЕНИЕ: Главная кнопка Telegram ---
-        window.Telegram.WebApp.MainButton.setText("СОХРАНИТЬ ОТЧЕТ");
-        window.Telegram.WebApp.MainButton.show();
-        // Отключаем нативную кнопку в HTML и используем кнопку Telegram
-        document.getElementById('saveButton').style.display = 'none'; 
-        window.Telegram.WebApp.MainButton.onClick(window.saveReport);
     }
+    
+    const saveButton = document.getElementById('saveButton');
+    if (saveButton) saveButton.disabled = true;
 
-    // 2. Инициализация Firebase и Аутентификация
     if (!window.initializeFirebase()) {
-         window.showSection('form');
+         window.showSection('form-view');
          return;
     }
 
     const isAuthenticated = await window.authenticateUser();
     
     if (isAuthenticated) {
+         // 2. Настройка админских вкладок
          if (window.isAdmin) {
-             // Админ: показать админку и скрыть кнопку сохранения
-             window.Telegram.WebApp.MainButton.hide();
-             
-             // Логика переключения на карту, если это стартовая секция
-             const urlParams = new URLSearchParams(window.location.search);
-             const initialView = urlParams.get('view');
-             const startSection = (initialView === 'map-view' || !initialView) ? 'map-view' : 'form';
-             
-             if (startSection === 'map-view') {
-                 window.showSection('map-view');
-             } else {
-                 window.showSection('form');
-                 window.Telegram.WebApp.MainButton.show();
-             }
-
-             // Показать все вкладки для админа
-             document.getElementById('btn-map-view').style.display = 'inline-flex';
-             document.getElementById('btn-stats').style.display = 'inline-flex';
-             document.getElementById('btn-raw-data').style.display = 'inline-flex';
-             
-         } else {
-             // Пользователь: только форма
-             window.showSection('form');
-             window.Telegram.WebApp.MainButton.show();
+             document.getElementById('btn-map-view').classList.remove('hidden');
+             document.getElementById('btn-stats').classList.remove('hidden');
+             document.getElementById('btn-raw-data').classList.remove('hidden');
          }
          
+         // 3. Выбор начального раздела
+         const urlParams = new URLSearchParams(window.location.search);
+         const initialView = urlParams.get('view');
+         
+         let startSection = 'form-view'; // По умолчанию - форма
+         
+         if (window.isAdmin && (initialView === 'map-view' || initialView === 'map' || !initialView)) {
+             startSection = 'map-view';
+         }
+
+         // Показываем секцию
+         window.showSection(startSection);
+         
+         if (saveButton) saveButton.disabled = false;
+         
     } else {
-         // Не аутентифицирован или крит. ошибка
-         window.showSection('form');
-         window.Telegram.WebApp.MainButton.hide();
+         window.showSection('form-view');
+         if (saveButton) saveButton.disabled = true;
+         // Аутентификация не удалась, показываем форму, но сохранение запрещено
     }
 }
