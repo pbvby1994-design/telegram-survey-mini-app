@@ -200,15 +200,19 @@
                 window.Telegram.WebApp.expand();
             }
             
-            if (typeof window.initializeFirebase === 'function' && typeof window.FIREBASE_CONFIG !== 'undefined') {
-                if (window.initializeFirebase()) {
-                    await window.checkAdminStatus(); 
-                } else {
-                     document.getElementById('telegramAuthInfo').textContent = '❌ Не удалось загрузить конфигурацию Firebase.';
-                }
-            } else {
-                 document.getElementById('telegramAuthInfo').textContent = '❌ Скрипт Firebase или config.js не загружены.';
-            }
+           // index.html (НОВАЯ версия)
+if (typeof window.initializeFirebase === 'function') {
+    // initializeFirebase() сам получает конфиг из URL и возвращает true/false
+    if (window.initializeFirebase()) {
+        await window.checkAdminStatus(); 
+    } else {
+         // Эта ветка сработает, если в URL нет параметра 'firebase_config' или он не декодируется
+         document.getElementById('telegramAuthInfo').textContent = '❌ Не удалось загрузить конфигурацию Firebase (нет параметра в URL).';
+    }
+} else {
+     // Эта ветка сработает, только если не загружен firebase-auth.js
+     document.getElementById('telegramAuthInfo').textContent = '❌ Скрипт firebase-auth.js не загружен.';
+}
             
             // Включаем кнопку Агитатора, так как доступ есть у всех
             document.getElementById('agitatorButton').disabled = false;
@@ -216,3 +220,4 @@
     </script>
 </body>
 </html>
+
