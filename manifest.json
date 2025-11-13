@@ -2,8 +2,9 @@
     "name": "Блокнот Агитатора",
     "short_name": "Агитатор",
     "description": "Панель для записи и анализа данных опросов",
-    "start_url": "/admin_dashboard.html?utm_source=pwa",
+    "start_url": "/index.html?utm_source=pwa",
     "display": "standalone",
+    "orientation": "portrait",
     "background_color": "#ffffff",
     "theme_color": "#4f46e5",
     "icons": [
