@@ -41,7 +41,6 @@
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
-        /* Стили для модального окна */
         .modal {
             background-color: rgba(0, 0, 0, 0.5);
         }
@@ -58,15 +57,12 @@
             }
         }
         
-        /* Класс, который будет добавляться к анимируемым элементам */
         .stagger-item {
             opacity: 0;
-            /* Базовая длительность анимации */
             animation: fadeInUp 0.6s ease-out forwards;
         }
     </style>
 
-    <script src="./config.js"></script>
     <script src="./firebase-auth.js"></script>
 </head>
 <body class="p-4 flex items-center justify-center min-h-screen">
@@ -102,7 +98,7 @@
     </div>
 
     <script>
-        // --- ФУНКЦИИ ОПОВЕЩЕНИЯ (Устранение TypeError: window.showAlert) ---
+        // --- ФУНКЦИИ ОПОВЕЩЕНИЯ ---
         window.showAlert = function(title, message) {
             document.getElementById('alertTitle').textContent = title;
             document.getElementById('alertMessage').textContent = message;
@@ -122,7 +118,6 @@
 
         // Функция для анимации и перехода
         window.animateAndRedirect = function(targetUrl) {
-            // Удаляем класс 'loaded', чтобы карточка исчезла
             document.getElementById('welcomeCard').classList.remove('loaded');
             document.getElementById('welcomeCard').classList.add('animate-pulse-once');
             
@@ -146,21 +141,20 @@
                 window.Telegram.WebApp.expand();
             }
             
-            // 2. Инициализация Firebase и проверка статуса (устранение ошибки config.js)
+            // 2. Инициализация Firebase и проверка статуса
             if (typeof window.initializeFirebase === 'function') {
                 if (window.initializeFirebase()) {
                     await window.checkAdminStatus(); 
                 } else {
+                     // Это сообщение появится, если в URL нет параметра 'firebase_config'
                      document.getElementById('telegramAuthInfo').textContent = '❌ Не удалось загрузить конфигурацию Firebase.';
                 }
             } else {
+                 // Это сообщение должно исчезнуть после исправления!
                  document.getElementById('telegramAuthInfo').textContent = '❌ Скрипт firebase-auth.js не загружен.';
             }
             
-            // 3. Активация кнопок и анимация (добавляем класс, который запускает CSS-анимацию)
-            // Мы добавили CSS-классы `stagger-item` и `style="animation-delay: X"` к самим элементам в HTML.
-            
-            // Включаем кнопку Агитатора (поскольку она анимирована через CSS, она сразу включится)
+            // 3. Активация кнопок
             document.getElementById('agitatorButton').disabled = false;
         };
     </script>
