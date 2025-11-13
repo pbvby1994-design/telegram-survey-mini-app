@@ -41,6 +41,10 @@
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
+        /* Стили для модального окна, которого нет в tailwind по умолчанию */
+        .modal {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
     </style>
 
     <script src="./config.js"></script>
@@ -66,7 +70,37 @@
         </button>
     </div>
 
+    <div id="alertModal" class="modal fixed inset-0 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-xs p-6 space-y-4">
+            <h3 id="alertTitle" class="text-lg font-semibold text-red-600">Ошибка</h3>
+            <p id="alertMessage" class="text-sm text-zinc-600">Произошла неизвестная ошибка.</p>
+            <button onclick="window.closeAlert()" class="w-full bg-red-600 text-white py-2 rounded-lg font-medium hover:bg-red-700 transition duration-150">
+                Закрыть
+            </button>
+        </div>
+    </div>
+
     <script>
+        // --- ФУНКЦИИ ОПОВЕЩЕНИЯ (НОВЫЙ БЛОК) ---
+        // Эти функции необходимы, чтобы firebase-auth.js не вызывал TypeError
+        window.showAlert = function(title, message) {
+            document.getElementById('alertTitle').textContent = title;
+            document.getElementById('alertMessage').textContent = message;
+            document.getElementById('alertModal').classList.remove('hidden');
+            document.getElementById('alertModal').classList.add('flex');
+            
+            // Также используем нативный Telegram WebApp.showAlert, если доступен
+            if (window.Telegram.WebApp && window.Telegram.WebApp.showAlert) {
+                 window.Telegram.WebApp.showAlert(`${title}: ${message}`);
+            }
+        }
+
+        window.closeAlert = function() {
+            document.getElementById('alertModal').classList.add('hidden');
+            document.getElementById('alertModal').classList.remove('flex');
+        }
+        // ----------------------------------------
+
         // Функция для анимации и перехода
         window.animateAndRedirect = function(targetUrl) {
             document.getElementById('welcomeCard').classList.remove('loaded');
@@ -76,16 +110,14 @@
                 window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
             }
             
-            // Переход после завершения анимации
             setTimeout(() => {
                 window.location.href = targetUrl;
-            }, 550); // Увеличил задержку для плавной анимации
+            }, 550);
         }
 
         window.onload = async () => {
             lucide.createIcons();
             
-            // Показываем карточку с анимацией
             document.getElementById('welcomeCard').classList.add('loaded');
             
             if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp.ready) {
@@ -93,17 +125,14 @@
                 window.Telegram.WebApp.expand();
             }
             
-            // ИСПРАВЛЕНИЕ КРИТИЧЕСКОЙ ОШИБКИ:
-            // Убираем проверку на window.FIREBASE_CONFIG, так как конфиг считывается из URL в firebase-auth.js
+            // ИСПРАВЛЕНИЕ #1: Убрана проверка на window.FIREBASE_CONFIG
             if (typeof window.initializeFirebase === 'function') {
                 if (window.initializeFirebase()) {
                     await window.checkAdminStatus(); 
                 } else {
-                     // Эта ветка сработает, если в URL нет параметра 'firebase_config' или он не декодируется
                      document.getElementById('telegramAuthInfo').textContent = '❌ Не удалось загрузить конфигурацию Firebase (нет параметра в URL).';
                 }
             } else {
-                 // Эта ветка сработает, только если не загружен firebase-auth.js
                  document.getElementById('telegramAuthInfo').textContent = '❌ Скрипт firebase-auth.js не загружен.';
             }
             
