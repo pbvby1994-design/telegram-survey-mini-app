@@ -297,6 +297,7 @@
                     window.fetchReports(window.isAdmin ? settlementFilter : null); 
                 }
                 if (window.mapInstance && sectionId === 'map-view') {
+                     // Принудительно подгоняем карту под размер контейнера
                      window.mapInstance.container.fitToViewport();
                 }
             } else {
