@@ -1,8 +1,8 @@
-// sw.js (ОКОНЧАТЕЛЬНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ - v5)
-const CACHE_NAME = 'agitator-notebook-cache-v5'; 
+// sw.js (ОКОНЧАТЕЛЬНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ - v6)
+const CACHE_NAME = 'agitator-notebook-cache-v6'; 
 
 // Список файлов, которые должны быть кешированы при установке Service Worker
-// ИСПРАВЛЕНИЕ: Удалена 'https://cdn.tailwindcss.com' из-за CORS
+// ИСПРАВЛЕНИЕ: Удалены './config.js' и CDN Tailwind (вызывающие ошибки 404/CORS)
 const urlsToCache = [
     // Основные файлы приложения (используем './' для совместимости)
     './', 
@@ -11,7 +11,7 @@ const urlsToCache = [
     './manifest.json',
     
     // Скрипты
-    './config.js',
+    // './config.js' удален, так как он пустой и вызывал 404
     './firebase-auth.js',
     './reports.js',
     './main.js',
@@ -21,7 +21,7 @@ const urlsToCache = [
     './icons/icon-192.png',
     './icons/icon-512.png',
 
-    // Критические CDN библиотеки (Tailwind удален)
+    // Критические CDN библиотеки 
     'https://unpkg.com/lucide@latest',
     'https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js',
     'https://telegram.org/js/telegram-web-app.js',
@@ -41,7 +41,7 @@ self.addEventListener('install', (event) => {
                 
                 for (const url of urlsToCache) {
                     try {
-                        // ИСПРАВЛЕНИЕ: Используем cache.add() с try/catch для обхода ошибки cache.addAll/404/CORS
+                        // Используем cache.add() с try/catch для обхода ошибки cache.addAll/404/CORS
                         await cache.add(url); 
                     } catch (e) {
                         console.warn(`SW cache skip: ${url} (Error: ${e.message})`);
@@ -79,12 +79,12 @@ self.addEventListener('activate', (event) => {
 });
 
 /**
- * Обработчик fetch: стратегия Cache First (для статики) и Network First (для API/отчетов).
+ * Обработчик fetch: стратегия Network First (для API/отчетов) и Cache First (для статики).
  */
 self.addEventListener('fetch', (event) => {
     const requestUrl = new URL(event.request.url);
 
-    // 1. Исключаем запросы Firebase и Dadata API из кэширования
+    // 1. Исключаем запросы Firebase и Dadata API из кэширования (Network First)
     if (requestUrl.hostname.includes('googleapis.com') ||
         requestUrl.hostname.includes('firebaseio.com') ||
         requestUrl.hostname.includes('dadata.ru') ||
