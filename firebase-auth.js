@@ -1,12 +1,12 @@
-// firebase-auth.js (ОКОНЧАТЕЛЬНАЯ ВЕРСИЯ - СИНТАКСИЧЕСКИ ПРАВИЛЬНАЯ)
+// firebase-auth.js (СИНТАКСИЧЕСКИ ПРАВИЛЬНАЯ ВЕРСИЯ)
 
-// --- Глобальные переменные (доступны в main.js через window.) ---
+// --- Глобальные переменные ---
 let app = null;
 window.db = null;
 window.auth = null;
 window.userTelegramId = null;
 window.userTelegramUsername = null;
-window.isAdmin = false; // Инициализация с корректным присвоением
+window.isAdmin = false;
 
 let token = null;
 
@@ -17,12 +17,12 @@ function getUrlParameter(name) {
 }
 
 // ----------------------------------------------------------------------
-// ИНИЦИАЛИЗАЦИЯ И ПОЛУЧЕНИЕ ПАРАМЕТРОВ ИЗ URL
+// ИНИЦИАЛИЗАЦИЯ
 // ----------------------------------------------------------------------
 
 window.initializeFirebase = function() {
     if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Firebase SDK не загружен. Проверьте подключение CDN в HTML.');
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Firebase SDK не загружен.');
         return false;
     }
     
@@ -34,10 +34,11 @@ window.initializeFirebase = function() {
     window.userTelegramId = getUrlParameter('user_id');
     window.userTelegramUsername = getUrlParameter('username');
     
-    // Также получаем роли (если они есть) - (строка ~83)
+    // 
     const adminUrlParam = getUrlParameter('is_admin');
     if (adminUrlParam === 'true') {
-        window.isAdmin = true; // <--- ПРОВЕРЕНО: ЗДЕСЬ ДОЛЖЕН БЫТЬ ОПЕРАТОР ПРИСВАИВАНИЯ =
+        // 👇 ИСПРАВЛЕНИЕ СТРОКИ 83: Чистое присваивание
+        window.isAdmin = true; 
     }
     
     if (!configBase64) {
@@ -54,7 +55,7 @@ window.initializeFirebase = function() {
         return false;
     }
     
-    // 2. Инициализация Firebase (v9 compatibility)
+    // 2. Инициализация Firebase
     try {
         app = firebase.initializeApp(window.FIREBASE_CONFIG);
         window.db = firebase.firestore(app);
@@ -69,7 +70,7 @@ window.initializeFirebase = function() {
 };
 
 // ----------------------------------------------------------------------
-// АУТЕНТИФИКАЦИЯ И ПРОВЕРКА СТАТУСА АДМИНА
+// АУТЕНТИФИКАЦИЯ
 // ----------------------------------------------------------------------
 
 window.checkAdminStatus = async function() {
@@ -77,7 +78,7 @@ window.checkAdminStatus = async function() {
         console.warn("Custom token not found in URL.");
         document.getElementById('saveButton')?.setAttribute('disabled', 'true');
         
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ #1: Добавляем ?.
+        // Добавлен ?.
         document.getElementById('debugAdminStatus')?.textContent = "ОТКАЗ (Нет токена)";
         
         return false; 
@@ -92,7 +93,7 @@ window.checkAdminStatus = async function() {
              window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
         }
         
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ #2: Добавляем ?.
+        // Добавлен ?.
         document.getElementById('debugAdminStatus')?.textContent = window.isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
         
         document.getElementById('saveButton')?.removeAttribute('disabled');
@@ -112,7 +113,7 @@ window.checkAdminStatus = async function() {
     } catch (error) {
         console.error("Firebase Custom Token Auth failed:", error);
         
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ #3: Добавляем ?.
+        // Добавлен ?.
         document.getElementById('debugAdminStatus')?.textContent = 'ОШИБКА АУТЕНТИФИКАЦИИ';
         
         window.showAlert('ОШИБКА АУТЕНТИФИКАЦИИ', `Не удалось войти: ${error.message}. Проверьте Custom Token.`);
