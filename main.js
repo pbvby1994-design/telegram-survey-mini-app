@@ -1,18 +1,15 @@
-// main.js (ФИНАЛЬНАЯ ВЕРСИЯ С АНИМАЦИЯМИ, PWA ОФФЛАЙН ЛОГИКОЙ И ARIA-ДОСТУПНОСТЬЮ)
+// main.js (ФИНАЛЬНАЯ ВЕРСИЯ С АНИМАЦИЯМИ, PWA ОФФЛАЙН ЛОГИКОЙ И УСИЛЕННЫМ TRY-CATCH)
 
 // --- Глобальные переменные ---
 window.mapInstance = null; 
-let currentLatitude = null; 
-let currentLongitude = null;
 let dadataCoords = null;    
 
 // --- КОНФИГУРАЦИЯ DADATA (Из URL-параметров) ---
 const urlParams = new URLSearchParams(window.location.search);
-
-// Ключ Dadata теперь передается как URL-параметр для безопасности.
+// Ключ Dadata теперь передается как URL-параметр.
 const DADATA_API_KEY = urlParams.get('dadata_token'); 
-// Используем FIAS ID для ограничения поиска.
-const DADATA_LOCATION_FIAS_ID = urlParams.get('dadata_fias_id') || '86'; // '86' - дефолтное значение для ХМАО
+// Используем FIAS ID для ограничения поиска (дефолтное значение '86' для ХМАО).
+const DADATA_LOCATION_FIAS_ID = urlParams.get('dadata_fias_id') || '86'; 
 
 let selectedSuggestionData = null; 
 
@@ -31,13 +28,12 @@ if (addressInput) {
         }
         addressInput.disabled = true; 
     } else {
-        // Ручной обработчик ввода для Dadata
         addressInput.addEventListener('input', async () => {
             const query = addressInput.value.trim();
             if (query.length < 3) {
                 suggestionsList?.innerHTML = '';
                 suggestionsList?.classList.add('hidden');
-                addressInput.setAttribute('aria-expanded', 'false'); // ARIA
+                addressInput.setAttribute('aria-expanded', 'false'); 
                 return;
             }
 
@@ -52,7 +48,6 @@ if (addressInput) {
                     },
                     body: JSON.stringify({
                         query: query,
-                        // Дополнительные параметры
                         count: 10,
                         locations: [
                             { 'kladr_id': DADATA_LOCATION_FIAS_ID } 
@@ -68,17 +63,17 @@ if (addressInput) {
                 
                 if (data.suggestions && data.suggestions.length > 0) {
                     renderSuggestions(data.suggestions);
-                    addressInput.setAttribute('aria-expanded', 'true'); // ARIA
+                    addressInput.setAttribute('aria-expanded', 'true'); 
                 } else {
                     suggestionsList?.innerHTML = '';
                     suggestionsList?.classList.add('hidden');
-                    addressInput.setAttribute('aria-expanded', 'false'); // ARIA
+                    addressInput.setAttribute('aria-expanded', 'false'); 
                 }
             } catch (error) {
                 console.error("Dadata API call failed:", error);
                 suggestionsList?.innerHTML = `<li class="p-2 text-red-500 text-sm" role="alert">Ошибка загрузки адресов. ${error.message}</li>`;
                 suggestionsList?.classList.remove('hidden');
-                addressInput.setAttribute('aria-expanded', 'true'); // ARIA
+                addressInput.setAttribute('aria-expanded', 'true'); 
             }
         });
 
@@ -92,7 +87,7 @@ if (addressInput) {
                 const li = document.createElement('li');
                 li.className = 'p-2 cursor-pointer hover:bg-indigo-100 text-sm text-gray-700';
                 li.textContent = suggestion.value;
-                li.setAttribute('role', 'option'); // ARIA
+                li.setAttribute('role', 'option'); 
                 li.onclick = () => selectSuggestion(suggestion);
                 suggestionsList.appendChild(li);
             });
@@ -104,7 +99,7 @@ if (addressInput) {
             addressInput.value = suggestion.value;
             suggestionsList?.innerHTML = '';
             suggestionsList?.classList.add('hidden');
-            addressInput.setAttribute('aria-expanded', 'false'); // ARIA
+            addressInput.setAttribute('aria-expanded', 'false'); 
 
             // Сохранение координат
             dadataCoords = {
@@ -122,14 +117,14 @@ if (addressInput) {
         document.addEventListener('click', (e) => {
             if (suggestionsList && !suggestionsList.contains(e.target) && e.target !== addressInput) {
                 suggestionsList.classList.add('hidden');
-                addressInput.setAttribute('aria-expanded', 'false'); // ARIA
+                addressInput.setAttribute('aria-expanded', 'false'); 
             }
         });
     }
 }
 
 
-// --- ФУНКЦИИ ИНТЕРФЕЙСА (ОБНОВЛЕНО ARIA) ---
+// --- ФУНКЦИИ ИНТЕРФЕЙСА ---
 
 /**
  * Переключает активный раздел дашборда с анимацией.
@@ -144,7 +139,7 @@ window.showSection = function(sectionId) {
         const isTarget = section.id === sectionId;
         section.classList.toggle('hidden', !isTarget);
         section.classList.toggle('active-tab', isTarget);
-        section.setAttribute('aria-hidden', !isTarget); // ARIA: Скрываем неактивные разделы
+        section.setAttribute('aria-hidden', !isTarget); 
     });
     
     buttons.forEach(button => {
@@ -159,10 +154,10 @@ window.showSection = function(sectionId) {
         
         // ARIA: Обновление состояния табов
         button.setAttribute('aria-selected', isTarget);
-        button.setAttribute('tabindex', isTarget ? '0' : '-1'); // ARIA: Только активный таб доступен для фокуса
+        button.setAttribute('tabindex', isTarget ? '0' : '-1'); 
         
         if (isTarget) {
-            button.focus(); // Устанавливаем фокус на активный таб для удобства
+            button.focus(); 
         }
     });
     
@@ -177,6 +172,11 @@ window.showSection = function(sectionId) {
         if (window.mapInstance && sectionId === 'map-view') {
              window.mapInstance.container.fitToViewport();
         }
+        
+        // 🚨 ИСПРАВЛЕНИЕ CHART.JS: Принудительный рендер графиков при переключении на вкладку Stats
+        if (sectionId === 'stats' && typeof window.updateStatsCharts === 'function') {
+             window.updateStatsCharts(); 
+        }
     } else {
          document.getElementById('mapLoading')?.classList.add('hidden');
     }
@@ -186,7 +186,6 @@ window.showSection = function(sectionId) {
 
 /**
  * Инициализирует Yandex Map.
- * Вызывается асинхронно через глобальный колбэк ymapsReadyCallback в HTML.
  */
 window.initMap = function() {
     if (window.mapInstance) return;
@@ -213,7 +212,7 @@ window.initMap = function() {
     } catch (e) {
         console.error("Ошибка инициализации Yandex Maps:", e);
         document.getElementById('mapLoading').textContent = "❌ Ошибка загрузки карты.";
-        document.getElementById('mapLoading').setAttribute('role', 'alert'); // ARIA
+        document.getElementById('mapLoading').setAttribute('role', 'alert'); 
     }
 };
 
@@ -246,7 +245,12 @@ async function handleFormSubmit(event) {
     // 1. Проверяем статус сети
     if (!navigator.onLine) {
         try {
-            const key = await window.saveOfflineReport(reportData);
+            // Добавлено сохранение времени в оффлайн-отчет для сортировки
+            const localData = {...reportData};
+            delete localData.timestamp; 
+            localData.saved_at = Date.now();
+            const key = await window.saveOfflineReport(localData);
+            
             window.showAlert('ОТЧЕТ СОХРАНЕН', `Нет подключения к сети. Отчет временно сохранен локально (ID: ${key}). Он будет отправлен при восстановлении сети.`);
             document.getElementById('reportForm').reset();
             saveButton.innerHTML = '<svg data-lucide="send" class="w-5 h-5 mr-2" aria-hidden="true"></svg> Сохранить отчет';
@@ -282,15 +286,18 @@ async function handleFormSubmit(event) {
         dadataCoords = null;
         if (addressStatus) addressStatus.textContent = '';
         
+        // 3. После успешной отправки пытаемся синхронизировать оффлайн-отчеты
         await syncOfflineReports();
         
     } catch (error) {
         console.error("Firebase save failed:", error);
         
+        // Если произошла ошибка (кроме Permision Denied, которая критична), пытаемся сохранить оффлайн
         if (error.code !== 'permission-denied' && typeof window.saveOfflineReport === 'function') {
              try {
                 const localData = {...reportData};
                 delete localData.timestamp; 
+                localData.saved_at = Date.now();
                 const key = await window.saveOfflineReport(localData);
                 
                 window.showAlert('СБОЙ СЕТИ / ОФФЛАЙН-СОХРАНЕНИЕ', `Ошибка отправки в Firebase. Отчет сохранен локально (ID: ${key}). Он будет отправлен при восстановлении сети.`);
@@ -319,6 +326,7 @@ async function handleFormSubmit(event) {
 // --- ИНИЦИАЛИЗАЦИЯ ДАШБОРДА (УСИЛЕННЫЙ TRY-CATCH) ---
 
 window.loadDashboard = async function() {
+    // 🚨 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Внешний try-catch для предотвращения ошибок инициализации
     try {
         // 1. Заполнение списка населенных пунктов
         const settlementSelect = document.getElementById('settlement');
@@ -335,8 +343,7 @@ window.loadDashboard = async function() {
         const isAuth = await window.authenticateWithCustomToken();
         const urlParams = new URLSearchParams(window.location.search);
         const initialView = urlParams.get('view') || 'form-view';
-        const urlRole = urlParams.get('role'); // Может быть 'admin' или 'reporter'
-
+        
         if (isAuth) {
             // Обновление UI
             document.getElementById('authUsername').textContent = window.userTelegramUsername || window.userTelegramId;
@@ -344,7 +351,6 @@ window.loadDashboard = async function() {
             
             // 3. Настройка видимости табов в зависимости от роли
             if (window.isAdmin) {
-                // Админ видит все
                 document.getElementById('btn-map-view')?.classList.remove('hidden');
                 document.getElementById('btn-stats')?.classList.remove('hidden');
                 document.getElementById('btn-raw-data')?.classList.remove('hidden');
@@ -360,10 +366,16 @@ window.loadDashboard = async function() {
                         option.textContent = settlement;
                         settlementStatsFilter.appendChild(option);
                     });
+                     // Добавляем обработчик для перерисовки графиков при смене фильтра
+                    settlementStatsFilter.addEventListener('change', () => {
+                         window.loadReports('all'); // Перезагружаем данные с фильтром
+                         if (window.updateStatsCharts) {
+                            window.updateStatsCharts();
+                         }
+                    });
                 }
 
             } else {
-                // Агитатор видит только Форму и Мои Отчеты
                 document.getElementById('btn-map-view')?.classList.add('hidden');
                 document.getElementById('btn-stats')?.classList.add('hidden');
                 document.getElementById('btn-raw-data')?.classList.add('hidden');
@@ -382,9 +394,8 @@ window.loadDashboard = async function() {
                  startSection = 'form-view';
             }
 
-            // 5. [НОВОЕ] Добавляем прослушиватели событий для автоматической синхронизации
+            // 5. Добавляем прослушиватели событий для автоматической синхронизации
             window.addEventListener('online', syncOfflineReports);
-            // Добавляем обработчик отправки формы
             document.getElementById('reportForm')?.addEventListener('submit', handleFormSubmit);
 
             // 6. Загрузка данных (для админов и агитаторов)
@@ -410,7 +421,6 @@ window.loadDashboard = async function() {
         console.error("Критическая ошибка при загрузке панели:", e);
         window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось загрузить панель из-за внутренней ошибки: ${e.message}.`);
         document.getElementById('saveButton')?.setAttribute('disabled', 'true');
-        // Показываем дефолтный раздел, если все сломалось
         window.showSection('form-view'); 
     }
 }
@@ -424,19 +434,25 @@ async function syncOfflineReports() {
     }
 
     const offlineReports = await window.getOfflineReports();
-    if (offlineReports.length === 0) {
-        return; 
-    }
+    const infoContainer = document.getElementById('offlineReportsInfo');
+    const countElement = document.getElementById('offlineReportsCount');
     
-    console.log(`Найдено ${offlineReports.length} оффлайн-отчетов для синхронизации.`);
+    if (offlineReports.length === 0) {
+        if (infoContainer) infoContainer.classList.add('hidden');
+        return; 
+    } else {
+        if (infoContainer) infoContainer.classList.remove('hidden');
+        if (countElement) countElement.textContent = `Найдено ${offlineReports.length} отчетов. Они будут отправлены при восстановлении сети.`;
+    }
     
     let syncCount = 0;
     
+    // Сортировка по времени сохранения (saved_at), чтобы отправлять старые отчеты первыми
     offlineReports.sort((a, b) => a.data.saved_at - b.data.saved_at);
 
     for (const { key, data: report } of offlineReports) {
         const reportData = { ...report };
-        delete reportData.saved_at; 
+        delete reportData.saved_at; // Удаляем служебное поле
         reportData.timestamp = firebase.firestore.FieldValue.serverTimestamp(); 
         
         try {
@@ -444,19 +460,28 @@ async function syncOfflineReports() {
             await window.deleteOfflineReport(key);
             
             syncCount++;
-            console.log(`Отчет (IDB Key: ${key}) успешно синхронизирован и удален из локального хранилища.`);
             
         } catch (error) {
-            // Если не удалось отправить, прекращаем попытки, чтобы не спамить
             console.warn(`Сбой синхронизации отчета (IDB Key: ${key}):`, error.message);
+            // Если сбой, прекращаем попытки, чтобы не нагружать сеть или API
             break; 
         }
     }
     
     if (syncCount > 0) {
         window.showAlert('СИНХРОНИЗАЦИЯ', `✅ Успешно отправлено ${syncCount} оффлайн-отчетов в Firebase.`);
-        if (window.loadReports) {
-            await window.loadReports(window.isAdmin ? 'all' : 'my');
+    }
+    
+    // Обновляем список отчетов и оффлайн-индикатор после синхронизации
+    if (window.loadReports) {
+        await window.loadReports(window.isAdmin ? 'all' : 'my');
+    }
+    const remainingReports = await window.getOfflineReports();
+    if (infoContainer) {
+        if (remainingReports.length === 0) {
+             infoContainer.classList.add('hidden');
+        } else {
+             countElement.textContent = `Найдено ${remainingReports.length} отчетов. Они будут отправлены при следующей возможности.`;
         }
     }
 }
