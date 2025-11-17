@@ -10,11 +10,10 @@ const urlsToCache = [
     '/manifest.json',
     
     // Скрипты
-    '/config.js',
     '/firebase-auth.js',
     '/reports.js',
     '/main.js',
-    '/offline_db.js', // [НОВОЕ]
+    '/offline_db.js',
     
     // Критические CDN библиотеки (Firebase, Chart.js, Tailwind, Lucide, Telegram WebApp)
     'https://cdn.tailwindcss.com',
@@ -27,35 +26,42 @@ const urlsToCache = [
     
     // Шрифты
     'https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap',
-    'https://fonts.gstatic.com',
-    
-    // Иконки
-    '/icons/icon-192.png',
-    '/icons/icon-512.png',
+    'https://fonts.gstatic.com'
 ];
 
-// 1. Событие INSTALL: Кеширование всех необходимых ресурсов
+// ----------------------------------------------------------------------
+// INSTALLATION
+// ----------------------------------------------------------------------
+
 self.addEventListener('install', event => {
-    self.skipWaiting(); // Принудительно активируем новый SW сразу
+    // Пропускаем ожидание и активируем SW немедленно
+    self.skipWaiting(); 
+    
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => {
-                console.log('Service Worker: Предварительное кэширование завершено');
-                return cache.addAll(urlsToCache).catch(error => {
-                    console.error('Service Worker: Ошибка при кэшировании некоторых ресурсов (возможно, CDN):', error);
-                });
+                console.log('Opened cache');
+                // Добавляем все критические ресурсы в кэш
+                return cache.addAll(urlsToCache); 
             })
     );
 });
 
-// 2. Событие ACTIVATE: Очистка старых кэшей
+// ----------------------------------------------------------------------
+// ACTIVATION
+// ----------------------------------------------------------------------
+
 self.addEventListener('activate', event => {
+    // Заставляем Service Worker контролировать все страницы немедленно
+    event.waitUntil(self.clients.claim()); 
+    
     event.waitUntil(
+        // Удаляем старые кэши
         caches.keys().then(cacheNames => {
             return Promise.all(
                 cacheNames.map(cacheName => {
                     if (cacheName !== CACHE_NAME) {
-                        console.log('Service Worker: Удаление старого кэша', cacheName);
+                        console.log('Service Worker: Deleting old cache', cacheName);
                         return caches.delete(cacheName);
                     }
                 })
@@ -64,25 +70,24 @@ self.addEventListener('activate', event => {
     );
 });
 
-// 3. Событие FETCH: Смешанная стратегия (Cache First для статики, Network First для API)
-self.addEventListener('fetch', event => {
-    const requestUrl = event.request.url;
+// ----------------------------------------------------------------------
+// FETCHING
+// ----------------------------------------------------------------------
 
-    if (!requestUrl.startsWith('http')) {
+self.addEventListener('fetch', event => {
+    // Пропускаем запросы Firebase Firestore, чтобы они всегда шли в сеть
+    if (event.request.url.includes('firestore.googleapis.com')) {
         return;
     }
     
-    // ИСКЛЮЧЕНИЕ: Сетевая стратегия для Firebase, Dadata и Yandex Maps (Network First)
-    if (requestUrl.includes('firebase') || 
-        requestUrl.includes('dadata.ru') || 
-        requestUrl.includes('api-maps.yandex.ru')) {
-        
-        // Для динамических данных: Network First (попытка получить данные из сети, если сбой, просто пропускаем)
+    // Пропускаем запросы Dadata и Yandex Maps, чтобы они всегда шли в сеть (Network Only)
+    if (event.request.url.includes('suggestions.dadata.ru') || 
+        event.request.url.includes('api-maps.yandex.ru')) {
         event.respondWith(
             fetch(event.request).catch(error => {
-                // В случае оффлайна, просто пусть приложение обработает ошибку
-                console.log('Service Worker: Сбой сетевого запроса (Firebase/API) - оффлайн?');
-                throw error; // Передаем ошибку обратно, чтобы main.js мог сохранить оффлайн
+                 console.error('Service Worker: Fetch failed (API)', error);
+                 // Здесь важно не возвращать ошибку, чтобы main.js мог сохранить оффлайн
+                 throw error; 
             })
         );
         return;
