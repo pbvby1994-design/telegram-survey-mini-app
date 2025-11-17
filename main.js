@@ -4,7 +4,7 @@
 window.mapInstance = null; 
 let dadataCoords = null;    
 
-// --- КОНФИГУРАЦИЯ DADATA (Из глобальной переменной window.DADATA_API_KEY) ---
+// --- КОНФИГУРАЦИЯ DADATA (ИСПРАВЛЕНО: Считывание из глобальной переменной) ---
 // Ключ Dadata теперь берется из window.DADATA_API_KEY, установленного в firebase-auth.js
 const DADATA_API_KEY = window.DADATA_API_KEY; 
 
@@ -222,7 +222,10 @@ function getFormData() {
     } else if (data.address) {
         // Если адрес введен вручную, сохраняем только введенное значение
         data.address = data.address.trim();
-        data.settlement = data.settlement || 'Не указан';
+        data.settlement = data.settlement || document.getElementById('settlement').value || 'Не указан';
+    } else {
+        // Если не указан адрес, берем только населенный пункт из выпадающего списка
+        data.settlement = document.getElementById('settlement').value || 'Не указан';
     }
 
     // 3. Добавляем координаты
@@ -240,7 +243,7 @@ function getFormData() {
     data.username = window.userTelegramUsername;
 
     // 5. Очищаем пустые поля
-    Object.keys(data).forEach(key => data[key] === null && delete data[key]);
+    Object.keys(data).forEach(key => (data[key] === null || data[key] === '') && delete data[key]);
     
     return data;
 }
@@ -249,8 +252,8 @@ function getFormData() {
  * Валидация данных формы.
  */
 function validateData(data) {
-    if (!data.settlement) {
-        window.showAlert('Ошибка', 'Пожалуйста, выберите населенный пункт или введите адрес.');
+    if (!data.settlement || data.settlement === 'Выберите...') {
+        window.showAlert('Ошибка', 'Пожалуйста, выберите населенный пункт.');
         return false;
     }
     if (!data.loyalty) {
@@ -336,7 +339,7 @@ window.updateOfflineIndicator = async function() {
 window.syncOfflineReports = async function() {
     const offlineReports = await window.getOfflineReports();
     if (offlineReports.length === 0) {
-        window.showAlert('СИНХРОНИЗАЦИЯ', 'Нет оффлайн-отчетов для отправки.');
+        // window.showAlert('СИНХРОНИЗАЦИЯ', 'Нет оффлайн-отчетов для отправки.'); // Убираем, чтобы не спамить
         return;
     }
     
@@ -367,19 +370,8 @@ window.syncOfflineReports = async function() {
         window.showAlert('СИНХРОНИЗАЦИЯ', `✅ Успешно отправлено ${syncCount} оффлайн-отчетов в Firebase.`);
     }
     
-    // Обновляем список отчетов и оффлайн-индикатор после синхронизации
-    if (window.loadReports) {
-        await window.loadReports(window.isAdmin ? 'all' : 'my');
-    }
-    const remainingReports = await window.getOfflineReports();
-    if (infoContainer) {
-        if (remainingReports.length === 0) {
-            infoContainer.textContent = '';
-            infoContainer.classList.add('hidden');
-        } else {
-            infoContainer.textContent = `💾 ${remainingReports.length} оффлайн-отчетов в ожидании отправки.`;
-        }
-    }
+    // Обновляем оффлайн-индикатор после синхронизации
+    window.updateOfflineIndicator();
 }
 
 
@@ -407,29 +399,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 1. Создаем иконки
     lucide.createIcons();
     
-    // 2. Инициализация Firebase и аутентификация
-    const authSuccess = window.initializeFirebase ? window.initializeFirebase() : false;
-    if (authSuccess) {
-        await window.checkAdminStatus();
-        
-        // 3. Проверка оффлайн-отчетов
+    // 2. Инициализация Firebase и аутентификация (уже происходит в index.html)
+    
+    // 3. Проверка оффлайн-отчетов
+    // Это вызывается только после успешной аутентификации в index.html, но для безопасности:
+    if (window.initializeFirebase && window.auth) {
         window.updateOfflineIndicator();
         
         // 4. Синхронизация при старте, если есть сеть
         if (navigator.onLine) {
             await window.syncOfflineReports();
         }
-        
-    } else {
-        // Ошибка в firebase-auth.js уже вызвала showAlert, просто блокируем кнопку
-        if (saveButton) saveButton.disabled = true;
     }
     
     // 5. Назначаем обработчики событий
     if (saveButton) {
         saveButton.addEventListener('click', (e) => {
             e.preventDefault();
-            submitReport();
+            window.submitReport();
         });
     }
 
