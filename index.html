@@ -6,6 +6,12 @@
     <title>Добро пожаловать | Блокнот Агитатора</title>
     
     <script src="https://cdn.tailwindcss.com"></script> 
+    <script>
+        // Конфигурация Tailwind для включения темной темы
+        tailwind.config = {
+            darkMode: 'class', // Активировать темную тему по наличию класса 'dark'
+        }
+    </script>
     
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -25,7 +31,13 @@
             font-family: 'Jost', sans-serif;
             background-color: #f4f4f5; /* bg-zinc-100 */
         }
-        
+        /* ТЕМНАЯ ТЕМА */
+        .dark body {
+            background-color: #18181b; /* bg-zinc-900 */
+        }
+        .dark .bg-white {
+            background-color: #27272a; /* bg-zinc-800 */
+        }
         /* Стили для плавной загрузки карточки и анимации stagger */
         #welcomeCard {
             opacity: 0;
@@ -49,16 +61,16 @@
         }
     </style>
 </head>
-<body class="flex items-center justify-center min-h-screen p-4">
+<body class="flex items-center justify-center min-h-screen p-4 transition-colors duration-300">
 
-    <div id="welcomeCard" class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm transition-all duration-500 ease-out">
+    <div id="welcomeCard" class="bg-white dark:bg-zinc-800 rounded-xl shadow-2xl dark:shadow-xl p-6 w-full max-w-sm transition-all duration-500 ease-out">
         <div class="text-center mb-6 stagger-item">
             <i data-lucide="notebook-text" class="w-12 h-12 text-indigo-600 mx-auto mb-2"></i>
-            <h1 class="text-2xl font-bold text-gray-900">Блокнот Агитатора</h1>
-            <p class="text-sm text-gray-500 mt-1">Выберите свою роль</p>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Блокнот Агитатора</h1>
+            <p class="text-sm text-gray-500 dark:text-zinc-400 mt-1">Выберите свою роль</p>
         </div>
         
-        <div id="telegramAuthInfo" class="text-sm font-medium text-indigo-600 bg-indigo-50 p-3 rounded-lg mb-4 stagger-item" style="transition-delay: 100ms;">
+        <div id="telegramAuthInfo" class="text-sm font-medium text-indigo-600 bg-indigo-50 dark:bg-indigo-900 dark:text-indigo-200 p-3 rounded-lg mb-4 stagger-item" style="transition-delay: 100ms;">
             Ожидание аутентификации...
         </div>
 
@@ -74,105 +86,17 @@
             </button>
         </div>
 
-        <div class="mt-6 p-3 text-xs text-gray-500 bg-gray-50 rounded-lg border border-gray-200 stagger-item" style="transition-delay: 400ms;">
+        <div class="mt-6 p-3 text-xs text-gray-500 dark:text-zinc-400 bg-gray-50 dark:bg-zinc-900 rounded-lg border border-gray-200 dark:border-zinc-700 stagger-item" style="transition-delay: 400ms;">
             <p>Вы вошли как: <span id="authUsername" class="font-semibold">...</span></p>
             <p>Ваш Telegram ID: <span id="authUserId" class="font-semibold">...</span></p>
         </div>
         
     </div>
 
-    <script src="firebase-auth.js"></script>
-    <script src="config.js"></script>
+    <script type="module" src="config.js"></script>
+    <script type="module" src="utils.js"></script>
+    <script type="module" src="firebase-auth.js"></script>
+    <script type="module" src="index-main.js"></script>
     
-    <script>
-        // Функция для кодирования конфигурации в Base64
-        function encodeFirebaseConfig(config) {
-            try {
-                const jsonString = JSON.stringify(config);
-                return btoa(jsonString);
-            } catch (e) {
-                console.error("Error encoding Firebase config:", e);
-                return null;
-            }
-        }
-        
-        // Функция для перенаправления
-        window.redirectToDashboard = function(role) {
-            // Находим FIREBASE_CONFIG и DADATA_TOKEN из config.js (глобальный доступ)
-            const firebaseConfig = window.FIREBASE_CONFIG;
-            const dadataToken = window.DADATA_TOKEN;
-            const dadataFiasId = window.DADATA_LOCATION_FIAS_ID; // Используем первый элемент, как дефолт
-            
-            if (!firebaseConfig || !dadataToken) {
-                 window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Отсутствует конфигурация Firebase или Dadata.');
-                 return;
-            }
-            
-            const configBase64 = encodeFirebaseConfig(firebaseConfig);
-            
-            // Получаем токен, который был получен при первой аутентификации (в firebase-auth.js)
-            const customToken = new URLSearchParams(window.location.search).get('token'); 
-            
-            // Формирование URL для перехода
-            let targetUrl = `admin_dashboard.html?view=form-view&role=${role}&firebase_config=${configBase64}`;
-            
-            if (customToken) {
-                 targetUrl += `&token=${customToken}`;
-            }
-            if (window.userTelegramId) {
-                targetUrl += `&user_id=${window.userTelegramId}`;
-            }
-            if (window.userTelegramUsername) {
-                targetUrl += `&username=${window.userTelegramUsername}`;
-            }
-            // Добавляем Dadata ключи в URL для доступа в main.js
-            targetUrl += `&dadata_token=${dadataToken}`;
-            if (dadataFiasId) {
-                 targetUrl += `&dadata_fias_id=${dadataFiasId}`;
-            }
-            
-            // Анимация перед переходом
-            document.getElementById('welcomeCard').classList.remove('loaded');
-            
-            if (window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
-                window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
-            }
-            
-            // Переход после завершения анимации
-            setTimeout(() => {
-                window.location.href = targetUrl;
-            }, 550); // Увеличил задержку для плавной анимации
-        }
-
-        window.onload = async () => {
-            lucide.createIcons();
-            
-            // Показываем карточку с анимацией
-            document.getElementById('welcomeCard').classList.add('loaded');
-            
-            if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp.ready) {
-                window.Telegram.WebApp.ready();
-                window.Telegram.WebApp.expand();
-            }
-            
-            // Запускаем инициализацию Firebase и получаем Claims
-            if (typeof window.initializeFirebase === 'function' && typeof window.FIREBASE_CONFIG !== 'undefined') {
-                if (window.initializeFirebase()) {
-                    await window.checkAdminStatus(); 
-                } else {
-                     document.getElementById('telegramAuthInfo').textContent = '❌ Не удалось загрузить конфигурацию Firebase.';
-                }
-            } else {
-                 document.getElementById('telegramAuthInfo').textContent = '❌ Скрипт Firebase или config.js не загружены.';
-            }
-            
-            // Обновляем информацию о пользователе
-            document.getElementById('authUsername').textContent = window.userTelegramUsername || 'Неизвестно';
-            document.getElementById('authUserId').textContent = window.userTelegramId || 'Неизвестно';
-
-            // Включаем кнопку Агитатора, так как доступ есть у всех
-            document.getElementById('agitatorButton').disabled = false;
-        };
-    </script>
-</body>
+    </body>
 </html>
