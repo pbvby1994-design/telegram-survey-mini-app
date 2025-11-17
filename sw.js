@@ -1,15 +1,17 @@
-// sw.js (ИСПРАВЛЕННАЯ ВЕРСИЯ - ИСПОЛЬЗУЕТ try/catch ДЛЯ cache.add)
-const CACHE_NAME = 'agitator-notebook-cache-v4'; // УВЕЛИЧЕННАЯ ВЕРСИЯ
+// sw.js (ОКОНЧАТЕЛЬНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ - v5)
+const CACHE_NAME = 'agitator-notebook-cache-v5'; 
 
 // Список файлов, которые должны быть кешированы при установке Service Worker
+// ИСПРАВЛЕНИЕ: Удалена 'https://cdn.tailwindcss.com' из-за CORS
 const urlsToCache = [
-    // Основные файлы приложения
-    './', // Корневой путь
+    // Основные файлы приложения (используем './' для совместимости)
+    './', 
     './index.html',
     './admin_dashboard.html',
     './manifest.json',
     
     // Скрипты
+    './config.js',
     './firebase-auth.js',
     './reports.js',
     './main.js',
@@ -18,9 +20,8 @@ const urlsToCache = [
     // Ресурсы
     './icons/icon-192.png',
     './icons/icon-512.png',
-    
-    // Критические CDN библиотеки
-    'https://cdn.tailwindcss.com',
+
+    // Критические CDN библиотеки (Tailwind удален)
     'https://unpkg.com/lucide@latest',
     'https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js',
     'https://telegram.org/js/telegram-web-app.js',
@@ -30,31 +31,26 @@ const urlsToCache = [
 ];
 
 /**
- * Обработчик установки Service Worker: кэширует каждый файл по отдельности.
+ * Обработчик установки Service Worker: кэширует каждый файл по отдельности (безопасный способ).
  */
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(async (cache) => {
-                console.log('Opened cache');
-                
-                let successCount = 0;
                 let failureCount = 0;
                 
                 for (const url of urlsToCache) {
                     try {
-                        // Используем cache.add() для каждого файла
+                        // ИСПРАВЛЕНИЕ: Используем cache.add() с try/catch для обхода ошибки cache.addAll/404/CORS
                         await cache.add(url); 
-                        successCount++;
                     } catch (e) {
-                        // Если файл не найден (404) или запрос не удался, мы просто предупреждаем и пропускаем его
                         console.warn(`SW cache skip: ${url} (Error: ${e.message})`);
                         failureCount++;
                     }
                 }
                 
                 if (failureCount > 0) {
-                     console.warn(`Service Worker installed with ${successCount} files, but ${failureCount} failed to cache.`);
+                     console.warn('Service Worker installed with errors in caching.');
                 } else {
                      console.log('Service Worker installed and all files cached successfully.');
                 }
@@ -64,8 +60,6 @@ self.addEventListener('install', (event) => {
     );
 });
 
-
-// Обработчики activate и fetch остаются без изменений
 /**
  * Обработчик активации: удаляет старые кэши.
  */
