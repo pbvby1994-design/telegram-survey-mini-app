@@ -1,4 +1,4 @@
-// main.js (ФИНАЛЬНАЯ ВЕРСИЯ С АНИМАЦИЯМИ - СИНТАКСИЧЕСКИ ПРОВЕРЕНО)
+// main.js (ФИНАЛЬНАЯ ВЕРСИЯ С НАДЕЖНОЙ ГЕОЛОКАЦИЕЙ)
 
 // --- Глобальные переменные ---
 window.mapInstance = null; 
@@ -95,50 +95,111 @@ function selectSuggestion(suggestion) {
         document.getElementById('addressStatus').textContent = `✅ Адрес найден. Координаты: ${dadataCoords.lat}, ${dadataCoords.lon}`;
     } else {
         dadataCoords = null;
-        document.getElementById('addressStatus').textContent = '⚠️ Координаты для этого адреса отсутствуют.';
+        document.getElementById('addressStatus').textContent = '⚠️ Координаты для этого адреса отсутствуют. Будет запрошена геолокация.';
     }
 }
 
-/**
- * Обработчик отправки формы
- */
-document.getElementById('reportForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    // Блокируем кнопку на время отправки
-    document.getElementById('saveButton').setAttribute('disabled', 'true');
-    document.getElementById('saveButton').innerHTML = '<svg data-lucide="loader" class="w-5 h-5 animate-spin"></svg> <span>Отправка...</span>';
-    lucide.createIcons();
-    
-    const timestamp = new Date();
-    const settlement = document.getElementById('settlement').value;
-    const address = document.getElementById('address').value;
-    const loyalty = document.querySelector('input[name="loyalty"]:checked').value;
-    const action = document.getElementById('action').value;
-    const comment = document.getElementById('comment').value;
+// ----------------------------------------------------------------------
+// ОТПРАВКА ФОРМЫ (ИСПРАВЛЕНА ЛОГИКА ГЕОЛОКАЦИИ)
+// ----------------------------------------------------------------------
 
-    let latitude = dadataCoords ? dadataCoords.lat : null;
-    let longitude = dadataCoords ? dadataCoords.lon : null;
-
-    // Если нет координат из Dadata, пытаемся получить геолокацию
-    if (!latitude || !longitude) {
-        try {
-             // Используем нативную геолокацию
-            const position = await new Promise((resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000, enableHighAccuracy: true });
-            });
-            latitude = position.coords.latitude;
-            longitude = position.coords.longitude;
-            window.showAlert('Геолокация', 'Использованы координаты телефона.');
-        } catch (error) {
-            console.warn("Geolocation failed:", error);
-            window.showAlert('Ошибка координат', 'Не удалось получить координаты из Dadata или геолокации. Отчет будет сохранен без координат.');
+if (document.getElementById('reportForm')) {
+    document.getElementById('reportForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // 1. Проверяем, что адрес валиден (выбран из списка)
+        if (!selectedSuggestionData) {
+            window.showAlert('Ошибка адреса', 'Пожалуйста, выберите адрес из предложенного списка Dadata.');
+            return;
         }
-    }
-    
+
+        // 2. Блокируем кнопку отправки и меняем текст
+        const saveButton = document.getElementById('saveButton');
+        saveButton.setAttribute('disabled', 'true');
+        saveButton.innerHTML = '<svg data-lucide="loader" class="w-5 h-5 animate-spin"></svg> <span>Получение координат...</span>';
+        lucide.createIcons();
+
+        // 3. Запускаем попытку получения координат
+        fetchGeolocationAndSubmit(e.target);
+    });
+}
+
+/**
+ * 1. Получает геолокацию с обработкой ошибок.
+ * 2. Если не удается, использует координаты Dadata (dadataCoords).
+ * 3. Отправляет отчет.
+ * @param {HTMLFormElement} form 
+ */
+function fetchGeolocationAndSubmit(form) {
+    const geoOptions = {
+        enableHighAccuracy: true,
+        timeout: 7000, // Увеличим таймаут для WebApp
+        maximumAge: 0
+    };
+
+    const submitReport = (lat, lon) => {
+        // Устанавливаем полученные координаты, если они есть
+        currentLatitude = lat;
+        currentLongitude = lon;
+
+        // Отправка отчета в Firestore
+        sendReportToFirestore(form);
+    };
+
+    // Если координаты Dadata УЖЕ есть, но геолокация не нужна, можно использовать их сразу
+    // НО: мы всегда стараемся получить Live Geo, как более точную.
+
+    // Пробуем получить геолокацию
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            // УСПЕХ: Получили координаты с устройства
+            console.log("Geolocation obtained from navigator.");
+            window.showAlert('Геолокация', 'Использованы точные координаты телефона.');
+            submitReport(position.coords.latitude, position.coords.longitude);
+        },
+        (error) => {
+            // ОШИБКА: Пользователь запретил, таймаут или другая ошибка
+            console.warn(`Geolocation failed (${error.code}): ${error.message}. Falling back to Dadata coordinates.`);
+            
+            // Fallback: Используем координаты из Dadata
+            if (dadataCoords && dadataCoords.lat && dadataCoords.lon) {
+                console.log("Using Dadata coordinates for report.");
+                window.showAlert('Координаты Dadata', 'Не удалось получить геолокацию. Использованы координаты адреса.');
+                submitReport(dadataCoords.lat, dadataCoords.lon);
+            } else {
+                // КРИТИЧЕСКАЯ ОШИБКА: Нет ни live geo, ни Dadata
+                const saveButton = document.getElementById('saveButton');
+                saveButton.removeAttribute('disabled');
+                saveButton.innerHTML = '<svg data-lucide="send" class="w-5 h-5"></svg> <span>Сохранить отчет</span>';
+                lucide.createIcons();
+
+                window.showAlert('Ошибка координат', 'Не удалось определить координаты. Отчет не сохранен.');
+                
+                // Оповещение Telegram о неудаче
+                if (window.Telegram.WebApp && window.Telegram.WebApp.sendData) {
+                    window.Telegram.WebApp.sendData(JSON.stringify({ status: 'report_failed' }));
+                }
+            }
+        },
+        geoOptions
+    );
+}
+
+/**
+ * Отправляет данные отчета в Firestore
+ * @param {HTMLFormElement} form 
+ */
+async function sendReportToFirestore(form) {
+    const timestamp = new Date();
+    const settlement = form.elements['settlement'].value;
+    const address = form.elements['address'].value;
+    const loyalty = form.elements['loyalty'].value;
+    const action = form.elements['action'].value;
+    const comment = form.elements['comment'].value;
+
     // Объект данных для Firestore
     const reportData = {
-        timestamp: timestamp,
+        timestamp: timestamp, // Будет заменено на serverTimestamp в reports.js/cloud functions
         user_id: window.userTelegramId,
         username: window.userTelegramUsername,
         settlement: settlement,
@@ -146,9 +207,13 @@ document.getElementById('reportForm')?.addEventListener('submit', async (e) => {
         loyalty: loyalty,
         action: action,
         comment: comment,
-        latitude: latitude,
-        longitude: longitude
+        latitude: currentLatitude, // Используем полученные координаты
+        longitude: currentLongitude // Используем полученные координаты
     };
+
+    const saveButton = document.getElementById('saveButton');
+    saveButton.innerHTML = '<svg data-lucide="loader" class="w-5 h-5 animate-spin"></svg> <span>Отправка...</span>';
+    lucide.createIcons();
 
     try {
         const docRef = await window.db.collection('reports').add(reportData);
@@ -165,9 +230,12 @@ document.getElementById('reportForm')?.addEventListener('submit', async (e) => {
         
         // 2. Обновление интерфейса
         window.showAlert('Успех', `Отчет ID: ${docRef.id} успешно сохранен.`);
-        document.getElementById('reportForm').reset();
+        form.reset();
         document.getElementById('addressStatus').textContent = '';
         dadataCoords = null; // Сброс координат
+        selectedSuggestionData = null; // Сброс выбранного адреса
+        currentLatitude = null;
+        currentLongitude = null;
         
         // 3. Обновление Моих Отчетов, если мы на вкладке
         if (window.updateMyReportsView) {
@@ -179,11 +247,11 @@ document.getElementById('reportForm')?.addEventListener('submit', async (e) => {
         window.showAlert('Ошибка Firebase', `Не удалось сохранить отчет: ${error.message}. Проверьте правила безопасности.`);
     } finally {
         // Разблокируем кнопку
-        document.getElementById('saveButton').removeAttribute('disabled');
-        document.getElementById('saveButton').innerHTML = '<svg data-lucide="send" class="w-5 h-5"></svg> <span>Сохранить отчет</span>';
+        saveButton.removeAttribute('disabled');
+        saveButton.innerHTML = '<svg data-lucide="send" class="w-5 h-5"></svg> <span>Сохранить отчет</span>';
         lucide.createIcons();
     }
-});
+}
 
 /**
  * Инициализация Yandex Maps
@@ -206,7 +274,7 @@ window.initMap = function() {
     document.getElementById('mapLoading')?.classList.add('hidden');
 
     // Если раздел "Карта" активен, вызываем загрузку данных для карты
-    if (document.getElementById('map-view').classList.contains('active-tab')) {
+    if (document.getElementById('map-view')?.classList.contains('active-tab')) {
         if (window.loadMapData) {
             window.loadMapData(); 
         }
@@ -216,7 +284,7 @@ window.initMap = function() {
 }
 
 /**
- * ФУНКЦИЯ ДЛЯ ПЛАВНОГО ПЕРЕКЛЮЧЕНИЯ РАЗДЕЛОВ (ОБНОВЛЕННАЯ С АНИМАЦИЕЙ)
+ * ФУНКЦИЯ ДЛЯ ПЛАВНОГО ПЕРЕКЛЮЧЕНИЯ РАЗДЕЛОВ (С АНИМАЦИЕЙ)
  */
 window.showSection = function(sectionId) {
     const sections = document.querySelectorAll('.dashboard-section');
@@ -224,14 +292,14 @@ window.showSection = function(sectionId) {
     // 1. Анимация: Плавное исчезновение текущего раздела
     let currentSection = null;
     sections.forEach(section => {
-        section.classList.remove('active-tab'); // Убираем флаг активности
-        if (!section.classList.contains('hidden') && section.id !== sectionId) {
+        if (section.classList.contains('active-tab')) {
             currentSection = section;
         }
     });
 
     // 2. Добавляем класс скрытия и анимацию (если есть что скрывать)
-    if (currentSection) {
+    if (currentSection && currentSection.id !== sectionId) {
+        currentSection.classList.remove('active-tab'); 
         currentSection.style.opacity = '0';
         setTimeout(() => {
             currentSection.classList.add('hidden');
@@ -241,7 +309,7 @@ window.showSection = function(sectionId) {
             
         }, 250); // Время, чтобы анимация исчезновения прошла
     } else {
-        // Если скрывать нечего, сразу показываем
+        // Если скрывать нечего или разделы совпадают, сразу показываем
         showNewSection(sectionId);
     }
 
@@ -321,6 +389,11 @@ window.loadDashboard = async function() {
         if (window.SETTLEMENTS && document.getElementById('settlement')) {
             const settlementSelect = document.getElementById('settlement');
             const statsFilterSelect = document.getElementById('settlementStatsFilter');
+            const mapFilterSelect = document.getElementById('settlementFilter');
+
+            // Добавляем опцию "Все" для фильтров
+            if (statsFilterSelect) statsFilterSelect.innerHTML = '<option value="all">Все населенные пункты</option>';
+            if (mapFilterSelect) mapFilterSelect.innerHTML = '<option value="all">Все населенные пункты</option>';
             
             // Очищаем существующие опции
             settlementSelect.innerHTML = '<option value="">Выберите населенный пункт</option>';
@@ -336,7 +409,8 @@ window.loadDashboard = async function() {
                 const optionFilter = document.createElement('option');
                 optionFilter.value = settlement;
                 optionFilter.textContent = settlement;
-                statsFilterSelect?.appendChild(optionFilter);
+                statsFilterSelect?.appendChild(optionFilter.cloneNode(true));
+                mapFilterSelect?.appendChild(optionFilter.cloneNode(true));
             });
         }
         
@@ -347,11 +421,13 @@ window.loadDashboard = async function() {
             document.getElementById('btn-stats')?.classList.remove('hidden');
             document.getElementById('btn-raw-data')?.classList.remove('hidden');
             document.getElementById('btn-my-reports-view')?.classList.remove('hidden');
+            document.getElementById('exportCsvButton')?.classList.remove('hidden');
         } else {
             // Агитатор видит только Форму и Мои Отчеты
             document.getElementById('btn-map-view')?.classList.add('hidden');
             document.getElementById('btn-stats')?.classList.add('hidden');
             document.getElementById('btn-raw-data')?.classList.add('hidden');
+            document.getElementById('exportCsvButton')?.classList.add('hidden');
             document.getElementById('btn-my-reports-view')?.classList.remove('hidden');
         }
 
