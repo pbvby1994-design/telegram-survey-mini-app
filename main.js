@@ -6,105 +6,121 @@ let currentLatitude = null;
 let currentLongitude = null;
 let dadataCoords = null;    
 
-// --- КОНФИГУРАЦИЯ DADATA (Из config.js) ---
-const DADATA_API_KEY = '29c85666d57139f459e452d1290dd73c23708472'; 
-const DADATA_LOCATION_FIAS_ID = new URLSearchParams(window.location.search).get('dadata_fias_id') || '86';
+// --- КОНФИГУРАЦИЯ DADATA (Из URL-параметров) ---
+const urlParams = new URLSearchParams(window.location.search);
+
+// Ключ Dadata теперь передается как URL-параметр для безопасности.
+const DADATA_API_KEY = urlParams.get('dadata_token'); 
+// Используем FIAS ID для ограничения поиска.
+const DADATA_LOCATION_FIAS_ID = urlParams.get('dadata_fias_id') || '86'; // '86' - дефолтное значение для ХМАО
 
 let selectedSuggestionData = null; 
 
 const addressInput = document.getElementById('address');
 const suggestionsList = document.getElementById('suggestionsList');
+const addressStatus = document.getElementById('addressStatus');
 
 /**
  * Ручной обработчик ввода для Dadata
  */
 if (addressInput) {
-    // Ручной обработчик ввода для Dadata
-    addressInput.addEventListener('input', async () => {
-        const query = addressInput.value.trim();
-        if (query.length < 3) {
-            suggestionsList?.innerHTML = '';
-            suggestionsList?.classList.add('hidden');
-            addressInput.setAttribute('aria-expanded', 'false'); // ARIA
-            return;
+    if (!DADATA_API_KEY) {
+        console.error("DADATA_API_KEY не найден в URL. Поиск адресов Dadata будет недоступен.");
+        if (addressStatus) {
+            addressStatus.textContent = '⚠️ API Dadata недоступно. Обратитесь к администратору.';
         }
-
-        try {
-            const response = await fetch('https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address', {
-                method: "POST",
-                mode: "cors",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    "Authorization": "Token " + DADATA_API_KEY
-                },
-                body: JSON.stringify({
-                    query: query,
-                    // Дополнительные параметры
-                    count: 10,
-                    locations: [
-                        { 'kladr_id': DADATA_LOCATION_FIAS_ID } // Ограничение по ХМАО
-                    ],
-                })
-            });
-            const data = await response.json();
-            
-            if (data.suggestions && data.suggestions.length > 0) {
-                renderSuggestions(data.suggestions);
-                addressInput.setAttribute('aria-expanded', 'true'); // ARIA
-            } else {
+        addressInput.disabled = true; 
+    } else {
+        // Ручной обработчик ввода для Dadata
+        addressInput.addEventListener('input', async () => {
+            const query = addressInput.value.trim();
+            if (query.length < 3) {
                 suggestionsList?.innerHTML = '';
                 suggestionsList?.classList.add('hidden');
                 addressInput.setAttribute('aria-expanded', 'false'); // ARIA
+                return;
             }
-        } catch (error) {
-            console.error("Dadata API call failed:", error);
-            suggestionsList?.innerHTML = `<li class="p-2 text-red-500 text-sm" role="alert">Ошибка загрузки адресов.</li>`;
-            suggestionsList?.classList.remove('hidden');
-            addressInput.setAttribute('aria-expanded', 'true'); // ARIA
+
+            try {
+                const response = await fetch('https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address', {
+                    method: "POST",
+                    mode: "cors",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                        "Authorization": "Token " + DADATA_API_KEY
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        // Дополнительные параметры
+                        count: 10,
+                        locations: [
+                            { 'kladr_id': DADATA_LOCATION_FIAS_ID } 
+                        ],
+                    })
+                });
+                const data = await response.json();
+                
+                if (data.suggestions && data.suggestions.length > 0) {
+                    renderSuggestions(data.suggestions);
+                    addressInput.setAttribute('aria-expanded', 'true'); // ARIA
+                } else {
+                    suggestionsList?.innerHTML = '';
+                    suggestionsList?.classList.add('hidden');
+                    addressInput.setAttribute('aria-expanded', 'false'); // ARIA
+                }
+            } catch (error) {
+                console.error("Dadata API call failed:", error);
+                suggestionsList?.innerHTML = `<li class="p-2 text-red-500 text-sm" role="alert">Ошибка загрузки адресов.</li>`;
+                suggestionsList?.classList.remove('hidden');
+                addressInput.setAttribute('aria-expanded', 'true'); // ARIA
+            }
+        });
+
+        // Функция отрисовки подсказок
+        function renderSuggestions(suggestions) {
+            if (!suggestionsList) return;
+            suggestionsList.innerHTML = '';
+            suggestionsList.classList.remove('hidden');
+
+            suggestions.forEach(suggestion => {
+                const li = document.createElement('li');
+                li.className = 'p-2 cursor-pointer hover:bg-indigo-100 text-sm text-gray-700';
+                li.textContent = suggestion.value;
+                li.setAttribute('role', 'option'); // ARIA
+                li.onclick = () => selectSuggestion(suggestion);
+                suggestionsList.appendChild(li);
+            });
         }
-    });
 
-    // Функция отрисовки подсказок
-    function renderSuggestions(suggestions) {
-        suggestionsList.innerHTML = '';
-        suggestionsList.classList.remove('hidden');
+        // Функция выбора подсказки
+        function selectSuggestion(suggestion) {
+            selectedSuggestionData = suggestion.data;
+            addressInput.value = suggestion.value;
+            suggestionsList?.innerHTML = '';
+            suggestionsList?.classList.add('hidden');
+            addressInput.setAttribute('aria-expanded', 'false'); // ARIA
 
-        suggestions.forEach(suggestion => {
-            const li = document.createElement('li');
-            li.className = 'p-2 cursor-pointer hover:bg-indigo-100 text-sm text-gray-700';
-            li.textContent = suggestion.value;
-            li.setAttribute('role', 'option'); // ARIA
-            li.onclick = () => selectSuggestion(suggestion);
-            suggestionsList.appendChild(li);
+            // Сохранение координат
+            dadataCoords = {
+                lat: suggestion.data.geo_lat,
+                lon: suggestion.data.geo_lon
+            };
+            if (addressStatus) {
+                addressStatus.textContent = dadataCoords.lat && dadataCoords.lon ? 
+                    `Координаты: ${dadataCoords.lat}, ${dadataCoords.lon}` : 
+                    'Координаты не найдены.';
+            }
+        }
+
+        // Закрытие списка подсказок при клике вне
+        document.addEventListener('click', (e) => {
+            if (suggestionsList && !suggestionsList.contains(e.target) && e.target !== addressInput) {
+                suggestionsList.classList.add('hidden');
+                addressInput.setAttribute('aria-expanded', 'false'); // ARIA
+            }
         });
     }
-
-    // Функция выбора подсказки
-    function selectSuggestion(suggestion) {
-        selectedSuggestionData = suggestion.data;
-        addressInput.value = suggestion.value;
-        suggestionsList.innerHTML = '';
-        suggestionsList.classList.add('hidden');
-        addressInput.setAttribute('aria-expanded', 'false'); // ARIA
-
-        // Сохранение координат
-        dadataCoords = {
-            lat: suggestion.data.geo_lat,
-            lon: suggestion.data.geo_lon
-        };
-        document.getElementById('addressStatus').textContent = dadataCoords.lat && dadataCoords.lon ? 
-            `Координаты: ${dadataCoords.lat}, ${dadataCoords.lon}` : 
-            'Координаты не найдены.';
-    }
-
-    // Закрытие списка подсказок при клике вне
-    document.addEventListener('click', (e) => {
-        if (suggestionsList && !suggestionsList.contains(e.target) && e.target !== addressInput) {
-            suggestionsList.classList.add('hidden');
-            addressInput.setAttribute('aria-expanded', 'false'); // ARIA
-        }
-    });
 }
 
 
@@ -163,9 +179,6 @@ window.showSection = function(sectionId) {
     lucide.createIcons();
 }
 
-// ... [Остальные функции syncOfflineReports, handleFormSubmit, loadDashboard остаются без изменений, 
-// так как основные ARIA-фиксы добавлены в HTML и showSection] ...
-
 /**
  * Инициализирует Yandex Map.
  * Вызывается асинхронно через глобальный колбэк ymapsReadyCallback в HTML.
@@ -209,7 +222,6 @@ async function handleFormSubmit(event) {
     saveButton.innerHTML = '<svg data-lucide="loader" class="w-5 h-5 mr-2 animate-spin" aria-hidden="true"></svg> Отправка...';
     lucide.createIcons();
 
-    // ... [Логика сбора данных] ...
     const reportData = {
         settlement: document.getElementById('settlement').value,
         address: selectedSuggestionData?.value || document.getElementById('address').value,
@@ -225,7 +237,6 @@ async function handleFormSubmit(event) {
         
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
     };
-    // ... [Логика оффлайн / синхронизации] ...
     
     // 1. Проверяем статус сети
     if (!navigator.onLine) {
@@ -234,18 +245,16 @@ async function handleFormSubmit(event) {
             window.showAlert('ОТЧЕТ СОХРАНЕН', `Нет подключения к сети. Отчет временно сохранен локально (ID: ${key}). Он будет отправлен при восстановлении сети.`);
             document.getElementById('reportForm').reset();
             saveButton.innerHTML = '<svg data-lucide="send" class="w-5 h-5 mr-2" aria-hidden="true"></svg> Сохранить отчет';
-            // ... [Сброс иконки] ...
         } catch (error) {
             console.error("Failed to save report to IndexedDB:", error);
             window.showAlert('Ошибка', 'Не удалось сохранить отчет локально. Пожалуйста, попробуйте еще раз.');
             saveButton.innerHTML = '<svg data-lucide="send" class="w-5 h-5 mr-2" aria-hidden="true"></svg> Сохранить отчет';
-            // ... [Сброс иконки] ...
         }
         saveButton.disabled = false;
         lucide.createIcons();
         selectedSuggestionData = null; 
         dadataCoords = null;
-        document.getElementById('addressStatus').textContent = '';
+        if (addressStatus) addressStatus.textContent = '';
         return;
     }
     
@@ -266,7 +275,7 @@ async function handleFormSubmit(event) {
         
         selectedSuggestionData = null; 
         dadataCoords = null;
-        document.getElementById('addressStatus').textContent = '';
+        if (addressStatus) addressStatus.textContent = '';
         
         await syncOfflineReports();
         
@@ -283,7 +292,7 @@ async function handleFormSubmit(event) {
                 document.getElementById('reportForm').reset(); 
                 selectedSuggestionData = null; 
                 dadataCoords = null;
-                document.getElementById('addressStatus').textContent = '';
+                if (addressStatus) addressStatus.textContent = '';
                 
             } catch (localError) {
                 console.error("Failed fallback save to IndexedDB:", localError);
@@ -369,6 +378,8 @@ window.loadDashboard = async function() {
 
         // 5. [НОВОЕ] Добавляем прослушиватели событий для автоматической синхронизации
         window.addEventListener('online', syncOfflineReports);
+        // Добавляем обработчик отправки формы
+        document.getElementById('reportForm')?.addEventListener('submit', handleFormSubmit);
 
         // 6. Загрузка данных (для админов и агитаторов)
         if (window.loadReports) {
