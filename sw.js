@@ -10,10 +10,15 @@ const urlsToCache = [
     '/manifest.json',
     
     // Скрипты
-    '/firebase-auth.js',
-    '/reports.js',
-    '/main.js',
-    '/offline_db.js',
+    // '/config.js', // ❌ УДАЛЕНО: Файл пуст и не существует, вызывает ошибку 404
+    './firebase-auth.js',
+    './reports.js',
+    './main.js',
+    './offline_db.js', 
+    
+    // CSS, иконки (убедитесь, что папка icons существует)
+    './icons/icon-192.png',
+    './icons/icon-512.png',
     
     // Критические CDN библиотеки (Firebase, Chart.js, Tailwind, Lucide, Telegram WebApp)
     'https://cdn.tailwindcss.com',
@@ -23,45 +28,37 @@ const urlsToCache = [
     'https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js',
     'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js',
     'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js',
-    
-    // Шрифты
-    'https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap',
-    'https://fonts.gstatic.com'
+    // ... Добавьте другие важные шрифты/ресурсы CDN, если они используются
 ];
 
-// ----------------------------------------------------------------------
-// INSTALLATION
-// ----------------------------------------------------------------------
-
-self.addEventListener('install', event => {
-    // Пропускаем ожидание и активируем SW немедленно
-    self.skipWaiting(); 
-    
+/**
+ * Обработчик установки Service Worker: кэширует все необходимые файлы.
+ */
+self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then(cache => {
+            .then((cache) => {
                 console.log('Opened cache');
-                // Добавляем все критические ресурсы в кэш
+                // Проверяем, что все пути начинаются с `./` для относительной корректности
                 return cache.addAll(urlsToCache); 
+            })
+            .catch(error => {
+                console.error('Service Worker: cache.addAll failed:', error);
+                // Важно: если addAll падает, SW не будет установлен.
             })
     );
 });
 
-// ----------------------------------------------------------------------
-// ACTIVATION
-// ----------------------------------------------------------------------
-
-self.addEventListener('activate', event => {
-    // Заставляем Service Worker контролировать все страницы немедленно
-    event.waitUntil(self.clients.claim()); 
-    
+/**
+ * Обработчик активации: удаляет старые кэши.
+ */
+self.addEventListener('activate', (event) => {
+    const cacheWhitelist = [CACHE_NAME];
     event.waitUntil(
-        // Удаляем старые кэши
-        caches.keys().then(cacheNames => {
+        caches.keys().then((cacheNames) => {
             return Promise.all(
-                cacheNames.map(cacheName => {
-                    if (cacheName !== CACHE_NAME) {
-                        console.log('Service Worker: Deleting old cache', cacheName);
+                cacheNames.map((cacheName) => {
+                    if (cacheWhitelist.indexOf(cacheName) === -1) {
                         return caches.delete(cacheName);
                     }
                 })
@@ -70,30 +67,32 @@ self.addEventListener('activate', event => {
     );
 });
 
-// ----------------------------------------------------------------------
-// FETCHING
-// ----------------------------------------------------------------------
+/**
+ * Обработчик fetch: стратегия Cache First (для статики) и Network First (для API/отчетов).
+ */
+self.addEventListener('fetch', (event) => {
+    const requestUrl = new URL(event.request.url);
 
-self.addEventListener('fetch', event => {
-    // Пропускаем запросы Firebase Firestore, чтобы они всегда шли в сеть
-    if (event.request.url.includes('firestore.googleapis.com')) {
-        return;
-    }
-    
-    // Пропускаем запросы Dadata и Yandex Maps, чтобы они всегда шли в сеть (Network Only)
-    if (event.request.url.includes('suggestions.dadata.ru') || 
-        event.request.url.includes('api-maps.yandex.ru')) {
+    // 1. Исключаем запросы Firebase и Dadata API из кэширования
+    // Они должны всегда идти в сеть (Network Only / Network First)
+    if (requestUrl.hostname.includes('googleapis.com') ||
+        requestUrl.hostname.includes('firebaseio.com') ||
+        requestUrl.hostname.includes('dadata.ru') ||
+        requestUrl.pathname.includes('/auth') || 
+        requestUrl.pathname.includes('/rs/suggest')) 
+    {
+        // Network Only - идем только в сеть
         event.respondWith(
             fetch(event.request).catch(error => {
-                 console.error('Service Worker: Fetch failed (API)', error);
-                 // Здесь важно не возвращать ошибку, чтобы main.js мог сохранить оффлайн
+                 console.error('Service Worker: Firebase/Dadata fetch failed (Network Only)', error);
+                 // Не перехватываем ошибку здесь, чтобы main.js мог сохранить оффлайн
                  throw error; 
             })
         );
         return;
     }
     
-    // Для всех остальных (статических) ресурсов: Cache First
+    // 2. Для всех остальных (статических) ресурсов: Cache First
     event.respondWith(
         caches.match(event.request)
             .then(response => {
