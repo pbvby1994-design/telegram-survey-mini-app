@@ -37,126 +37,124 @@ window.initializeFirebase = function() {
     }
 
     // 0. Проверка загрузки Firebase SDK
-    if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Firebase SDK не загружен. Проверьте подключение CDN в HTML.');
+    if (!window.firebase || !window.firebase.apps.length) {
+        // Проверяем, что библиотеки Firebase загружены
+        console.error("Firebase SDK not loaded.");
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Не удалось загрузить Firebase SDK.');
+        return false;
+    }
+
+    // 1. Получение токена
+    token = getUrlParameter('auth_token');
+    if (!token) {
+        console.error("Firebase Custom Token (auth_token) not found in URL.");
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Токен аутентификации не найден. Пожалуйста, запустите приложение из Telegram.');
         return false;
     }
     
-    // 1. Считывание всех параметров из URL
-    const configBase64 = getUrlParameter('config'); // <-- ИЩЕМ ЕДИНЫЙ ПАРАМЕТР 'config'
-    token = getUrlParameter('token'); 
+    // 2. Получение Telegram Auth Data
     window.userTelegramId = getUrlParameter('user_id');
-    window.userTelegramUsername = getUrlParameter('username');
-    const adminUrlParam = getUrlParameter('is_admin');
-    
-    
-    if (!configBase64 || !token || !window.userTelegramId) {
-        // Убрали showAlert, т.к. его должен вызвать document.addEventListener в index.html
-        console.error("Отсутствуют обязательные параметры URL (config, token, user_id).");
+    window.userTelegramUsername = getUrlParameter('user_username');
+
+    // 3. Получение Base64 Config
+    const configBase64 = getUrlParameter('config');
+    if (!configBase64) {
+        console.error("Base64 Config not found in URL.");
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Конфигурация Firebase не найдена.');
         return false;
     }
-    
-    let configData;
-    // 2. Декодирование и парсинг Base64
+
+    // 4. Парсинг Config
+    let config = {};
     try {
         const configJson = atob(configBase64);
-        configData = JSON.parse(configJson);
-        
-        // --- СОХРАНЕНИЕ КЛЮЧЕЙ ИЗ КОНФИГАЦИИ В ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
-        window.DADATA_API_KEY = configData.dadata_token || null;
-        window.YANDEX_MAP_KEY = configData.ymaps_api_key || null;
-        const firebaseConfig = configData.firebase_config;
-
-        if (!firebaseConfig || !firebaseConfig.apiKey) {
-            throw new Error("Missing critical Firebase fields inside config.");
-        }
-        
-        // Сохраняем публичную конфигурацию Firebase для инициализации
-        window.FIREBASE_CONFIG = firebaseConfig; 
-        
-    } catch (e) {
-        console.error("Failed to decode or parse config:", e);
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось проанализировать конфигурацию (config). Ошибка: ${e.message}`);
-        return false;
-    }
-    
-    // 3. Инициализация Firebase
-    try {
-        if (!firebase.apps.length) {
-            app = firebase.initializeApp(window.FIREBASE_CONFIG);
-            window.db = firebase.firestore(app);
-            window.auth = firebase.auth(app);
-            console.log("Firebase initialized successfully.");
-        }
-        
-        // 4. Установка статуса администратора (приоритет у токена, но URL может быть базой)
-        if (adminUrlParam === 'true') {
-            window.isAdmin = true; 
-        }
-        
-        return true;
-    } catch (e) {
-        console.error("Firebase initialization failed:", e);
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось инициализировать Firebase: ${e.message}. Проверьте правильность ключей.`);
-        return false;
-    }
-};
-
-// ----------------------------------------------------------------------
-// АУТЕНТИФИКАЦИЯ
-// ----------------------------------------------------------------------
-
-window.checkAdminStatus = async function() {
-    const telegramAuthInfo = document.getElementById('telegramAuthInfo');
-    const saveButton = document.getElementById('saveButton'); 
-    const debugAdminStatus = document.getElementById('debugAdminStatus');
-
-    if (!token) {
-        console.warn("Custom token not found in URL.");
-        saveButton?.setAttribute('disabled', 'true');
-        telegramAuthInfo.textContent = '❌ Требуется токен аутентификации.';
-        return false; 
-    }
-    
-    try {
-        const userCredential = await window.auth.signInWithCustomToken(token);
-        const idTokenResult = await userCredential.user.getIdTokenResult();
-        
-        // Проверка isAdmin из claims токена Firebase
-        if (idTokenResult.claims && idTokenResult.claims.admin) {
-             const tokenAdmin = idTokenResult.claims.admin;
-             window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
-        }
-        
-        // Отображение статуса
-        debugAdminStatus?.textContent = window.isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
-        saveButton?.removeAttribute('disabled');
-        telegramAuthInfo.textContent = `✅ Аутентификация успешна. Роль: ${window.isAdmin ? 'Администратор' : 'Агитатор'}`;
-        
-        // Показ кнопки администратора
-        if (window.isAdmin && document.getElementById('adminButton')) {
-             document.getElementById('adminButton').style.display = 'flex';
-             
-             // Для плавной анимации (stagger)
-             const adminButton = document.getElementById('adminButton');
-             if (adminButton.classList.contains('stagger-item')) {
-                 adminButton.style.opacity = 0; 
-                 setTimeout(() => {
-                    adminButton.style.opacity = 1; 
-                 }, 10);
-             }
-        }
-        
-        return true;
+        config = JSON.parse(configJson);
     } catch (error) {
-        console.error("Firebase Custom Token Auth failed:", error);
-        
-        debugAdminStatus?.textContent = 'ОШИБКА АУТЕНТИФИКАЦИИ'; 
-        telegramAuthInfo.textContent = '❌ Ошибка аутентификации Firebase.';
-        
-        window.showAlert('ОШИБКА АУТЕНТИФИКАЦИИ', `Не удалось войти: ${error.message}. Проверьте Custom Token.`);
-        saveButton?.setAttribute('disabled', 'true');
-        
+        console.error("Failed to parse or decode Base64 config:", error);
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Не удалось декодировать или распарсить конфигурацию.');
         return false;
     }
-};
+    
+    // 5. Инициализация Firebase App (если еще не инициализировано)
+    if (!app) {
+        // Инициализация с данными из Base64 config
+        app = window.firebase.initializeApp(config.FIREBASE_CONFIG); 
+        window.db = window.firebase.firestore();
+        window.auth = window.firebase.auth();
+    }
+    
+    // 6. Установка глобальных ключей API
+    if (config.DADATA_TOKEN) {
+        window.DADATA_API_KEY = config.DADATA_TOKEN;
+    } else {
+        console.warn("DADATA_API_KEY is missing from config. Dadata features may not work.");
+    }
+
+    if (config.YMAPS_API_KEY) {
+        window.YANDEX_MAP_KEY = config.YMAPS_API_KEY;
+    } else {
+        console.warn("YANDEX_MAP_KEY is missing from config. Yandex Maps may not work.");
+    }
+    
+    // 7. Аутентификация
+    const telegramAuthInfo = document.getElementById('telegramAuthInfo');
+    const debugAdminStatus = document.getElementById('debugAdminStatus');
+    const saveButton = document.getElementById('saveButton'); // Для main.js
+
+    // Вызываем alert и блокируем кнопку немедленно, если аутентификация не удалась
+    if (!window.auth) {
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Firebase Auth не инициализирован.');
+        saveButton?.disabled = true;
+        return false;
+    }
+    
+    // Синхронный вызов аутентификации
+    window.auth.signInWithCustomToken(token)
+        .then(async (userCredential) => {
+            const user = userCredential.user;
+            
+            // Получение claims (обновляется асинхронно)
+            const idTokenResult = await user.getIdTokenResult(true);
+            
+            // Проверка claims для admin статуса
+            const tokenAdmin = idTokenResult.claims.admin;
+            if (tokenAdmin !== undefined) {
+                // ВАЖНО: Никаких присваиваний в условии, только сравнение
+                window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
+            }
+            
+            // Отображение статуса
+            debugAdminStatus?.textContent = window.isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
+            saveButton?.removeAttribute('disabled');
+            telegramAuthInfo.textContent = `✅ Аутентификация успешна. Роль: ${window.isAdmin ? 'Администратор' : 'Агитатор'}`;
+            
+            // Показ кнопки администратора
+            if (window.isAdmin && document.getElementById('adminButton')) {
+                 document.getElementById('adminButton').style.display = 'flex';
+                 
+                 // Для плавной анимации (stagger)
+                 const adminButton = document.getElementById('adminButton');
+                 if (adminButton.classList.contains('stagger-item')) {
+                     adminButton.style.opacity = 0; 
+                     setTimeout(() => {
+                        adminButton.style.opacity = 1; 
+                     }, 10);
+                 }
+            }
+            
+            return true;
+        })
+        .catch((error) => {
+            console.error("Firebase Custom Token Auth failed:", error);
+            
+            debugAdminStatus?.textContent = 'ОШИБКА АУТЕНТИФИКАЦИИ'; 
+            telegramAuthInfo.textContent = '❌ Ошибка аутентификации Firebase.';
+            
+            window.showAlert('ОШИБКА АУТЕНТИФИКАЦИИ', `Не удалось войти: ${error.message}. Проверьте Custom Token.`);
+            saveButton?.disabled = true;
+            return false;
+        });
+
+    // Возвращаем true, чтобы основной скрипт продолжил работу (ожидая асинхронной аутентификации)
+    return true; 
+}
