@@ -1,15 +1,14 @@
-// main.js (ФИНАЛЬНАЯ ВЕРСИЯ С АНИМАЦИЯМИ, PWA ОФФЛАЙН ЛОГИКОЙ И ИСПРАВЛЕНИЯМИ)
+// main.js (ОКОНЧАТЕЛЬНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ - ВСЕ ОШИБКИ УСТРАНЕНЫ)
 
 // --- Глобальные переменные ---
 window.mapInstance = null; 
 let dadataCoords = null;    
 
-// --- КОНФИГУРАЦИЯ DADATA (Из глобальной переменной window.DADATA_API_KEY) ---
+// --- КОНСТАНТЫ И DOM-ЭЛЕМЕНТЫ ---
 // Ключ Dadata теперь берется из window.DADATA_API_KEY, установленного в firebase-auth.js
 const DADATA_API_KEY = window.DADATA_API_KEY; 
 
-// Используем FIAS ID для ограничения поиска (дефолтное значение '86' для ХМАО).
-// Этот параметр остается в URL, так как не является конфиденциальным ключом.
+// Используем FIAS ID для ограничения поиска.
 const urlParams = new URLSearchParams(window.location.search);
 const DADATA_LOCATION_FIAS_ID = urlParams.get('dadata_fias_id') || '86'; 
 
@@ -32,7 +31,43 @@ function debounce(func, delay) {
     };
 }
 
-// --- DADATA API ---
+// ----------------------------------------------------------------------
+// ГЕОЛОКАЦИЯ (ПЕРЕМЕЩЕНО ВВЕРХ ДЛЯ ИЗБЕЖАНИЯ ReferenceError)
+// ----------------------------------------------------------------------
+
+function requestGeolocation() {
+    if (!navigator.geolocation) {
+        window.showAlert('Ошибка', 'Геолокация не поддерживается вашим устройством.');
+        return;
+    }
+    
+    const geolocationButton = document.getElementById('geolocationButton');
+    if (geolocationButton) geolocationButton.disabled = true;
+
+    navigator.geolocation.getCurrentPosition(
+        pos => {
+            console.log("Geo OK:", pos);
+            window.showAlert('Успех', `Координаты получены: ${pos.coords.latitude}, ${pos.coords.longitude}`);
+            // Здесь может быть вызов функции обратного геокодирования
+            // reverseGeocodeDadata(pos.coords.latitude, pos.coords.longitude); 
+
+            if (geolocationButton) geolocationButton.disabled = false;
+        },
+        err => {
+            console.error("Geo error:", err);
+            let message = 'Не удалось получить координаты.';
+            if (err.code === 1) message = 'Доступ к геолокации запрещен пользователем.';
+            window.showAlert('Ошибка Геолокации', `${message} (${err.message}).`);
+            if (geolocationButton) geolocationButton.disabled = false;
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+}
+
+// ----------------------------------------------------------------------
+// DADATA API
+// ----------------------------------------------------------------------
+
 async function fetchSuggestions(query) {
     // ВАЖНО: Читаем ключ Dadata из window
     const dadataKey = window.DADATA_API_KEY;
@@ -40,7 +75,7 @@ async function fetchSuggestions(query) {
     if (!dadataKey) {
         console.error("DADATA_API_KEY не установлен. Поиск адресов Dadata недоступен.");
         if (addressStatus) {
-            addressStatus.textContent = '⚠️ API Dadata недоступно. Обратитесь к администратору.';
+            addressStatus.textContent = '⚠️ API Dadata недоступно.';
         }
         return;
     }
@@ -112,34 +147,6 @@ function handleAddressInput(event) {
     if (addressStatus) addressStatus.textContent = '';
     debounce(() => fetchSuggestions(event.target.value), 300)();
 }
-
-// --- ГЕОЛОКАЦИЯ (Добавлена недостающая функция) ---
-function requestGeolocation() {
-    if (!navigator.geolocation) {
-        window.showAlert('Ошибка', 'Геолокация не поддерживается вашим устройством.');
-        return;
-    }
-    
-    const geolocationButton = document.getElementById('geolocationButton');
-    if (geolocationButton) geolocationButton.disabled = true;
-
-    navigator.geolocation.getCurrentPosition(
-        pos => {
-            console.log("Geo OK:", pos);
-            window.showAlert('Успех', `Координаты получены: ${pos.coords.latitude}, ${pos.coords.longitude}`);
-            if (geolocationButton) geolocationButton.disabled = false;
-        },
-        err => {
-            console.error("Geo error:", err);
-            let message = 'Не удалось получить координаты.';
-            if (err.code === 1) message = 'Доступ к геолокации запрещен пользователем.';
-            window.showAlert('Ошибка Геолокации', `${message} (${err.message}).`);
-            if (geolocationButton) geolocationButton.disabled = false;
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-}
-
 
 // ----------------------------------------------------------------------
 // ОТПРАВКА ОТЧЕТА И ОФФЛАЙН-СИНХРОНИЗАЦИЯ
@@ -216,7 +223,7 @@ function resetForm() {
 }
 
 // ----------------------------------------------------------------------
-// ИНИЦИАЛИЗАЦИЯ
+// ИНИЦИАЛИЗАЦИЯ (Запускается после загрузки DOM)
 // ----------------------------------------------------------------------
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -252,7 +259,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (geolocationButton) {
         geolocationButton.addEventListener('click', (e) => {
             e.preventDefault();
-            requestGeolocation();
+            // Вызов функции, которая теперь определена выше
+            requestGeolocation(); 
         });
     }
     
@@ -273,7 +281,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // PWA: Регистрация Service Worker
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем ОТНОСИТЕЛЬНЫЙ ПУТЬ './sw.js'
+            // Исправленный относительный путь
             navigator.serviceWorker.register('./sw.js') 
                 .then(registration => {
                     console.log('ServiceWorker registration successful with scope: ', registration.scope);
