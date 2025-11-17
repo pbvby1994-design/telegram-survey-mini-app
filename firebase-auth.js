@@ -1,4 +1,4 @@
-// firebase-auth.js (СИНТАКСИЧЕСКИ ПРАВИЛЬНАЯ ВЕРСИЯ)
+// firebase-auth.js (ОКОНЧАТЕЛЬНАЯ ВЕРСИЯ - СИНТАКСИЧЕСКИ ПРАВИЛЬНАЯ)
 
 // --- Глобальные переменные ---
 let app = null;
@@ -6,7 +6,7 @@ window.db = null;
 window.auth = null;
 window.userTelegramId = null;
 window.userTelegramUsername = null;
-window.isAdmin = false;
+window.isAdmin = false; 
 
 let token = null;
 
@@ -17,10 +17,11 @@ function getUrlParameter(name) {
 }
 
 // ----------------------------------------------------------------------
-// ИНИЦИАЛИЗАЦИЯ
+// ИНИЦИАЛИЗАЦИЯ И ПОЛУЧЕНИЕ ПАРАМЕТРОВ ИЗ URL
 // ----------------------------------------------------------------------
 
 window.initializeFirebase = function() {
+    // Эта проверка срабатывает, если CDN не загрузился
     if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
         window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Firebase SDK не загружен.');
         return false;
@@ -34,10 +35,10 @@ window.initializeFirebase = function() {
     window.userTelegramId = getUrlParameter('user_id');
     window.userTelegramUsername = getUrlParameter('username');
     
-    // 
+    // Около строки 83: Проверка параметра is_admin
     const adminUrlParam = getUrlParameter('is_admin');
     if (adminUrlParam === 'true') {
-        // 👇 ИСПРАВЛЕНИЕ СТРОКИ 83: Чистое присваивание
+        // 👇 ВАЖНО: Только оператор присваивания '='
         window.isAdmin = true; 
     }
     
@@ -74,13 +75,16 @@ window.initializeFirebase = function() {
 // ----------------------------------------------------------------------
 
 window.checkAdminStatus = async function() {
+    // В index.html нет этих элементов, используем ?.
+    const telegramAuthInfo = document.getElementById('telegramAuthInfo');
+    const saveButton = document.getElementById('saveButton'); 
+    const debugAdminStatus = document.getElementById('debugAdminStatus');
+
     if (!token) {
         console.warn("Custom token not found in URL.");
-        document.getElementById('saveButton')?.setAttribute('disabled', 'true');
-        
-        // Добавлен ?.
-        document.getElementById('debugAdminStatus')?.textContent = "ОТКАЗ (Нет токена)";
-        
+        saveButton?.setAttribute('disabled', 'true');
+        debugAdminStatus?.textContent = "ОТКАЗ (Нет токена)";
+        telegramAuthInfo.textContent = '❌ Требуется токен аутентификации.';
         return false; 
     }
     
@@ -93,14 +97,14 @@ window.checkAdminStatus = async function() {
              window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
         }
         
-        // Добавлен ?.
-        document.getElementById('debugAdminStatus')?.textContent = window.isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
-        
-        document.getElementById('saveButton')?.removeAttribute('disabled');
+        debugAdminStatus?.textContent = window.isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
+        saveButton?.removeAttribute('disabled');
+        telegramAuthInfo.textContent = `✅ Аутентификация успешна. Роль: ${window.isAdmin ? 'Администратор' : 'Агитатор'}`;
         
         if (window.isAdmin && document.getElementById('adminButton')) {
              document.getElementById('adminButton').style.display = 'flex';
              
+             // Для плавной анимации
              if (document.getElementById('adminButton').classList.contains('stagger-item')) {
                  document.getElementById('adminButton').style.opacity = 0; 
                  setTimeout(() => {
@@ -113,11 +117,11 @@ window.checkAdminStatus = async function() {
     } catch (error) {
         console.error("Firebase Custom Token Auth failed:", error);
         
-        // Добавлен ?.
-        document.getElementById('debugAdminStatus')?.textContent = 'ОШИБКА АУТЕНТИФИКАЦИИ';
+        debugAdminStatus?.textContent = 'ОШИБКА АУТЕНТИФИКАЦИИ';
+        telegramAuthInfo.textContent = '❌ Ошибка аутентификации Firebase.';
         
         window.showAlert('ОШИБКА АУТЕНТИФИКАЦИИ', `Не удалось войти: ${error.message}. Проверьте Custom Token.`);
-        document.getElementById('saveButton')?.setAttribute('disabled', 'true');
+        saveButton?.setAttribute('disabled', 'true');
         
         return false;
     }
