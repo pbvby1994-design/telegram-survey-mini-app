@@ -14,275 +14,222 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-    <script src="https://api-maps.yandex.ru/2.1/?apikey=35d34bfb-514d-42c1-b37d-cb751ea4793e&lang=ru_RU&onload=initMap" type="text/javascript" async></script>
+    <script>
+        // Yandex Maps API вызовет эту функцию, как только сам API будет готов.
+        // Она, в свою очередь, безопасно вызывает window.initMap, которая определена в main.js
+        window.ymapsReadyCallback = function() {
+            if (typeof window.initMap === 'function') {
+                window.initMap();
+            } else {
+                console.warn("Yandex Maps API загружен, но window.initMap еще не определена. Ожидание main.js.");
+                // В этом случае mapInstance будет инициализирован, когда main.js все-таки загрузится.
+            }
+        };
+    </script>
+    
+    <script src="https://api-maps.yandex.ru/2.1/?apikey=35d34bfb-514d-42c1-b37d-cb751ea4793e&lang=ru_RU&callback=ymapsReadyCallback" type="text/javascript" async></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <script src="./firebase-auth.js"></script>
-    <script src="./reports.js"></script>
-    <script src="./main.js"></script>
-
     <style>
         body { 
             font-family: 'Jost', sans-serif;
-            background-color: #f0f3f6; /* Мягкий, современный фон */
+            background-color: #f4f4f5;
         }
-        /* Глобальный контейнер для стилей карточек */
-        .content-card {
-            background-color: #f9f9f9;
-            border-radius: 16px; /* Более округлые углы */
-            box-shadow: 
-                6px 6px 12px rgba(0, 0, 0, 0.1),
-                -6px -6px 12px rgba(255, 255, 255, 0.9);
-            padding: 24px;
-        }
-        /* Стиль для плавного переключения разделов */
         .dashboard-section {
             transition: opacity 0.3s ease-in-out;
         }
-        /* Стиль модального окна */
-        .modal {
-            background-color: rgba(0, 0, 0, 0.5);
-        }
-        /* Стилизация кнопки-таба */
-        .tab-button {
-            border-radius: 10px;
-            font-weight: 500;
-            transition: all 0.2s ease;
+        .hidden {
+            display: none !important;
         }
         .tab-button.active {
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
-        }
-        /* Стиль для инпутов */
-        input:not([type="radio"]):not([type="checkbox"]), select, textarea {
-            border-radius: 10px;
-            border: 1px solid #d1d5db;
-            padding: 10px 14px;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        }
-        input:focus, select:focus, textarea:focus {
-            border-color: #4f46e5;
-            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
-            outline: none;
-        }
-        #map {
-             /* Убеждаемся, что карта занимает всю высоту, доступную родительскому блоку */
-            height: 500px;
-            min-height: 300px; 
-            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
         }
     </style>
+
+    <script src="./firebase-auth.js"></script>
+    <script src="./reports.js"></script>
+    <script src="./main.js"></script>
 </head>
-<body class="p-4">
+<body class="p-2 sm:p-4 pb-20">
+
+    <header class="mb-4 bg-white p-4 rounded-xl shadow-md">
+        <h1 class="text-2xl font-bold text-gray-800">Блокнот Агитатора</h1>
+        <p id="telegramAuthInfo" class="text-sm font-medium text-indigo-600 mt-1">Идет аутентификация...</p>
+        <div class="text-xs text-gray-500 mt-1">
+            Пользователь: <span id="authUsername">...</span> (<span id="authId">...</span>)
+            <span id="debugAdminStatus" class="font-bold text-red-500 ml-2 hidden"></span>
+        </div>
+    </header>
+
+    <div class="flex flex-wrap gap-2 mb-4">
+        <button id="btn-form-view" onclick="showSection('form-view')" class="tab-button flex items-center px-4 py-2 text-sm font-medium rounded-lg transition duration-200 bg-indigo-600 text-white active">
+            <svg data-lucide="send" class="w-4 h-4 mr-1"></svg> Форма
+        </button>
+        <button id="btn-my-reports-view" onclick="showSection('my-reports-view')" class="tab-button flex items-center px-4 py-2 text-sm font-medium rounded-lg transition duration-200 text-zinc-600 hover:bg-indigo-100">
+            <svg data-lucide="file-text" class="w-4 h-4 mr-1"></svg> Мои отчеты
+        </button>
+        <button id="btn-map-view" onclick="showSection('map-view')" class="tab-button flex items-center px-4 py-2 text-sm font-medium rounded-lg transition duration-200 text-zinc-600 hover:bg-indigo-100 hidden">
+            <svg data-lucide="map" class="w-4 h-4 mr-1"></svg> Карта
+        </button>
+        <button id="btn-stats" onclick="showSection('stats')" class="tab-button flex items-center px-4 py-2 text-sm font-medium rounded-lg transition duration-200 text-zinc-600 hover:bg-indigo-100 hidden">
+            <svg data-lucide="pie-chart" class="w-4 h-4 mr-1"></svg> Статистика
+        </button>
+        <button id="btn-raw-data" onclick="showSection('raw-data')" class="tab-button flex items-center px-4 py-2 text-sm font-medium rounded-lg transition duration-200 text-zinc-600 hover:bg-indigo-100 hidden">
+            <svg data-lucide="database" class="w-4 h-4 mr-1"></svg> Данные
+        </button>
+        <button id="exportCsvButton" onclick="exportReportsToCsv()" class="tab-button flex items-center px-4 py-2 text-sm font-medium rounded-lg transition duration-200 text-zinc-600 hover:bg-green-100 hidden">
+            <svg data-lucide="download" class="w-4 h-4 mr-1"></svg> CSV
+        </button>
+    </div>
+
+    <section id="form-view" class="dashboard-section bg-white p-4 rounded-xl shadow-md active-tab">
+        <h2 class="text-xl font-semibold mb-4 text-gray-800">Отправка Отчета</h2>
+        <form id="reportForm">
+            <div class="mb-4">
+                <label for="settlement" class="block text-sm font-medium text-gray-700 mb-1">Населенный пункт*</label>
+                <select id="settlement" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="">Выберите населенный пункт</option>
+                    </select>
+            </div>
+
+            <div class="mb-4">
+                <label for="address" class="block text-sm font-medium text-gray-700 mb-1">Адрес (Улица, Дом)*</label>
+                <input type="text" id="address" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" placeholder="Начните вводить адрес">
+                <div id="suggestionsList" class="absolute z-10 bg-white border border-gray-300 rounded-lg shadow-lg w-[calc(100%-2rem)] max-h-48 overflow-y-auto mt-1 hidden">
+                    </div>
+                <p id="addressStatus" class="text-xs mt-1 text-gray-500"></p>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Лояльность*</label>
+                <div class="flex flex-wrap gap-x-6 gap-y-2">
+                    <label class="flex items-center">
+                        <input type="radio" name="loyalty" value="strong" required class="form-radio text-green-600">
+                        <span class="ml-2 text-sm text-gray-900">1. Ярко выраженная</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="loyalty" value="moderate" class="form-radio text-yellow-600">
+                        <span class="ml-2 text-sm text-gray-900">2. Умеренная</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="loyalty" value="neutral" class="form-radio text-blue-600">
+                        <span class="ml-2 text-sm text-gray-900">3. Нейтральная</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="loyalty" value="against" class="form-radio text-red-600">
+                        <span class="ml-2 text-sm text-gray-900">4. Против</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label for="action" class="block text-sm font-medium text-gray-700 mb-1">Проведенное действие*</label>
+                <select id="action" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="">Выберите действие</option>
+                    <option value="call">Телефонный звонок</option>
+                    <option value="face-to-face">Обход/Личная встреча</option>
+                    <option value="mail">Раздача материалов</option>
+                    <option value="other">Другое</option>
+                </select>
+            </div>
+
+            <div class="mb-6">
+                <label for="comment" class="block text-sm font-medium text-gray-700 mb-1">Комментарий</label>
+                <textarea id="comment" rows="3" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" placeholder="Дополнительные детали, результат встречи"></textarea>
+            </div>
+
+            <button id="saveButton" type="submit" disabled class="w-full flex items-center justify-center bg-indigo-500 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-600 transition duration-200 disabled:bg-gray-400">
+                <svg data-lucide="send" class="w-5 h-5 mr-2"></svg>
+                <span>Сохранить отчет</span>
+            </button>
+        </form>
+    </section>
+
+    <section id="my-reports-view" class="dashboard-section hidden bg-white p-4 rounded-xl shadow-md">
+        <h2 class="text-xl font-semibold mb-4 text-gray-800">Мои Отчеты</h2>
+        <div id="myReportsList" class="space-y-3">
+            <p class="text-gray-500">Загрузка ваших отчетов...</p>
+        </div>
+    </section>
     
-    <div class="max-w-4xl mx-auto space-y-6 pb-20"> <div id="tabMenu" class="content-card shadow-xl p-3 flex justify-between space-x-2 fixed bottom-0 left-0 right-0 max-w-4xl mx-auto z-10 rounded-t-xl rounded-b-none">
-            
-            <button id="btn-form-view" onclick="window.showSection('form-view')" class="tab-button flex-1 text-zinc-600 hover:bg-indigo-100 py-2.5 flex flex-col items-center justify-center">
-                <svg data-lucide="clipboard-pen" class="w-5 h-5 mb-0.5"></svg>
-                <span class="text-xs">Опрос</span>
-            </button>
-            
-            <button id="btn-my-reports-view" onclick="window.showSection('my-reports-view')" class="tab-button flex-1 text-zinc-600 hover:bg-indigo-100 py-2.5 flex flex-col items-center justify-center">
-                <svg data-lucide="file-text" class="w-5 h-5 mb-0.5"></svg>
-                <span class="text-xs">Мои Отчеты</span>
-            </button>
-            
-            <button id="btn-map-view" onclick="window.showSection('map-view')" class="tab-button flex-1 text-zinc-600 hover:bg-indigo-100 py-2.5 flex flex-col items-center justify-center hidden">
-                <svg data-lucide="map" class="w-5 h-5 mb-0.5"></svg>
-                <span class="text-xs">Карта</span>
-            </button>
-            
-            <button id="btn-stats" onclick="window.showSection('stats')" class="tab-button flex-1 text-zinc-600 hover:bg-indigo-100 py-2.5 flex flex-col items-center justify-center hidden">
-                <svg data-lucide="bar-chart-3" class="w-5 h-5 mb-0.5"></svg>
-                <span class="text-xs">Статистика</span>
-            </button>
-            
-            <button id="btn-raw-data" onclick="window.showSection('raw-data')" class="tab-button flex-1 text-zinc-600 hover:bg-indigo-100 py-2.5 flex flex-col items-center justify-center hidden">
-                <svg data-lucide="database" class="w-5 h-5 mb-0.5"></svg>
-                <span class="text-xs">Данные</span>
-            </button>
+    <section id="map-view" class="dashboard-section hidden bg-white p-4 rounded-xl shadow-md">
+        <h2 class="text-xl font-semibold mb-4 text-gray-800">Карта Отчетов (Админ)</h2>
+        <div id="mapLoading" class="text-center p-8 text-gray-500">
+            <svg data-lucide="loader" class="w-8 h-8 mx-auto animate-spin mb-2"></svg>
+            <p>Загрузка карты...</p>
         </div>
+        <div id="map" class="w-full h-80 rounded-lg shadow-inner"></div>
+        <div id="mapInfo" class="text-sm mt-3 p-2 bg-gray-50 rounded-lg">
+            <p class="text-gray-700 font-medium">Фильтр по НП:</p>
+            <select id="settlementFilter" onchange="filterMapData(this.value)" class="w-full p-2 border border-gray-300 rounded-lg mt-1 text-sm">
+                <option value="all">Все населенные пункты</option>
+                </select>
+        </div>
+    </section>
 
-        <div id="form-view" class="dashboard-section space-y-6">
-            <div class="content-card">
-                <h2 class="text-xl font-bold text-zinc-800 mb-4">Форма нового отчета</h2>
-                <form id="reportForm" class="space-y-4">
-                    
-                    <label class="block">
-                        <span class="text-zinc-700 font-medium">Населенный пункт:</span>
-                        <select id="settlement" required class="w-full mt-1 bg-white">
-                            </select>
-                    </label>
-
-                    <label class="block relative">
-                        <span class="text-zinc-700 font-medium">Адрес (Улица, дом):</span>
-                        <input type="text" id="address" required class="w-full mt-1 bg-white" placeholder="Начните вводить адрес...">
-                        <div id="suggestionsList" class="absolute z-10 w-full bg-white border border-gray-300 rounded-b-lg shadow-xl mt-1 hidden max-h-60 overflow-y-auto">
-                            </div>
-                        <p id="addressStatus" class="text-xs mt-1 text-red-500"></p>
-                    </label>
-                    
-                    <div class="space-y-2">
-                        <span class="text-zinc-700 font-medium block">Оценка лояльности:</span>
-                        <div id="loyaltyGroup" class="flex justify-around bg-gray-100 p-2 rounded-xl">
-                            <label class="flex flex-col items-center p-2 cursor-pointer transition duration-150 hover:bg-gray-200 rounded-lg">
-                                <input type="radio" name="loyalty" value="strong" class="form-radio text-green-500" required>
-                                <span class="text-xs mt-1 text-green-600">Сильный</span>
-                            </label>
-                            <label class="flex flex-col items-center p-2 cursor-pointer transition duration-150 hover:bg-gray-200 rounded-lg">
-                                <input type="radio" name="loyalty" value="moderate" class="form-radio text-green-400">
-                                <span class="text-xs mt-1 text-green-500">Умеренный</span>
-                            </label>
-                            <label class="flex flex-col items-center p-2 cursor-pointer transition duration-150 hover:bg-gray-200 rounded-lg">
-                                <input type="radio" name="loyalty" value="neutral" class="form-radio text-yellow-500">
-                                <span class="text-xs mt-1 text-yellow-600">Нейтральный</span>
-                            </label>
-                            <label class="flex flex-col items-center p-2 cursor-pointer transition duration-150 hover:bg-gray-200 rounded-lg">
-                                <input type="radio" name="loyalty" value="against" class="form-radio text-red-500">
-                                <span class="text-xs mt-1 text-red-600">Против</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <label class="block">
-                        <span class="text-zinc-700 font-medium">Согласие на действие:</span>
-                        <select id="action" required class="w-full mt-1 bg-white">
-                            <option value="">Выберите действие</option>
-                            <option value="call">Согласен на звонок</option>
-                            <option value="meeting">Согласен на встречу</option>
-                            <option value="none">Нет контакта</option>
-                        </select>
-                    </label>
-
-                    <label class="block">
-                        <span class="text-zinc-700 font-medium">Комментарий:</span>
-                        <textarea id="comment" rows="3" class="w-full mt-1 bg-white" placeholder="Заметки о контакте"></textarea>
-                    </label>
-                    
-                    <div class="pt-2 text-center border-t border-gray-200">
-                        <p class="text-xs text-zinc-500">Авторизован как: <span id="authUsername">...</span> (<span id="authId">...</span>)</p>
-                    </div>
-
-                    <button id="saveButton" type="submit" disabled class="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition duration-200 transform hover:scale-[1.01] disabled:bg-zinc-400 flex items-center justify-center space-x-2">
-                        <svg data-lucide="send" class="w-5 h-5"></svg>
-                        <span>Сохранить отчет</span>
-                    </button>
-                </form>
+    <section id="stats" class="dashboard-section hidden bg-white p-4 rounded-xl shadow-md">
+        <h2 class="text-xl font-semibold mb-4 text-gray-800">Общая Статистика (Админ)</h2>
+        <div class="mb-4">
+            <label for="settlementStatsFilter" class="block text-sm font-medium text-gray-700 mb-1">Фильтр по населенному пункту:</label>
+            <select id="settlementStatsFilter" onchange="filterStatsData(this.value)" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
+                <option value="all">Все населенные пункты</option>
+                </select>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="p-3 border rounded-lg">
+                <h3 class="font-semibold mb-2 text-gray-700">Распределение лояльности</h3>
+                <canvas id="loyaltyChart"></canvas>
+            </div>
+            <div class="p-3 border rounded-lg">
+                <h3 class="font-semibold mb-2 text-gray-700">Проведенные действия</h3>
+                <canvas id="actionChart"></canvas>
             </div>
         </div>
-
-        <div id="my-reports-view" class="dashboard-section hidden space-y-6">
-            <div class="content-card">
-                <h2 class="text-xl font-bold text-zinc-800 mb-4">Мои последние отчеты</h2>
-                <div id="myReportsList" class="space-y-4">
-                    <p class="text-zinc-500 text-sm">Загрузка ваших отчетов...</p>
-                </div>
-            </div>
+    </section>
+    
+    <section id="raw-data" class="dashboard-section hidden bg-white p-4 rounded-xl shadow-md">
+        <h2 class="text-xl font-semibold mb-4 text-gray-800">Сырые Данные Отчетов (Админ)</h2>
+        <div class="overflow-x-auto">
+            <table id="reportsTable" class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Время</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Пользователь</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">НП</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Адрес</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Лояльность</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действие</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Комментарий</th>
+                    </tr>
+                </thead>
+                <tbody id="reportsTableBody" class="bg-white divide-y divide-gray-200">
+                    <tr><td colspan="8" class="px-3 py-4 whitespace-nowrap text-sm text-gray-500">Загрузка данных...</td></tr>
+                </tbody>
+            </table>
         </div>
+    </section>
 
-        <div id="map-view" class="dashboard-section hidden space-y-6">
-            <div class="content-card">
-                <h2 class="text-xl font-bold text-zinc-800 mb-4">Карта активности</h2>
-                <div id="map" class="w-full rounded-xl">
-                    </div>
-                <div id="mapLoading" class="mt-4 text-center text-indigo-600 font-medium">
-                    <svg data-lucide="loader" class="w-6 h-6 animate-spin mx-auto mb-2"></svg>
-                    Загрузка карты и данных...
-                </div>
-            </div>
-        </div>
-
-        <div id="stats" class="dashboard-section hidden space-y-6">
-            <div class="content-card">
-                <h2 class="text-xl font-bold text-zinc-800 mb-4">Сводная статистика</h2>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-white p-4 rounded-xl shadow-md">
-                        <h3 class="font-semibold text-lg mb-2">Лояльность (График)</h3>
-                        <canvas id="loyaltyChart"></canvas>
-                    </div>
-                    <div class="bg-white p-4 rounded-xl shadow-md">
-                        <h3 class="font-semibold text-lg mb-2">Согласие на контакт (График)</h3>
-                        <canvas id="actionChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="mt-6">
-                    <h3 class="font-semibold text-lg mb-2">Фильтрация</h3>
-                    <div class="flex space-x-3 items-center">
-                        <select id="settlementStatsFilter" class="flex-1 bg-white">
-                            <option value="">Все НП</option>
-                            </select>
-                        <button onclick="window.applyStatsFilter()" class="bg-indigo-500 text-white py-2 px-4 rounded-xl font-medium hover:bg-indigo-600 transition">
-                            Применить
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="raw-data" class="dashboard-section hidden space-y-6">
-            <div class="content-card">
-                <h2 class="text-xl font-bold text-zinc-800 mb-4">Экспорт данных</h2>
-                
-                <div class="flex justify-between items-center mb-4">
-                    <button onclick="window.exportToCSV()" class="bg-emerald-600 text-white py-2.5 px-6 rounded-xl font-semibold hover:bg-emerald-700 transition duration-200 flex items-center space-x-2">
-                        <svg data-lucide="download" class="w-5 h-5"></svg>
-                        <span>Скачать CSV</span>
-                    </button>
-                </div>
-
-                <div class="overflow-x-auto bg-white rounded-xl shadow-inner p-2">
-                    <table id="reportsTable" class="min-w-full divide-y divide-gray-200">
-                        <thead>
-                            <tr class="text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                <th class="px-3 py-2">ID</th>
-                                <th class="px-3 py-2">Дата</th>
-                                <th class="px-3 py-2">Агитатор</th>
-                                <th class="px-3 py-2">НП</th>
-                                <th class="px-3 py-2">Адрес</th>
-                                <th class="px-3 py-2">Лояльность</th>
-                                <th class="px-3 py-2">Действие</th>
-                                <th class="px-3 py-2">Комментарий</th>
-                            </tr>
-                        </thead>
-                        <tbody id="reportsTableBody" class="divide-y divide-gray-200 text-sm text-gray-800">
-                            </tbody>
-                    </table>
-                    <p id="tableStatus" class="p-3 text-center text-zinc-500">Загрузка данных...</p>
-                </div>
-            </div>
-        </div>
-        
-    </div>
-
-    <div id="alertModal" class="modal fixed inset-0 z-50 hidden items-center justify-center p-4 transition-opacity duration-300">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 space-y-4 transform scale-95 transition-transform duration-300">
-            <div class="flex items-center space-x-3">
-                <svg data-lucide="alert-triangle" class="w-6 h-6 text-red-600"></svg>
-                <h3 id="alertTitle" class="text-xl font-bold text-zinc-800">Ошибка</h3>
-            </div>
-            <p id="alertMessage" class="text-base text-zinc-600">Произошла неизвестная ошибка.</p>
-            <button onclick="window.closeAlert()" class="w-full bg-red-600 text-white py-3 rounded-xl font-semibold hover:bg-red-700 transition duration-200">
-                Закрыть
+    <div id="alertModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black bg-opacity-50">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full">
+            <h3 id="alertTitle" class="text-lg font-bold mb-3 text-gray-900"></h3>
+            <p id="alertMessage" class="text-sm text-gray-600 mb-4"></p>
+            <button onclick="closeAlert()" class="w-full bg-indigo-500 text-white font-semibold py-2 rounded-lg hover:bg-indigo-600 transition duration-200">
+                ОК
             </button>
         </div>
     </div>
-
+    
     <script>
-        // --- ФУНКЦИИ ОПОВЕЩЕНИЯ (ОБНОВЛЕННЫЕ С АНИМАЦИЕЙ) ---
+        // Глобальная функция оповещения
         window.showAlert = function(title, message) {
             document.getElementById('alertTitle').textContent = title;
             document.getElementById('alertMessage').textContent = message;
-            
-            const modal = document.getElementById('alertModal');
-            // Анимация модального окна
-            modal.querySelector('div').classList.remove('scale-95');
-            modal.querySelector('div').classList.add('scale-100');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+            document.getElementById('alertModal').classList.remove('hidden');
+            document.getElementById('alertModal').classList.add('flex');
             
             if (window.Telegram.WebApp && window.Telegram.WebApp.showAlert) {
                  window.Telegram.WebApp.showAlert(`${title}: ${message}`);
@@ -290,26 +237,24 @@
         }
 
         window.closeAlert = function() {
-            const modal = document.getElementById('alertModal');
-            // Анимация закрытия
-            modal.querySelector('div').classList.remove('scale-100');
-            modal.querySelector('div').classList.add('scale-95');
-            setTimeout(() => {
-                modal.classList.add('hidden');
-                modal.classList.remove('flex');
-            }, 300); // Соответствует transition-duration-300
+            document.getElementById('alertModal').classList.add('hidden');
+            document.getElementById('alertModal').classList.remove('flex');
         }
-        // ----------------------------------------
         
         document.addEventListener('DOMContentLoaded', () => {
              // Убеждаемся, что все кнопки-иконки прорисованы
             lucide.createIcons();
             
-            // Проверяем, что main.js загружен и вызывает loadDashboard
-            if (window.loadDashboard) {
-                window.loadDashboard();
+            // 1. Инициализация Firebase (определена в firebase-auth.js)
+            if (typeof window.initializeFirebase === 'function') {
+                if (window.initializeFirebase()) {
+                    // 2. Загрузка Дашборда (определена в main.js)
+                    if (window.loadDashboard) {
+                        window.loadDashboard();
+                    }
+                }
             } else {
-                 window.showAlert('Критическая ошибка', 'Файл main.js не загружен. Проверьте синтаксис.');
+                 window.showAlert('Критическая ошибка', 'Скрипт аутентификации Firebase не загружен.');
             }
         });
     </script>
