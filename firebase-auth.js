@@ -1,4 +1,4 @@
-// firebase-auth.js (СИНТАКСИЧЕСКИ ПРАВИЛЬНЫЙ И БЕЗОПАСНЫЙ КОД)
+// firebase-auth.js (ЦЕЛЕВАЯ, БЕЗОПАСНАЯ ВЕРСИЯ С ЕДИНЫМ КОНФИГОМ)
 
 // --- Глобальные переменные ---
 let app = null;
@@ -9,7 +9,11 @@ window.userTelegramUsername = null;
 window.isAdmin = false; 
 
 let token = null;
-window.FIREBASE_CONFIG = null; // Хранение конфигурации
+
+// НОВЫЕ ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ КЛЮЧЕЙ (Установлены из Base64-конфига)
+window.DADATA_API_KEY = null; 
+window.YANDEX_MAP_KEY = null; 
+// ------------------------------
 
 // Максимальная безопасная длина URL (общепринятый лимит)
 const MAX_URL_LENGTH = 2000; 
@@ -38,66 +42,73 @@ window.initializeFirebase = function() {
         return false;
     }
     
-    // 1. Считывание и декодирование конфигурации Firebase
-    const configBase64 = getUrlParameter('firebase_config');
+    // 1. Считывание всех параметров из URL
+    const configBase64 = getUrlParameter('config'); // <-- ИЩЕМ ЕДИНЫЙ ПАРАМЕТР 'config'
     token = getUrlParameter('token'); 
-    
-    // Получение user_id и username
     window.userTelegramId = getUrlParameter('user_id');
     window.userTelegramUsername = getUrlParameter('username');
-    
-    // Получение admin статуса из URL (для переопределения/отладки, но приоритет у токена)
     const adminUrlParam = getUrlParameter('is_admin');
-    if (adminUrlParam === 'true') {
-        window.isAdmin = true; 
-    }
     
-    if (!configBase64) {
-        console.error("Firebase config (firebase_config) not found in URL.");
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Параметр "firebase_config" не найден в URL.');
+    
+    if (!configBase64 || !token || !window.userTelegramId) {
+        // Убрали showAlert, т.к. его должен вызвать document.addEventListener в admin_dashboard/index
+        console.error("Отсутствуют обязательные параметры URL (config, token, user_id).");
         return false;
     }
     
+    let configData;
     // 2. Декодирование и парсинг Base64
     try {
         const configJson = atob(configBase64);
-        window.FIREBASE_CONFIG = JSON.parse(configJson);
+        configData = JSON.parse(configJson);
         
-        // 2.1. Строгая проверка декодированного объекта
-        if (!window.FIREBASE_CONFIG.apiKey || !window.FIREBASE_CONFIG.projectId) {
-            throw new Error("Missing critical fields in Firebase config (e.g., apiKey, projectId).");
+        // --- СОХРАНЕНИЕ КЛЮЧЕЙ ИЗ КОНФИГАЦИИ ---
+        // Эти ключи должны быть в вашем Base64 JSON!
+        window.DADATA_API_KEY = configData.dadata_token || null;
+        window.YANDEX_MAP_KEY = configData.ymaps_api_key || null;
+        const firebaseConfig = configData.firebase_config;
+
+        if (!firebaseConfig || !firebaseConfig.apiKey) {
+            throw new Error("Missing critical Firebase fields inside config.");
         }
         
+        // Сохраняем публичную конфигурацию Firebase для инициализации
+        window.FIREBASE_CONFIG = firebaseConfig; 
+        
     } catch (e) {
-        console.error("Failed to decode or parse Firebase config:", e);
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось декодировать или проанализировать конфигурацию Firebase. Ошибка: ${e.message}`);
+        console.error("Failed to decode or parse config:", e);
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось проанализировать конфигурацию (config). Ошибка: ${e.message}`);
         return false;
     }
     
     // 3. Инициализация Firebase
     try {
-        // Проверка, что приложение еще не инициализировано
         if (!firebase.apps.length) {
             app = firebase.initializeApp(window.FIREBASE_CONFIG);
-            // При использовании compat API вызываем методы с app
-            window.db = firebase.firestore(app); 
+            window.db = firebase.firestore(app);
             window.auth = firebase.auth(app);
             console.log("Firebase initialized successfully.");
         }
+        
+        // 4. Установка статуса администратора (приоритет у токена, но URL может быть базой)
+        if (adminUrlParam === 'true') {
+            window.isAdmin = true; 
+        }
+        
         return true;
     } catch (e) {
         console.error("Firebase initialization failed:", e);
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось инициализировать Firebase: ${e.message}. Проверьте правильность конфигурации.`);
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось инициализировать Firebase: ${e.message}. Проверьте правильность ключей.`);
         return false;
     }
 };
 
 // ----------------------------------------------------------------------
-// АУТЕНТИФИКАЦИЯ
+// АУТЕНТИФИКАЦИЯ (без изменений, т.к. она синтаксически верна)
 // ----------------------------------------------------------------------
 
 window.checkAdminStatus = async function() {
-    // Используем ?. для безопасности
+    // ... (весь код функции checkAdminStatus остается без изменений)
     const telegramAuthInfo = document.getElementById('telegramAuthInfo');
     const saveButton = document.getElementById('saveButton'); 
     const debugAdminStatus = document.getElementById('debugAdminStatus');
@@ -131,7 +142,6 @@ window.checkAdminStatus = async function() {
              // Для плавной анимации (stagger)
              const adminButton = document.getElementById('adminButton');
              if (adminButton.classList.contains('stagger-item')) {
-                 // Временно удаляем opacity=0, чтобы сработала CSS анимация stagger-item
                  adminButton.style.opacity = 0; 
                  setTimeout(() => {
                     adminButton.style.opacity = 1; 
