@@ -6,10 +6,10 @@ let dadataCoords = null;
 
 // --- КОНФИГУРАЦИЯ DADATA (Из глобальной переменной window.DADATA_API_KEY) ---
 // Ключ Dadata теперь берется из window.DADATA_API_KEY, установленного в firebase-auth.js
-// ИСПРАВЛЕНИЕ: Переменная здесь ссылается на window, чтобы избежать конфликта инициализации
 const DADATA_API_KEY = window.DADATA_API_KEY; 
 
 // Используем FIAS ID для ограничения поиска (дефолтное значение '86' для ХМАО).
+// Этот параметр остается в URL, так как не является конфиденциальным ключом.
 const urlParams = new URLSearchParams(window.location.search);
 const DADATA_LOCATION_FIAS_ID = urlParams.get('dadata_fias_id') || '86'; 
 
@@ -110,33 +110,30 @@ function renderSuggestions(suggestions) {
 function handleAddressInput(event) {
     selectedSuggestionData = null; 
     if (addressStatus) addressStatus.textContent = '';
-    fetchSuggestions(event.target.value);
+    debounce(() => fetchSuggestions(event.target.value), 300)();
 }
 
-// --- ГЕОЛОКАЦИЯ (Добавлена отсутствующая функция) ---
+// --- ГЕОЛОКАЦИЯ (Добавлена недостающая функция) ---
 function requestGeolocation() {
     if (!navigator.geolocation) {
         window.showAlert('Ошибка', 'Геолокация не поддерживается вашим устройством.');
         return;
     }
     
-    // Блокируем кнопку, пока идет запрос
     const geolocationButton = document.getElementById('geolocationButton');
     if (geolocationButton) geolocationButton.disabled = true;
 
     navigator.geolocation.getCurrentPosition(
         pos => {
             console.log("Geo OK:", pos);
-            // Если нужно, здесь можно обновить поля адреса или сохранить координаты
             window.showAlert('Успех', `Координаты получены: ${pos.coords.latitude}, ${pos.coords.longitude}`);
             if (geolocationButton) geolocationButton.disabled = false;
         },
         err => {
             console.error("Geo error:", err);
-            // Ошибка 1: user denied, Ошибка 2: position unavailable, Ошибка 3: timeout
             let message = 'Не удалось получить координаты.';
             if (err.code === 1) message = 'Доступ к геолокации запрещен пользователем.';
-            window.showAlert('Ошибка Геолокации', `${message} ${err.message}.`);
+            window.showAlert('Ошибка Геолокации', `${message} (${err.message}).`);
             if (geolocationButton) geolocationButton.disabled = false;
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -276,10 +273,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // PWA: Регистрация Service Worker
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем АБСОЛЮТНЫЙ ПУТЬ для GitHub Pages/Telegram
-            navigator.serviceWorker.register("/telegram-survey-mini-app/sw.js", { 
-                scope: "/telegram-survey-mini-app/" // Абсолютный scope проекта
-            }) 
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем ОТНОСИТЕЛЬНЫЙ ПУТЬ './sw.js'
+            navigator.serviceWorker.register('./sw.js') 
                 .then(registration => {
                     console.log('ServiceWorker registration successful with scope: ', registration.scope);
                 })
@@ -288,5 +283,4 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
         });
     }
-
 });
