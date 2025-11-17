@@ -41,21 +41,17 @@ function initDB() {
 /**
  * Сохраняет отчет в IndexedDB.
  * @param {Object} reportData Данные отчета.
- * @returns {Promise<number>} Ключ сохраненного отчета.
+ * @returns {Promise<number>} Ключ добавленного отчета.
  */
 window.saveOfflineReport = async function(reportData) {
     const database = await initDB();
     return new Promise((resolve, reject) => {
         const transaction = database.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
-
-        // Добавляем timestamp для последующей сортировки
-        const dataToStore = { ...reportData, saved_at: new Date().getTime() };
-
-        const request = store.add(dataToStore);
+        const request = store.add(reportData);
 
         request.onsuccess = (event) => {
-            resolve(event.target.result); // Возвращает сгенерированный ключ
+            resolve(event.target.result);
         };
 
         request.onerror = (event) => {
@@ -66,8 +62,8 @@ window.saveOfflineReport = async function(reportData) {
 }
 
 /**
- * Загружает все сохраненные оффлайн-отчеты.
- * @returns {Promise<Array<Object>>} Массив объектов { key, reportData }.
+ * Получает все сохраненные оффлайн-отчеты.
+ * @returns {Promise<Array<{key: number, data: Object}>>} Список отчетов с их ключами.
  */
 window.getOfflineReports = async function() {
     const database = await initDB();
@@ -117,6 +113,3 @@ window.deleteOfflineReport = async function(key) {
         };
     });
 }
-
-// Запускаем инициализацию базы данных при загрузке скрипта
-initDB().catch(e => console.error("Failed to initialize offline DB:", e));
