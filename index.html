@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Добро пожаловать | Блокнот Агитатора</title>
     
+    <link rel="manifest" href="manifest.json">
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => console.log('SW registered: ', registration))
+                    .catch(registrationError => console.log('SW registration failed: ', registrationError));
+            });
+        }
+    </script>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -14,6 +25,8 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     
     <script src="offline_db.js"></script>
+    <script src="firebase-auth.js"></script>
+    <script src="main.js"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,91 +35,187 @@
     <style>
         body { 
             font-family: 'Jost', sans-serif;
-            background-color: #f7f7f7;
-            overflow-x: hidden;
+            background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
         }
-        /* Анимация плавного появления для stagger-item */
+        /* Анимация загрузки */
+        .loading-dot {
+            animation: dot-fading 1.4s infinite ease-in-out both;
+            background-color: #4f46e5;
+            width: 10px;
+            height: 10px;
+            border-radius: 100%;
+            display: inline-block;
+            margin: 0 4px;
+        }
+        .loading-dot:nth-child(1) { animation-delay: -0.32s; }
+        .loading-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes dot-fading {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
         .stagger-item {
             opacity: 0;
             animation: fadeIn 0.5s ease-out forwards;
         }
+        .stagger-item:nth-child(1) { animation-delay: 0.2s; }
+        .stagger-item:nth-child(2) { animation-delay: 0.4s; }
+        .stagger-item:nth-child(3) { animation-delay: 0.6s; }
         @keyframes fadeIn {
-            to { opacity: 1; }
-        }
-        .animate-stagger-1 { animation-delay: 0.1s; }
-        .animate-stagger-2 { animation-delay: 0.2s; }
-        .animate-stagger-3 { animation-delay: 0.3s; }
-        
-        .loading-dot {
-            animation: dot-flicker 1.4s infinite ease-in-out both;
-        }
-        .loading-dot:nth-child(1) { animation-delay: -0.32s; }
-        .loading-dot:nth-child(2) { animation-delay: -0.16s; }
-        @keyframes dot-flicker {
-          0%, 80%, 100% { transform: scale(0); }
-          40% { transform: scale(1.0); }
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
 <body>
-    
-    <div id="alertModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-        <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm mx-4">
-            <h3 id="alertTitle" class="text-xl font-bold text-red-600 mb-3">ОШИБКА</h3>
-            <p id="alertMessage" class="text-gray-700 mb-4">Произошла неизвестная ошибка.</p>
-            <button onclick="window.closeAlert()" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition">Закрыть</button>
-        </div>
-    </div>
-
-    <div class="container mx-auto p-4 max-w-screen-md">
-        
-        <h1 class="text-3xl font-bold mb-8 text-indigo-700 stagger-item animate-stagger-1">Блокнот Агитатора</h1>
-        
-        <div class="bg-white shadow-lg rounded-xl p-6 mb-8 stagger-item animate-stagger-2">
-            <h2 class="text-xl font-semibold mb-3">Ваш статус</h2>
-            <p id="telegramAuthInfo" class="text-gray-600 mb-2">
-                <span id="loadingDots" class="flex items-center space-x-1">
-                    <span class="loading-dot w-2 h-2 bg-indigo-500 rounded-full"></span>
-                    <span class="loading-dot w-2 h-2 bg-indigo-500 rounded-full"></span>
-                    <span class="loading-dot w-2 h-2 bg-indigo-500 rounded-full"></span>
-                    <span>Аутентификация...</span>
-                </span>
-            </p>
-            
-            <div class="text-sm text-gray-500 mt-4 border-t pt-4">
-                <p>Ваш Telegram ID: <span id="authId" class="font-medium text-gray-700">-</span></p>
-                <p>Ваше имя: <span id="authUsername" class="font-medium text-gray-700">-</span></p>
-                <p>Статус Администратора (по токену): <span id="debugAdminStatus" class="font-medium text-gray-700">-</span></p>
-                <p id="offlineInfo" class="mt-2 text-yellow-600 hidden">
-                    <i data-lucide="cloud-off" class="w-4 h-4 inline-block mr-1"></i>
-                    Есть <span id="offlineCount" class="font-semibold">0</span> оффлайн-отчетов. Повторите отправку.
-                </p>
+    <div id="alertModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full justify-center items-center z-50">
+        <div class="relative p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 id="alertTitle" class="text-lg leading-6 font-medium text-gray-900"></h3>
+                <div class="mt-2 px-7 py-3">
+                    <p id="alertMessage" class="text-sm text-gray-500"></p>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="alertCloseButton" onclick="window.closeAlert()" class="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        ОК
+                    </button>
+                </div>
             </div>
         </div>
+    </div>
+    
+    <div id="roleSelection" class="flex flex-col items-center justify-center flex-grow p-6 text-center">
         
-        <div class="grid grid-cols-2 gap-4">
-            
-            <a href="main.html" id="agitatorButton" class="stagger-item animate-stagger-3 bg-indigo-600 text-white p-6 rounded-xl shadow-lg hover:bg-indigo-700 transition duration-300 flex flex-col items-center justify-center space-y-2 disabled:opacity-50" disabled>
-                <i data-lucide="clipboard-edit" class="w-8 h-8"></i>
-                <span class="text-lg font-semibold">Агитатор</span>
-                <span class="text-xs opacity-80">Ввод данных опроса</span>
-            </a>
-            
-            <a href="admin_dashboard.html" id="adminButton" class="stagger-item animate-stagger-3 bg-red-600 text-white p-6 rounded-xl shadow-lg hover:bg-red-700 transition duration-300 flex flex-col items-center justify-center space-y-2 opacity-0" style="display: none;">
-                <i data-lucide="bar-chart-3" class="w-8 h-8"></i>
-                <span class="text-lg font-semibold">Администратор</span>
-                <span class="text-xs opacity-80">Просмотр статистики и карты</span>
-            </a>
-            
+        <h1 class="text-3xl font-bold text-gray-800 mb-2 stagger-item">Блокнот Агитатора</h1>
+        <p class="text-gray-500 mb-8 stagger-item">Выберите вашу роль, чтобы начать работу.</p>
+
+        <div id="authInfo" class="bg-white p-4 rounded-lg shadow-md w-full max-w-sm mb-8 space-y-2 stagger-item">
+            <p id="telegramAuthInfo" class="text-sm font-medium text-gray-600">⏳ Инициализация...</p>
+            <p class="text-xs text-gray-400">ID: <span id="authId" class="font-mono">...</span> | Username: <span id="authUsername" class="font-mono">...</span></p>
         </div>
         
+        <div id="loadingDots" class="flex justify-center items-center mb-8">
+            <div class="loading-dot"></div>
+            <div class="loading-dot"></div>
+            <div class="loading-dot"></div>
+        </div>
+
+        <div class="space-y-4 w-full max-w-sm">
+            <button id="agitatorButton" onclick="goToReportForm();" 
+                class="stagger-item w-full flex items-center justify-center p-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                disabled>
+                <i data-lucide="notebook-pen" class="w-5 h-5 mr-3"></i>
+                Открыть Блокнот Агитатора
+            </button>
+            
+            <button id="adminButton" 
+                onclick="window.location.href = 'admin_dashboard.html' + window.location.search;" 
+                class="stagger-item w-full flex items-center justify-center p-4 bg-gray-200 text-gray-800 font-semibold rounded-lg shadow-md hover:bg-gray-300 transition-colors"
+                style="display: none;">
+                <i data-lucide="bar-chart-3" class="w-5 h-5 mr-3"></i>
+                Открыть Панель Администратора
+            </button>
+        </div>
     </div>
 
-    <script src="firebase-auth.js"></script>
+    <div id="mainContent" class="hidden flex-grow w-full max-w-xl mx-auto p-4 bg-white shadow-lg rounded-lg">
+        <div class="flex justify-between items-center mb-6 border-b pb-4">
+            <h1 class="text-2xl font-bold text-gray-800">Форма Отчета Агитатора</h1>
+            <button id="syncButton" class="text-indigo-600 hover:text-indigo-800 transition-colors p-2 rounded-full bg-indigo-50" title="Синхронизировать">
+                <i data-lucide="cloud-sync" class="w-6 h-6"></i>
+            </button>
+        </div>
+
+        <div id="offlineInfo" class="hidden p-3 mb-4 text-sm font-medium rounded-lg text-yellow-800" role="alert">
+            </div>
+
+        <form id="reportForm" class="space-y-6">
+            
+            <div>
+                <label for="settlement" class="block text-sm font-medium text-gray-700 mb-2">Населенный пункт <span class="text-red-500">*</span></label>
+                <select id="settlement" name="settlement" required 
+                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm">
+                    <option value="">Выберите...</option>
+                    <option value="г.п. Лянтор">г.п. Лянтор</option>
+                    <option value="с.п. Русскинская">с.п. Русскинская</option>
+                    <option value="г.п. Федоровский">г.п. Федоровский</option>
+                    <option value="г.п. Барсово">г.п. Барсово</option>
+                    <option value="г.п. Белый Яр">г.п. Белый Яр</option>
+                    <option value="с.п. Лямина">с.п. Лямина</option>
+                    <option value="с.п. Сытомино">с.п. Сытомино</option>
+                    <option value="с.п. Угут">с.п. Угут</option>
+                    <option value="с.п. Ульт-Ягун">с.п. Ульт-Ягун</option>
+                    <option value="с.п. Солнечный">с.п. Солнечный</option>
+                    <option value="с.п. Нижнесортымский">с.п. Нижнесортымский</option>
+                    <option value="с.п. Тундрино">с.п. Тундрино</option>
+                    <option value="с.п. Локосово">с.п. Локосово</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="address" class="block text-sm font-medium text-gray-700 mb-2">Адрес (Улица, Дом)</label>
+                <div class="flex space-x-2">
+                    <input type="text" id="address" name="address" placeholder="Начните вводить адрес" autocomplete="off"
+                        class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm p-3">
+                    <button id="geolocationButton" title="Определить по GPS" 
+                            class="p-3 bg-indigo-100 text-indigo-600 rounded-md shadow-sm hover:bg-indigo-200 transition-colors flex items-center justify-center">
+                        <i data-lucide="locate-fixed" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <ul id="suggestionsList" class="absolute z-10 w-[95%] max-w-xl bg-white border border-gray-300 rounded-md shadow-lg mt-1 hidden max-h-60 overflow-y-auto">
+                    </ul>
+                <p id="addressStatus" class="mt-2 text-sm text-gray-500 h-5"></p>
+            </div>
+
+            <div>
+                <p class="block text-sm font-medium text-gray-700 mb-3">Уровень лояльности <span class="text-red-500">*</span></p>
+                <div class="mt-1 space-y-3">
+                    <label class="flex items-center space-x-3 bg-red-50 p-3 rounded-lg border border-red-200">
+                        <input type="radio" name="loyalty" value="Низкая" required class="focus:ring-red-500 h-4 w-4 text-red-600 border-gray-300">
+                        <span class="text-sm font-medium text-red-800">Низкая (Против/Негатив)</span>
+                    </label>
+                    <label class="flex items-center space-x-3 bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                        <input type="radio" name="loyalty" value="Нейтральная" class="focus:ring-yellow-500 h-4 w-4 text-yellow-600 border-gray-300">
+                        <span class="text-sm font-medium text-yellow-800">Нейтральная (Равнодушен/Не знает)</span>
+                    </label>
+                    <label class="flex items-center space-x-3 bg-green-50 p-3 rounded-lg border border-green-200">
+                        <input type="radio" name="loyalty" value="Высокая" class="focus:ring-green-500 h-4 w-4 text-green-600 border-gray-300">
+                        <span class="text-sm font-medium text-green-800">Высокая (Поддерживает/Позитив)</span>
+                    </label>
+                </div>
+            </div>
+
+            <div>
+                <label for="action" class="block text-sm font-medium text-gray-700 mb-2">Совершенное действие (опционально)</label>
+                <select id="action" name="action"
+                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm">
+                    <option value="">Не выбрано</option>
+                    <option value="Распространение материалов">Распространение материалов</option>
+                    <option value="Разговор/Убеждение">Разговор/Убеждение</option>
+                    <option value="Регистрация сторонника">Регистрация сторонника</option>
+                </select>
+            </div>
+            
+            <div>
+                <label for="comment" class="block text-sm font-medium text-gray-700 mb-2">Комментарий</label>
+                <textarea id="comment" name="comment" rows="3" 
+                    class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md p-3"
+                    placeholder="Подробности о встрече..."></textarea>
+            </div>
+            
+            <button id="saveButton" type="submit"
+                class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
+                <i data-lucide="save" class="w-6 h-6 mr-2"></i>
+                Сохранить Отчет
+            </button>
+        </form>
+    </div>
+
     <script>
-        // Глобальные утилиты для отображения сообщений
+        // --- УТИЛИТЫ ДЛЯ МОДАЛЬНЫХ ОКОН (Повтор, чтобы быть уверенным) ---
         window.showAlert = function(title, message) {
-            console.error(`${title}: ${message}`);
             document.getElementById('alertTitle').textContent = title;
             document.getElementById('alertMessage').textContent = message;
             document.getElementById('alertModal').classList.remove('hidden');
@@ -122,7 +231,20 @@
             document.getElementById('alertModal').classList.remove('flex');
         }
 
-        // Основная функция загрузки
+        // --- ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ЭКРАНОВ ---
+        window.goToReportForm = function() {
+            document.getElementById('roleSelection').classList.add('hidden');
+            document.getElementById('mainContent').classList.remove('hidden');
+            
+            // Если Telegram WebApp доступен, меняем цвет хедера на более подходящий для формы
+            if (window.Telegram.WebApp) {
+                // Если нужно, установить другой цвет, например, #ffffff
+                // window.Telegram.WebApp.setHeaderColor('#ffffff');
+                window.Telegram.WebApp.setBackgroundColor('#ffffff');
+            }
+        }
+
+        // --- ИНИЦИАЛИЗАЦИЯ ---
         window.onload = async function() {
             // 1. Инициализация Telegram WebApp
             if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp.ready) {
@@ -136,7 +258,7 @@
 
             if (typeof window.initializeFirebase === 'function') {
                 if (window.initializeFirebase()) {
-                    await window.checkAdminStatus(); 
+                    const authResult = await window.checkAdminStatus(); 
                     
                     // Установка Telegram ID и Username
                     document.getElementById('authId').textContent = window.userTelegramId;
@@ -145,15 +267,22 @@
                     // После успешной проверки статуса скрываем точки
                     loadingDots.classList.add('hidden');
 
+                    if (!authResult) {
+                         // Если аутентификация по токену провалилась, блокируем кнопки
+                         document.getElementById('agitatorButton').disabled = true;
+                    }
+
                 } else {
                      // Ошибка инициализации (нет config URL)
                      telegramAuthInfo.textContent = '❌ Конфигурация не найдена.';
                      loadingDots.classList.add('hidden');
+                     document.getElementById('agitatorButton').disabled = true;
                 }
             } else {
                  // Скрипт firebase-auth.js не загружен (синтаксическая ошибка)
                  telegramAuthInfo.textContent = '❌ Критическая ошибка загрузки скриптов.';
                  loadingDots.classList.add('hidden');
+                 document.getElementById('agitatorButton').disabled = true;
             }
             
             // 3. Активация кнопки Агитатора (поскольку это роль по умолчанию)
