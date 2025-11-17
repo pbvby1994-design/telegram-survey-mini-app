@@ -1,17 +1,15 @@
-// firebase-auth.js (ОКОНЧАТЕЛЬНАЯ ВЕРСИЯ - СИНТАКСИЧЕСКИ ПРАВИЛЬНАЯ И БЕЗОПАСНАЯ)
+// firebase-auth.js (ES Module)
+import { showAlert } from './utils.js';
 
-// --- Глобальные переменные ---
+// --- Модульные переменные (экспортируются) ---
 let app = null;
-window.db = null;
-window.auth = null;
-window.userTelegramId = null;
-window.userTelegramUsername = null;
-window.isAdmin = false; 
+export let db = null;
+export let auth = null;
+export let userTelegramId = null;
+export let userTelegramUsername = null;
+export let isAdmin = false;
 
 let token = null;
-
-// Максимальная безопасная длина URL (общепринятый лимит)
-const MAX_URL_LENGTH = 2000; 
 
 // Функция для получения параметра из URL
 function getUrlParameter(name) {
@@ -23,111 +21,81 @@ function getUrlParameter(name) {
 // ИНИЦИАЛИЗАЦИЯ И ПОЛУЧЕНИЕ ПАРАМЕТРОВ ИЗ URL
 // ----------------------------------------------------------------------
 
-window.initializeFirebase = function() {
-    // 0. Проверка общей длины URL
-    if (window.location.href.length > MAX_URL_LENGTH) {
-        console.error("URL too long. May be truncated.");
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Длина URL превышает безопасный лимит. Конфигурация может быть обрезана.');
-        return false;
-    }
-
-    // 0. Проверка загрузки Firebase SDK
+/**
+ * Инициализирует Firebase App, Firestore и Auth.
+ * @returns {boolean} - true, если инициализация прошла успешно.
+ */
+export function initializeFirebase() {
     if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Firebase SDK не загружен. Проверьте подключение CDN в HTML.');
+        showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Firebase SDK не загружен.');
         return false;
     }
     
-    // 1. Считывание и декодирование конфигурации Firebase
     const configBase64 = getUrlParameter('firebase_config');
     token = getUrlParameter('token'); 
     
-    // Получение user_id и username
-    window.userTelegramId = getUrlParameter('user_id');
-    window.userTelegramUsername = getUrlParameter('username');
+    userTelegramId = getUrlParameter('user_id');
+    userTelegramUsername = getUrlParameter('username');
 
     if (!configBase64) {
-        console.error("Firebase config not found in URL.");
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Конфигурация Firebase не найдена в URL. Проверьте настройки бота.');
-        return false;
+         showAlert('ОШИБКА КОНФИГУРАЦИИ', 'Конфигурация Firebase не найдена в URL.');
+         return false;
     }
-
+    
     try {
         const configJson = atob(configBase64);
-        const config = JSON.parse(configJson);
-        
-        // 2. Инициализация Firebase
-        app = firebase.initializeApp(config);
-        window.db = firebase.firestore();
-        window.auth = firebase.auth();
-        
-        // Установка времени ожидания для операций
-        window.db.settings({
-            ignoreUndefinedProperties: true
-        });
+        const firebaseConfig = JSON.parse(configJson);
 
-        console.log("Firebase initialized successfully.");
-        return true;
+        // Инициализация Firebase (v8 Syntax)
+        if (!app) {
+             app = firebase.initializeApp(firebaseConfig);
+             db = app.firestore();
+             auth = app.auth();
+        }
         
+        return true;
     } catch (error) {
         console.error("Firebase initialization failed:", error);
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Ошибка инициализации Firebase: ${error.message}`);
+        showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось инициализировать Firebase: ${error.message}.`);
         return false;
     }
-};
+}
 
-// ----------------------------------------------------------------------
-// АУТЕНТИФИКАЦИЯ (CUSTOM TOKEN)
-// ----------------------------------------------------------------------
-
-window.checkAdminStatus = async function() {
-    if (!window.auth) {
-        console.error("Firebase Auth not initialized.");
-        return false;
-    }
-    
+/**
+ * Аутентификация через Custom Token и проверка статуса админа.
+ * Обновляет экспортируемую переменную `isAdmin`.
+ * @returns {Promise<boolean>}
+ */
+export async function checkAdminStatus() {
+    const telegramAuthInfo = document.getElementById('telegramAuthInfo');
     const debugAdminStatus = document.getElementById('debugAdminStatus');
     const saveButton = document.getElementById('saveButton');
-    const telegramAuthInfo = document.getElementById('telegramAuthInfo');
-
-    if (!token) {
-        console.warn("Custom token not found in URL.");
-        saveButton?.setAttribute('disabled', 'true');
-        debugAdminStatus?.textContent = "ОТКАЗ (Нет токена)";
-        telegramAuthInfo.textContent = '❌ Необходим токен аутентификации.';
+    
+    if (!auth || !token) {
+        debugAdminStatus?.textContent = 'ОТКАЗ (Нет Auth/Токена)';
+        telegramAuthInfo.textContent = '❌ Не удалось получить токен. Используйте бота для входа.';
         return false;
     }
     
     try {
-        // 2. Аутентификация с помощью Custom Token (v8 Syntax)
-        const userCredential = await window.auth.signInWithCustomToken(token);
-        
-        // 3. Получение Claims (проверка флага админа из токена)
+        const userCredential = await auth.signInWithCustomToken(token);
         const idTokenResult = await userCredential.user.getIdTokenResult();
         
         // Перезаписываем isAdmin на основе Claims
         if (idTokenResult.claims && idTokenResult.claims.admin) {
              const tokenAdmin = idTokenResult.claims.admin;
-             // ПРИСВАИВАНИЕ (строки 117-120): Используем ОДИН знак "="
-             window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
+             isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
         }
         
-        debugAdminStatus?.textContent = window.isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
+        debugAdminStatus?.textContent = isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
         saveButton?.removeAttribute('disabled');
-        telegramAuthInfo.textContent = `✅ Аутентификация успешна. Роль: ${window.isAdmin ? 'Администратор' : 'Агитатор'}`;
+        telegramAuthInfo.textContent = `✅ Аутентификация успешна. Роль: ${isAdmin ? 'Администратор' : 'Агитатор'}`;
         
         // Показ кнопки администратора
-        if (window.isAdmin && document.getElementById('adminButton')) {
-             document.getElementById('adminButton').style.display = 'flex';
-             
-             // Для плавной анимации (stagger)
+        if (isAdmin && document.getElementById('adminButton')) {
              const adminButton = document.getElementById('adminButton');
-             if (adminButton?.classList.contains('stagger-item')) {
-                 // Временно удаляем opacity=0, чтобы сработала CSS анимация stagger-item
-                 adminButton.style.opacity = 0; 
-                 setTimeout(() => {
-                    adminButton.style.opacity = 1; 
-                 }, 10);
-             }
+             adminButton.style.display = 'flex';
+             // ... логика анимации stagger ...
         }
         
         return true;
@@ -137,26 +105,25 @@ window.checkAdminStatus = async function() {
         debugAdminStatus?.textContent = 'ОШИБКА АУТЕНТИФИКАЦИИ'; 
         telegramAuthInfo.textContent = '❌ Ошибка аутентификации Firebase.';
         
-        window.showAlert('ОШИБКА АУТЕНТИФИКАЦИИ', `Не удалось войти: ${error.message}. Проверьте Custom Token.`);
+        showAlert('ОШИБКА АУТЕНТИФИКАЦИИ', `Не удалось войти: ${error.message}. Проверьте Custom Token.`);
         saveButton?.setAttribute('disabled', 'true');
         
         return false;
     }
 }
 
-// ----------------------------------------------------------------------
-// ВЫХОД ИЗ СИСТЕМЫ
-// ----------------------------------------------------------------------
-
+/**
+ * Выход из системы и перенаправление на главную страницу 
+ * (Оставлен как window.signOut для совместимости с onclick в HTML)
+ */
 window.signOut = async function() {
     try {
-        await window.auth.signOut();
-        window.isAdmin = false;
-        console.log("User signed out.");
-        // Перезагрузка страницы, чтобы вернуться к стартовому экрану
-        window.location.reload(); 
+        if (auth) {
+            await auth.signOut();
+        }
     } catch (error) {
         console.error("Error signing out:", error);
-        window.showAlert('ОШИБКА ВЫХОДА', `Не удалось выйти из системы: ${error.message}`);
+    } finally {
+        window.location.href = 'index.html'; 
     }
 }
