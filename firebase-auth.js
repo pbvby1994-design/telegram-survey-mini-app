@@ -1,4 +1,4 @@
-// firebase-auth.js (ОКОНЧАТЕЛЬНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ - СИНТАКСИЧЕСКИ ПРАВИЛЬНАЯ)
+// firebase-auth.js (ОКОНЧАТЕЛЬНАЯ, СИНТАКСИЧЕСКИ БЕЗОПАСНАЯ ВЕРСИЯ)
 
 // --- Глобальные переменные ---
 let app = null;
@@ -45,11 +45,11 @@ window.initializeFirebase = function() {
     
     // 1. Получение Base64-конфига
     const configBase64 = getUrlParameter('config');
-    const tokenParam = getUrlParameter('token');
+    const tokenParam = getUrlParameter('token'); 
     
     if (!configBase64) {
         console.error("Configuration (config parameter) not found in URL.");
-        return false;
+        return false; 
     }
 
     try {
@@ -58,13 +58,14 @@ window.initializeFirebase = function() {
         const config = JSON.parse(configJson);
         
         // Установка токена
-        token = tokenParam || config.TELEGRAM_CUSTOM_TOKEN; // Предпочитаем token из URL
-        if (!token) {
+        const customToken = tokenParam || config.TELEGRAM_CUSTOM_TOKEN; 
+        if (!customToken) {
             console.error("Custom token not found in URL or config.");
             window.showAlert('ОШИБКА', 'Пользовательский токен не найден.');
             return false;
         }
-
+        token = customToken; 
+        
         // Установка ключей API в window
         window.DADATA_API_KEY = config.DADATA_TOKEN || null;
         window.YANDEX_MAP_KEY = config.YMAPS_API_KEY || null;
@@ -94,15 +95,14 @@ window.initializeFirebase = function() {
 window.checkAdminStatus = async function() {
     const telegramAuthInfo = document.getElementById('telegramAuthInfo');
     const saveButton = document.getElementById('saveButton');
-    const debugAdminStatus = document.getElementById('debugAdminStatus'); // Этот элемент может отсутствовать на главной странице
-
+    const debugAdminStatus = document.getElementById('debugAdminStatus'); 
+    
     if (!window.auth || !token) {
-        telegramAuthInfo.textContent = '❌ Критическая ошибка: Auth/Token отсутствует.';
+        if (telegramAuthInfo) telegramAuthInfo.textContent = '❌ Критическая ошибка: Auth/Token отсутствует.';
         return false;
     }
 
     try {
-        // Используем токен для входа в Firebase
         const userCredential = await window.auth.signInWithCustomToken(token);
         const user = userCredential.user;
         
@@ -116,24 +116,26 @@ window.checkAdminStatus = async function() {
             window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
         }
         
-        // Отображение статуса (ИСПРАВЛЕНО: заменено debugAdminStatus?.textContent = ... на if)
+        // 4. Отображение статуса (ИСПРАВЛЕНО: БЕЗОПАСНАЯ КОНСТРУКЦИЯ IF)
         if (debugAdminStatus) { 
             debugAdminStatus.textContent = window.isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
         }
         
-        // Разблокировка кнопки (ИСПРАВЛЕНО: заменено saveButton?.removeAttribute(...) на if)
+        // 5. Разблокировка кнопки 
         if (saveButton) {
             saveButton.removeAttribute('disabled');
         }
 
-        telegramAuthInfo.textContent = `✅ Аутентификация успешна. Роль: ${window.isAdmin ? 'Администратор' : 'Агитатор'}`;
+        if (telegramAuthInfo) {
+            telegramAuthInfo.textContent = `✅ Аутентификация успешна. Роль: ${window.isAdmin ? 'Администратор' : 'Агитатор'}`;
+        }
         
-        // Показ кнопки администратора
-        if (window.isAdmin && document.getElementById('adminButton')) {
-             document.getElementById('adminButton').style.display = 'flex';
+        // 6. Показ кнопки администратора
+        const adminButton = document.getElementById('adminButton');
+        if (window.isAdmin && adminButton) {
+             adminButton.style.display = 'flex';
              
              // Для плавной анимации (stagger)
-             const adminButton = document.getElementById('adminButton');
              if (adminButton.classList.contains('stagger-item')) {
                  adminButton.style.opacity = 0; 
                  setTimeout(() => {
@@ -146,12 +148,14 @@ window.checkAdminStatus = async function() {
     } catch (error) {
         console.error("Firebase Custom Token Auth failed:", error);
         
-        // ИСПРАВЛЕНО: заменено debugAdminStatus?.textContent = ... на if
+        // ИСПРАВЛЕНО: БЕЗОПАСНАЯ КОНСТРУКЦИЯ IF
         if (debugAdminStatus) { 
             debugAdminStatus.textContent = 'ОШИБКА АУТЕНТИФИКАЦИИ'; 
         }
 
-        telegramAuthInfo.textContent = '❌ Ошибка аутентификации Firebase.';
+        if (telegramAuthInfo) {
+            telegramAuthInfo.textContent = '❌ Ошибка аутентификации Firebase.';
+        }
         
         window.showAlert('ОШИБКА АУТЕНТИФИКАЦИИ', `Не удалось войти: ${error.message}. Проверьте Custom Token.`);
         return false;
