@@ -16,13 +16,11 @@
 
     <script>
         // Yandex Maps API вызовет эту функцию, как только сам API будет готов.
-        // Она, в свою очередь, безопасно вызывает window.initMap, которая определена в main.js
         window.ymapsReadyCallback = function() {
             if (typeof window.initMap === 'function') {
                 window.initMap();
             } else {
                 console.warn("Yandex Maps API загружен, но window.initMap еще не определена. Ожидание main.js.");
-                // В этом случае mapInstance будет инициализирован, когда main.js все-таки загрузится.
             }
         };
     </script>
@@ -179,14 +177,23 @@
                 </select>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="p-3 border rounded-lg">
+            
+            <div class="p-3 border rounded-lg relative">
                 <h3 class="font-semibold mb-2 text-gray-700">Распределение лояльности</h3>
                 <canvas id="loyaltyChart"></canvas>
+                <div id="loyaltyNoData" class="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 rounded-lg hidden">
+                    <p class="text-gray-500 font-medium p-4 text-center">Нет данных для построения графика.</p>
+                </div>
             </div>
-            <div class="p-3 border rounded-lg">
+            
+            <div class="p-3 border rounded-lg relative">
                 <h3 class="font-semibold mb-2 text-gray-700">Проведенные действия</h3>
                 <canvas id="actionChart"></canvas>
+                <div id="actionNoData" class="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 rounded-lg hidden">
+                    <p class="text-gray-500 font-medium p-4 text-center">Нет данных для построения графика.</p>
+                </div>
             </div>
+
         </div>
     </section>
     
