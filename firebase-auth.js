@@ -51,7 +51,7 @@ window.initializeFirebase = function() {
     
     
     if (!configBase64 || !token || !window.userTelegramId) {
-        // Убрали showAlert, т.к. его должен вызвать document.addEventListener в admin_dashboard/index
+        // Убрали showAlert, т.к. его должен вызвать document.addEventListener в index.html
         console.error("Отсутствуют обязательные параметры URL (config, token, user_id).");
         return false;
     }
@@ -62,8 +62,7 @@ window.initializeFirebase = function() {
         const configJson = atob(configBase64);
         configData = JSON.parse(configJson);
         
-        // --- СОХРАНЕНИЕ КЛЮЧЕЙ ИЗ КОНФИГАЦИИ ---
-        // Эти ключи должны быть в вашем Base64 JSON!
+        // --- СОХРАНЕНИЕ КЛЮЧЕЙ ИЗ КОНФИГАЦИИ В ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
         window.DADATA_API_KEY = configData.dadata_token || null;
         window.YANDEX_MAP_KEY = configData.ymaps_api_key || null;
         const firebaseConfig = configData.firebase_config;
