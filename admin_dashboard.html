@@ -13,7 +13,10 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
+    
+    <script src="firebase-auth.js"></script>
+    <script src="reports.js"></script> 
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -21,107 +24,120 @@
     <style>
         body { 
             font-family: 'Jost', sans-serif;
-            background-color: #f7f7f7;
-            overflow-x: hidden;
+            background-color: #f4f4f4;
+            min-height: 100vh;
         }
-        /* Анимация плавного появления для stagger-item */
-        .stagger-item {
-            opacity: 0;
-            animation: fadeIn 0.5s ease-out forwards;
+        .container {
+            max-width: 1200px;
         }
-        @keyframes fadeIn {
-            to { opacity: 1; }
+        .chart-container {
+            max-width: 100%;
+        }
+        #map {
+            width: 100%;
+            height: 500px;
+            border-radius: 0.5rem;
         }
     </style>
 </head>
 <body>
-    
-    <div id="alertModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-        <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm mx-4">
-            <h3 id="alertTitle" class="text-xl font-bold text-red-600 mb-3">ОШИБКА</h3>
-            <p id="alertMessage" class="text-gray-700 mb-4">Произошла неизвестная ошибка.</p>
-            <button onclick="window.closeAlert()" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition">Закрыть</button>
+    <div id="alertModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full justify-center items-center z-50">
+        <div class="relative p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 id="alertTitle" class="text-lg leading-6 font-medium text-gray-900"></h3>
+                <div class="mt-2 px-7 py-3">
+                    <p id="alertMessage" class="text-sm text-gray-500"></p>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="alertCloseButton" onclick="window.closeAlert()" class="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        ОК
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
-    
-    <div class="container mx-auto p-4 max-w-screen-xl">
-        <h1 class="text-3xl font-bold mb-6 text-indigo-700">Панель Администратора</h1>
-        
-        <div class="bg-white shadow-lg rounded-xl p-6 mb-8">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="flex justify-between items-center mb-6 border-b pb-4">
+            <h1 class="text-3xl font-bold text-gray-800">Панель Администратора</h1>
+            <button onclick="window.location.href = 'index.html' + window.location.search;" 
+                class="flex items-center p-2 bg-gray-200 text-gray-800 rounded-lg shadow-md hover:bg-gray-300 transition-colors">
+                <i data-lucide="arrow-left" class="w-5 h-5 mr-1"></i>
+                К выбору роли
+            </button>
+        </header>
+
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Статус и Фильтры</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div class="text-sm">
+                    <p class="font-medium text-gray-600">Telegram ID:</p>
+                    <p id="authId" class="font-mono text-gray-800">...</p>
+                </div>
+                <div class="text-sm">
+                    <p class="font-medium text-gray-600">Username:</p>
+                    <p id="authUsername" class="font-mono text-gray-800">...</p>
+                </div>
+                <div class="text-sm">
+                    <p class="font-medium text-gray-600">Статус админа:</p>
+                    <p id="debugAdminStatus" class="font-bold text-green-600">ДА</p>
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="flex flex-col">
-                    <label for="filterSettlement" class="text-sm font-medium text-gray-500">Поселение</label>
-                    <select id="filterSettlement" class="mt-1 p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150">
-                        <option value="all">Все поселения</option>
+                <div>
+                    <label for="filterSettlement" class="block text-sm font-medium text-gray-700">Населенный пункт</label>
+                    <select id="filterSettlement" 
+                        class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm">
+                        <option value="all">Все</option>
                         </select>
                 </div>
-                <div class="flex flex-col">
-                    <label for="filterUser" class="text-sm font-medium text-gray-500">Пользователь</label>
-                    <select id="filterUser" class="mt-1 p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150">
-                        <option value="all">Все агитаторы</option>
+                <div>
+                    <label for="filterUser" class="block text-sm font-medium text-gray-700">Пользователь</label>
+                    <select id="filterUser" 
+                        class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm">
+                        <option value="all">Все</option>
+                        <option value="my">Мои Отчеты</option>
                         </select>
                 </div>
-                <div class="flex items-end space-x-2">
-                    <button id="applyFilters" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition duration-150 flex items-center justify-center space-x-2" disabled>
-                        <i data-lucide="filter" class="w-5 h-5"></i>
-                        <span>Применить фильтры</span>
-                    </button>
-                    <button id="resetFilters" class="p-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition duration-150" disabled>
-                        <i data-lucide="rotate-ccw" class="w-5 h-5 text-gray-600"></i>
+                <div class="flex items-end">
+                    <button id="applyFiltersButton" 
+                        class="w-full flex items-center justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors">
+                        <i data-lucide="filter" class="w-4 h-4 mr-2"></i>
+                        Применить
                     </button>
                 </div>
             </div>
-            
-            <div class="mt-4 pt-4 border-t border-gray-100">
-                <p class="text-sm text-gray-500">
-                    Всего отчетов (по фильтру): <span id="totalReportsCount" class="font-semibold text-gray-700">0</span>
-                </p>
-            </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <div class="lg:col-span-2 bg-white shadow-lg rounded-xl p-4 h-[500px]">
-                <h2 class="text-xl font-semibold mb-3">Карта Отчетов (Яндекс)</h2>
-                <div id="yandexMap" class="w-full h-[430px] rounded-lg">
-                    <div class="flex items-center justify-center h-full text-gray-500">Загрузка карты...</div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="bg-white p-6 rounded-lg shadow-md lg:col-span-2">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">Географическое Распределение Отчетов</h2>
+                <div id="map">
+                    </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">Распределение Лояльности</h2>
+                <div class="chart-container relative">
+                    <canvas id="loyaltyChart"></canvas>
+                    <p id="loyaltyNoData" class="absolute inset-0 flex items-center justify-center text-gray-500 hidden"></p>
                 </div>
             </div>
 
-            <div class="bg-white shadow-lg rounded-xl p-4 h-[500px] flex flex-col">
-                <h2 class="text-xl font-semibold mb-3">Распределение Лояльности</h2>
-                <div class="flex-grow flex items-center justify-center">
-                    <canvas id="loyaltyChart" class="w-full h-full"></canvas>
-                    <p id="loyaltyNoData" class="hidden text-center text-gray-500"></p>
-                </div>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <div class="lg:col-span-1 bg-white shadow-lg rounded-xl p-4 h-[400px] flex flex-col">
-                <h2 class="text-xl font-semibold mb-3">Распределение Действий</h2>
-                <div class="flex-grow flex items-center justify-center">
-                    <canvas id="actionChart" class="w-full h-full"></canvas>
-                    <p id="actionNoData" class="hidden text-center text-gray-500"></p>
-                </div>
-            </div>
-            
-            <div class="lg:col-span-2 bg-white shadow-lg rounded-xl p-6">
-                <h2 class="text-xl font-semibold mb-3 border-b pb-2">Последние Отчеты</h2>
-                <div id="reportsList" class="space-y-4 max-h-96 overflow-y-auto">
-                    <div class="text-center text-gray-500 py-10">Загрузка отчетов...</div>
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">Совершенные Действия</h2>
+                <div class="chart-container relative">
+                    <canvas id="actionChart"></canvas>
+                    <p id="actionNoData" class="absolute inset-0 flex items-center justify-center text-gray-500 hidden"></p>
                 </div>
             </div>
         </div>
-
     </div>
 
-    <script src="firebase-auth.js"></script>
-    <script src="reports.js"></script>
-    
     <script>
-        // Глобальные утилиты для отображения сообщений
+        // --- УТИЛИТЫ ДЛЯ МОДАЛЬНЫХ ОКОН ---
         window.showAlert = function(title, message) {
-            console.error(`${title}: ${message}`);
             document.getElementById('alertTitle').textContent = title;
             document.getElementById('alertMessage').textContent = message;
             document.getElementById('alertModal').classList.remove('hidden');
@@ -137,24 +153,18 @@
             document.getElementById('alertModal').classList.remove('flex');
         }
         
-        // НОВАЯ ФУНКЦИЯ ДЛЯ БЕЗОПАСНОЙ ЗАГРУЗКИ ЯНДЕКС КАРТ
-        // Функция-заглушка, которую Yandex Maps должен вызвать после загрузки скрипта. 
-        // Фактическая инициализация карты (создание объекта Map) происходит в reports.js, в функции window.initMap.
-        window.initMap = function() {
-            // Пустая функция, требуемая API Яндекса.
-        }
-
-        /**
-         * Динамическая загрузка скрипта Яндекс Карт с безопасным ключом.
-         * Вызывается после успешной инициализации Firebase.
-         */
+        // --- ЗАГРУЗКА СКРИПТА ЯНДЕКС КАРТ (БЕЗОПАСНО) ---
         function loadYandexMapsScript() {
-            if (!window.YANDEX_MAP_KEY) {
-                window.showAlert('Критическая Ошибка', 'Ключ Yandex Maps не найден в конфигурации. Карта не будет загружена.');
+            if (document.getElementById('yandex-maps-script')) {
                 return;
+            }
+            if (!window.YANDEX_MAP_KEY) {
+                 window.showAlert('Ошибка Ключа', 'Ключ Яндекс.Карт не найден в конфигурации. Карта недоступна.');
+                 return;
             }
             
             const script = document.createElement('script');
+            script.id = 'yandex-maps-script';
             // Ключ берется из window.YANDEX_MAP_KEY, установленного в firebase-auth.js
             script.src = `https://api-maps.yandex.ru/2.1/?apikey=${window.YANDEX_MAP_KEY}&lang=ru_RU&onload=initMap`;
             script.type = 'text/javascript';
@@ -165,23 +175,46 @@
         }
         
         // Инициализация при загрузке DOM
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 1. Инициализация Telegram WebApp
+            if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp.ready) {
+                window.Telegram.WebApp.ready();
+                window.Telegram.WebApp.expand();
+            }
+
              // Убеждаемся, что все кнопки-иконки прорисованы
             lucide.createIcons();
             
-            // 1. Инициализация Firebase
+            // 2. Инициализация Firebase и аутентификация
             if (window.initializeFirebase && window.initializeFirebase()) {
-                
-                // 2. БЕЗОПАСНАЯ ЗАГРУЗКА ЯНДЕКС КАРТ
-                loadYandexMapsScript();
-                
-                if (window.loadDashboard) {
-                    window.loadDashboard(); // Эта функция находится в reports.js
-                }
+                 const authResult = await window.checkAdminStatus(); 
+                 
+                 // Установка Telegram ID и Username
+                 document.getElementById('authId').textContent = window.userTelegramId;
+                 document.getElementById('authUsername').textContent = window.userTelegramUsername || 'Не указано';
+                 
+                 if (authResult && window.isAdmin) {
+                    
+                    // 3. БЕЗОПАСНАЯ ЗАГРУЗКА ЯНДЕКС КАРТ
+                    loadYandexMapsScript();
+                    
+                    if (window.loadDashboard) {
+                        window.loadDashboard(); // Эта функция находится в reports.js
+                    }
+                 } else {
+                     window.showAlert('Доступ Запрещен', 'У вас нет прав администратора.');
+                     document.getElementById('debugAdminStatus').textContent = 'НЕТ';
+                     // Перенаправление на главную через 3 секунды
+                     setTimeout(() => {
+                        window.location.href = 'index.html' + window.location.search;
+                     }, 3000);
+                 }
+                 
             } else {
                  window.showAlert('Критическая Ошибка', 'Не удалось инициализировать Firebase SDK. Проверьте параметры URL.');
                  document.getElementById('authUsername').textContent = '—';
                  document.getElementById('authId').textContent = '—';
+                 document.getElementById('debugAdminStatus').textContent = 'ОШИБКА';
             }
         });
     </script>
