@@ -25,256 +25,313 @@ const infoContainer = document.getElementById('offlineInfo');
  * Ручной обработчик ввода для Dadata
  */
 if (addressInput) {
-    // ВАЖНО: Проверяем DADATA_API_KEY, который установлен в firebase-auth.js
+    // ВАЖНО: Проверяем DADATA_API_KEY. Если его нет, отключаем поиск Dadata.
     if (!DADATA_API_KEY) {
-        console.error("DADATA_API_KEY не найден в глобальной конфигурации. Поиск адресов Dadata будет недоступен.");
+        console.error("DADATA_API_KEY не найден. Поиск адресов Dadata будет недоступен.");
         if (addressStatus) {
             addressStatus.textContent = '⚠️ API Dadata недоступно. Обратитесь к администратору.';
-            addressInput.setAttribute('disabled', 'true');
         }
     } else {
-        if (addressStatus) {
-            addressStatus.textContent = 'Введите адрес...';
-        }
-    }
-
-    let debounceTimer;
-    addressInput.addEventListener('input', () => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            fetchSuggestions(addressInput.value);
-        }, 300);
-    });
-
-    // Скрываем список при потере фокуса, но даем время на клик по предложению
-    addressInput.addEventListener('blur', () => {
-        setTimeout(() => {
-            if (suggestionsList) suggestionsList.classList.add('hidden');
-        }, 150);
-    });
-    addressInput.addEventListener('focus', () => {
-        if (suggestionsList && suggestionsList.childElementCount > 0) {
-            suggestionsList.classList.remove('hidden');
-        }
-    });
-}
-
-/**
- * Получает предложения по адресу от Dadata.
- * @param {string} query Введенный пользователем адрес.
- */
-async function fetchSuggestions(query) {
-    if (!query || query.length < 3 || !DADATA_API_KEY) {
-        if (suggestionsList) suggestionsList.classList.add('hidden');
-        return;
-    }
-
-    try {
-        const response = await fetch("https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address", {
-            method: "POST",
-            mode: "cors",
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "Authorization": "Token " + DADATA_API_KEY 
-            },
-            body: JSON.stringify({
-                query: query,
-                // Ограничение по региону (ХМАО)
-                locations: [{ fias_region_code: DADATA_LOCATION_FIAS_ID }],
-                count: 5 
-            })
+        addressInput.addEventListener('input', debounce(handleAddressInput, 300));
+        addressInput.addEventListener('focus', () => {
+             // Скрываем список при фокусе, если ничего не введено
+             if (addressInput.value.length === 0) {
+                 suggestionsList.classList.add('hidden');
+             }
         });
-
-        if (!response.ok) {
-            throw new Error(`Dadata API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        suggestionsList.innerHTML = '';
-        if (data.suggestions && data.suggestions.length > 0) {
-            data.suggestions.forEach(suggestion => {
-                const li = document.createElement('li');
-                li.className = 'p-3 cursor-pointer hover:bg-indigo-100 transition duration-150 border-b last:border-b-0';
-                li.textContent = suggestion.value;
-                li.addEventListener('mousedown', (e) => { // Используем mousedown, чтобы событие сработало до blur
-                    e.preventDefault();
-                    selectSuggestion(suggestion);
-                });
-                suggestionsList.appendChild(li);
-            });
-            suggestionsList.classList.remove('hidden');
-        } else {
-            suggestionsList.classList.add('hidden');
-        }
-
-    } catch (error) {
-        console.error("Error fetching Dadata suggestions:", error);
-        addressStatus.textContent = '❌ Ошибка Dadata API.';
-        suggestionsList.classList.add('hidden');
     }
 }
 
 /**
- * Выбирает предложение адреса и сохраняет его данные.
- * @param {Object} suggestion Данные предложения от Dadata.
- */
-function selectSuggestion(suggestion) {
-    selectedSuggestionData = suggestion.data;
-    addressInput.value = suggestion.value;
-    suggestionsList.classList.add('hidden');
-    addressStatus.textContent = '✅ Адрес выбран.';
-    
-    // Сохраняем координаты Dadata для отчета
-    dadataCoords = {
-        latitude: parseFloat(suggestion.data.geo_lat),
-        longitude: parseFloat(suggestion.data.geo_lon)
-    };
-    
-    // Очищаем поле геолокации, чтобы не дублировать, если она была запрошена
-    document.getElementById('geolocationInfo').textContent = '—';
-}
-
-/**
- * Отправляет отчет в Firebase или сохраняет его оффлайн.
- */
-async function submitReport() {
-    const settlement = document.getElementById('settlement').value;
-    const address = addressInput.value.trim();
-    const loyalty = document.querySelector('input[name="loyalty"]:checked')?.value;
-    const action = document.getElementById('action').value;
-    const comment = document.getElementById('comment').value.trim();
-    
-    if (!settlement || !address || !loyalty || !action) {
-        window.showAlert('Ошибка', 'Пожалуйста, заполните все обязательные поля (Поселение, Адрес, Лояльность, Действие).');
-        return;
-    }
-    
-    // Собираем координаты: сначала геолокация, затем Dadata
-    const latitude = document.getElementById('geolocationInfo').dataset.lat || dadataCoords?.latitude || null;
-    const longitude = document.getElementById('geolocationInfo').dataset.lon || dadataCoords?.longitude || null;
-
-    const reportData = {
-        telegram_id: window.userTelegramId,
-        telegram_username: window.userTelegramUsername,
-        settlement,
-        address,
-        loyalty,
-        action,
-        comment: comment || null,
-        latitude: latitude ? parseFloat(latitude) : null,
-        longitude: longitude ? parseFloat(longitude) : null,
-        source: 'agitator-app',
-        // timestamp будет заполнен на сервере Firebase, если отчет отправляется онлайн
-    };
-    
-    // Блокируем кнопку, чтобы избежать двойной отправки
-    saveButton.disabled = true;
-    saveButton.innerHTML = `<i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Отправка...`;
-    lucide.createIcons();
-    
-    try {
-        // 1. Попытка отправить в Firebase
-        await window.db.collection('reports').add({
-            ...reportData,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        window.showAlert('Успех', '✅ Отчет успешно отправлен в Firebase.');
-        resetForm();
-
-    } catch (firebaseError) {
-        console.warn("Firebase недоступен. Сохранение оффлайн...", firebaseError);
-        
-        // 2. Если Firebase недоступен, сохраняем в IndexedDB
-        try {
-            // Добавляем служебное поле для сортировки оффлайн-отчетов
-            reportData.saved_at = Date.now();
-            await window.saveOfflineReport(reportData);
-            
-            window.showAlert('Оффлайн-режим', '⚠️ Соединение отсутствует. Отчет сохранен локально и будет отправлен позже.');
-            updateOfflineIndicator();
-            resetForm();
-            
-        } catch (dbError) {
-            console.error("Критическая ошибка сохранения в IndexedDB:", dbError);
-            window.showAlert('Критическая Ошибка', 'Не удалось сохранить отчет даже в оффлайн-режиме.');
-        }
-    } finally {
-        saveButton.disabled = false;
-        saveButton.innerHTML = `<i data-lucide="save" class="w-5 h-5"></i> Отправить отчет`;
-        lucide.createIcons();
-    }
-}
-
-/**
- * Запрашивает текущую геолокацию устройства.
+ * Запрос геолокации через браузерное API.
  */
 function requestGeolocation() {
-    const infoField = document.getElementById('geolocationInfo');
-    const geoButton = document.getElementById('geolocationButton');
-    
-    if (!navigator.geolocation) {
-        infoField.textContent = '❌ Геолокация не поддерживается.';
-        window.showAlert('Ошибка', 'Ваше устройство не поддерживает геолокацию.');
-        return;
+    if (navigator.geolocation) {
+        addressStatus.textContent = '⏳ Определение местоположения...';
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                dadataCoords = { latitude: lat, longitude: lon };
+
+                // Получение адреса по координатам Dadata
+                reverseGeocodeDadata(lat, lon);
+            },
+            (error) => {
+                console.error("Geolocation error:", error);
+                addressStatus.textContent = '❌ Не удалось определить местоположение. Введите адрес вручную.';
+            },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+    } else {
+        addressStatus.textContent = '❌ Геолокация не поддерживается вашим устройством.';
     }
-
-    geoButton.disabled = true;
-    geoButton.innerHTML = `<i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Поиск...`;
-    lucide.createIcons();
-    infoField.textContent = 'Определение координат...';
-
-    // Опции для точности и таймаута
-    const options = {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-    };
-
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-            
-            infoField.textContent = `✅ Координаты: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-            infoField.dataset.lat = lat;
-            infoField.dataset.lon = lon;
-            
-            // Очищаем данные Dadata, чтобы использовать более точную геолокацию
-            dadataCoords = null; 
-            
-            geoButton.disabled = false;
-            geoButton.innerHTML = `<i data-lucide="locate-fixed" class="w-5 h-5"></i> Получить геопозицию`;
-            lucide.createIcons();
-        },
-        (error) => {
-            let errorMessage = 'Ошибка определения геолокации.';
-            if (error.code === error.PERMISSION_DENIED) {
-                errorMessage = '🚫 Доступ к геолокации запрещен.';
-            } else if (error.code === error.POSITION_UNAVAILABLE) {
-                errorMessage = '🗺️ Данные о местоположении недоступны.';
-            } else if (error.code === error.TIMEOUT) {
-                errorMessage = '⌛ Время ожидания истекло.';
-            }
-            
-            infoField.textContent = `❌ ${errorMessage}`;
-            infoField.dataset.lat = '';
-            infoField.dataset.lon = '';
-            
-            geoButton.disabled = false;
-            geoButton.innerHTML = `<i data-lucide="locate-fixed" class="w-5 h-5"></i> Получить геопозицию`;
-            lucide.createIcons();
-            
-            window.showAlert('Геолокация', errorMessage);
-        },
-        options
-    );
 }
 
 /**
- * Повторно отправляет сохраненные оффлайн-отчеты в Firebase.
+ * Обратный геокодинг с использованием Dadata
+ * @param {number} lat Широта
+ * @param {number} lon Долгота
+ */
+function reverseGeocodeDadata(lat, lon) {
+    if (!DADATA_API_KEY) return;
+
+    fetch("https://suggestions.dadata.ru/suggestions/api/4_1/rs/geolocate/address", {
+        method: "POST",
+        mode: "cors",
+        headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": "Token " + DADATA_API_KEY
+        },
+        body: JSON.stringify({ lat: lat, lon: lon })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.suggestions && data.suggestions.length > 0) {
+            const suggestion = data.suggestions[0];
+            
+            // Заполнение поля адреса
+            addressInput.value = suggestion.value;
+            selectedSuggestionData = suggestion.data; // Сохраняем полный объект данных
+            
+            addressStatus.textContent = '✅ Адрес определен по координатам.';
+        } else {
+            addressStatus.textContent = '⚠️ Адрес не найден по координатам. Введите вручную.';
+        }
+    })
+    .catch(error => {
+        console.error("Dadata reverse geocode error:", error);
+        addressStatus.textContent = '❌ Ошибка Dadata API.';
+    });
+}
+
+/**
+ * Декоратор для ограничения частоты вызова функции.
+ */
+function debounce(func, delay) {
+    let timeoutId;
+    return function(...args) {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+            func.apply(this, args);
+        }, delay);
+    };
+}
+
+/**
+ * Обрабатывает ввод адреса и запрашивает подсказки Dadata.
+ */
+function handleAddressInput() {
+    const query = addressInput.value.trim();
+
+    if (!query || query.length < 3) {
+        suggestionsList.classList.add('hidden');
+        return;
+    }
+
+    if (!DADATA_API_KEY) return;
+    
+    addressStatus.textContent = '⏳ Поиск адреса...';
+
+    fetch("https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address", {
+        method: "POST",
+        mode: "cors",
+        headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": "Token " + DADATA_API_KEY
+        },
+        body: JSON.stringify({ 
+            query: query,
+            // Ограничение поиска по FIAS ID Сургутского района
+            locations: [{ fias_id: DADATA_LOCATION_FIAS_ID }],
+            // Дополнительные ограничения
+            restrict_value: true 
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        displaySuggestions(data.suggestions);
+        addressStatus.textContent = '';
+    })
+    .catch(error => {
+        console.error("Dadata suggest error:", error);
+        addressStatus.textContent = '❌ Ошибка Dadata API.';
+    });
+}
+
+/**
+ * Отображает список подсказок Dadata.
+ */
+function displaySuggestions(suggestions) {
+    suggestionsList.innerHTML = '';
+
+    if (!suggestions || suggestions.length === 0) {
+        suggestionsList.classList.add('hidden');
+        return;
+    }
+
+    suggestions.forEach(suggestion => {
+        const item = document.createElement('li');
+        item.className = 'p-3 hover:bg-indigo-50 cursor-pointer border-b last:border-b-0 transition-colors';
+        item.textContent = suggestion.value;
+        
+        item.addEventListener('click', () => {
+            addressInput.value = suggestion.value;
+            selectedSuggestionData = suggestion.data;
+            dadataCoords = { 
+                latitude: parseFloat(suggestion.data.geo_lat), 
+                longitude: parseFloat(suggestion.data.geo_lon) 
+            };
+            suggestionsList.classList.add('hidden');
+            addressStatus.textContent = '✅ Адрес выбран.';
+        });
+
+        suggestionsList.appendChild(item);
+    });
+
+    suggestionsList.classList.remove('hidden');
+}
+
+// ----------------------------------------------------------------------
+// ОТПРАВКА ДАННЫХ
+// ----------------------------------------------------------------------
+
+/**
+ * Собирает данные формы и отправляет отчет.
+ */
+function getFormData() {
+    const form = document.getElementById('reportForm');
+    const data = {};
+
+    // 1. Собираем данные формы
+    new FormData(form).forEach((value, key) => {
+        // Пропускаем незаполненные radio, чтобы не было "on"
+        if (key === 'loyalty' || key === 'action') {
+            if (value === 'on' || value === '') return;
+        }
+        data[key] = value;
+    });
+
+    // 2. Добавляем данные из Dadata/Geolocation
+    if (selectedSuggestionData) {
+        data.fias_id = selectedSuggestionData.fias_id || null;
+        data.settlement = selectedSuggestionData.settlement_with_type || data.settlement || null;
+        data.address = selectedSuggestionData.value || data.address || null;
+    } else if (data.address) {
+        // Если адрес введен вручную, сохраняем только введенное значение
+        data.address = data.address.trim();
+        data.settlement = data.settlement || 'Не указан';
+    }
+
+    // 3. Добавляем координаты
+    if (dadataCoords) {
+        data.latitude = dadataCoords.latitude;
+        data.longitude = dadataCoords.longitude;
+    } else if (selectedSuggestionData && selectedSuggestionData.geo_lat && selectedSuggestionData.geo_lon) {
+        // Координаты из Dadata
+        data.latitude = parseFloat(selectedSuggestionData.geo_lat);
+        data.longitude = parseFloat(selectedSuggestionData.geo_lon);
+    }
+    
+    // 4. Добавляем данные пользователя из window.auth
+    data.user_id = window.userTelegramId;
+    data.username = window.userTelegramUsername;
+
+    // 5. Очищаем пустые поля
+    Object.keys(data).forEach(key => data[key] === null && delete data[key]);
+    
+    return data;
+}
+
+/**
+ * Валидация данных формы.
+ */
+function validateData(data) {
+    if (!data.settlement) {
+        window.showAlert('Ошибка', 'Пожалуйста, выберите населенный пункт или введите адрес.');
+        return false;
+    }
+    if (!data.loyalty) {
+        window.showAlert('Ошибка', 'Пожалуйста, выберите уровень лояльности.');
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Отправляет отчет в Firebase или сохраняет локально.
+ */
+window.submitReport = async function() {
+    const reportData = getFormData();
+    if (!validateData(reportData)) return;
+
+    try {
+        if (!window.db) {
+            throw new Error("Соединение с Firebase не установлено.");
+        }
+        
+        // Добавляем серверную метку времени
+        reportData.timestamp = firebase.firestore.FieldValue.serverTimestamp();
+        
+        // Отправка в Firebase
+        const docRef = await window.db.collection('reports').add(reportData);
+
+        // Отправка подтверждения боту (опционально)
+        if (window.Telegram.WebApp) {
+            window.Telegram.WebApp.sendData(JSON.stringify({
+                status: 'report_saved',
+                reportId: docRef.id
+            }));
+        }
+
+        window.showAlert('Успех', '✅ Отчет успешно сохранен в Firebase!');
+        resetForm();
+        window.updateOfflineIndicator();
+        
+    } catch (error) {
+        console.error("Ошибка сохранения в Firebase:", error);
+        
+        // В случае ошибки Firebase (нет сети, сбой токена и т.д.) - сохраняем локально
+        reportData.saved_at = Date.now(); // Локальная метка времени
+        
+        try {
+            await window.saveOfflineReport(reportData);
+            window.showAlert('Оффлайн', '⚠️ Нет соединения. Отчет сохранен локально и будет отправлен позже.');
+            resetForm();
+            window.updateOfflineIndicator();
+            
+        } catch (localError) {
+            window.showAlert('Критическая Ошибка', `❌ Не удалось сохранить отчет локально: ${localError.message}`);
+        }
+    }
+}
+
+// ----------------------------------------------------------------------
+// ОФФЛАЙН / PWA ЛОГИКА
+// ----------------------------------------------------------------------
+
+/**
+ * Обновляет индикатор оффлайн-отчетов.
+ */
+window.updateOfflineIndicator = async function() {
+    const offlineReports = await window.getOfflineReports();
+    if (infoContainer) {
+        if (offlineReports.length > 0) {
+            infoContainer.textContent = `💾 ${offlineReports.length} оффлайн-отчетов в ожидании отправки.`;
+            infoContainer.classList.remove('hidden');
+            infoContainer.classList.remove('bg-gray-100');
+            infoContainer.classList.add('bg-yellow-100');
+        } else {
+            infoContainer.textContent = '';
+            infoContainer.classList.add('hidden');
+        }
+    }
+}
+
+/**
+ * Синхронизирует локальные отчеты с Firebase.
  */
 window.syncOfflineReports = async function() {
     const offlineReports = await window.getOfflineReports();
@@ -283,15 +340,9 @@ window.syncOfflineReports = async function() {
         return;
     }
     
-    const syncButton = document.getElementById('syncButton');
-    const initialText = syncButton.innerHTML;
-    syncButton.disabled = true;
-    syncButton.innerHTML = `<i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Синхронизация...`;
-    lucide.createIcons();
-
     let syncCount = 0;
     
-    // Сортируем по saved_at (самый старый отчет впереди)
+    // Сортируем по saved_at, чтобы отправлять старые отчеты первыми
     offlineReports.sort((a, b) => a.data.saved_at - b.data.saved_at);
 
     for (const { key, data: report } of offlineReports) {
@@ -317,52 +368,40 @@ window.syncOfflineReports = async function() {
     }
     
     // Обновляем список отчетов и оффлайн-индикатор после синхронизации
-    updateOfflineIndicator();
-    
-    syncButton.disabled = false;
-    syncButton.innerHTML = initialText;
-    lucide.createIcons();
-}
-
-
-/**
- * Обновляет индикатор наличия оффлайн-отчетов.
- */
-window.updateOfflineIndicator = async function() {
-    const offlineReports = await window.getOfflineReports();
-    const count = offlineReports.length;
-    
-    if (count > 0) {
-        infoContainer.classList.remove('hidden');
-        document.getElementById('offlineCount').textContent = count;
-        document.getElementById('syncButton').classList.remove('hidden');
-        document.getElementById('syncButton').disabled = false;
-    } else {
-        infoContainer.classList.add('hidden');
-        document.getElementById('syncButton').classList.add('hidden');
+    if (window.loadReports) {
+        await window.loadReports(window.isAdmin ? 'all' : 'my');
+    }
+    const remainingReports = await window.getOfflineReports();
+    if (infoContainer) {
+        if (remainingReports.length === 0) {
+            infoContainer.textContent = '';
+            infoContainer.classList.add('hidden');
+        } else {
+            infoContainer.textContent = `💾 ${remainingReports.length} оффлайн-отчетов в ожидании отправки.`;
+        }
     }
 }
 
-/**
- * Сбрасывает форму после успешной отправки.
- */
-function resetForm() {
-    document.getElementById('reportForm').reset();
-    addressInput.value = '';
-    selectedSuggestionData = null;
-    dadataCoords = null;
-    document.getElementById('geolocationInfo').textContent = '—';
-    document.getElementById('geolocationInfo').dataset.lat = '';
-    document.getElementById('geolocationInfo').dataset.lon = '';
-    addressStatus.textContent = 'Введите адрес...';
-    
-    // Снимаем выбор с радиокнопок
-    document.querySelectorAll('input[name="loyalty"]').forEach(radio => radio.checked = false);
-}
 
 // ----------------------------------------------------------------------
 // ИНИЦИАЛИЗАЦИЯ
 // ----------------------------------------------------------------------
+
+/**
+ * Очистка формы после отправки
+ */
+function resetForm() {
+    document.getElementById('reportForm').reset();
+    addressInput.value = '';
+    suggestionsList.classList.add('hidden');
+    dadataCoords = null;
+    selectedSuggestionData = null;
+    addressStatus.textContent = '';
+    
+    // Снимаем выбор с радиокнопок
+    document.querySelectorAll('input[type="radio"]').forEach(radio => radio.checked = false);
+}
+
 
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. Создаем иконки
@@ -376,12 +415,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 3. Проверка оффлайн-отчетов
         window.updateOfflineIndicator();
         
+        // 4. Синхронизация при старте, если есть сеть
+        if (navigator.onLine) {
+            await window.syncOfflineReports();
+        }
+        
     } else {
         // Ошибка в firebase-auth.js уже вызвала showAlert, просто блокируем кнопку
         if (saveButton) saveButton.disabled = true;
     }
     
-    // 4. Назначаем обработчики событий
+    // 5. Назначаем обработчики событий
     if (saveButton) {
         saveButton.addEventListener('click', (e) => {
             e.preventDefault();
@@ -404,5 +448,5 @@ document.addEventListener('DOMContentLoaded', async () => {
             window.syncOfflineReports();
         });
     }
-});
 
+});
