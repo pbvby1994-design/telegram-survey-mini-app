@@ -44,73 +44,70 @@ window.initializeFirebase = function() {
     // Получение user_id и username
     window.userTelegramId = getUrlParameter('user_id');
     window.userTelegramUsername = getUrlParameter('username');
-    
-    // Получение admin статуса из URL
-    const adminUrlParam = getUrlParameter('is_admin');
-    if (adminUrlParam === 'true') {
-        window.isAdmin = true; 
-    }
-    
+
     if (!configBase64) {
-        console.error("Firebase config (firebase_config) not found in URL.");
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Параметр "firebase_config" не найден в URL.');
+        console.error("Firebase config not found in URL.");
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', 'Конфигурация Firebase не найдена в URL. Проверьте настройки бота.');
         return false;
     }
-    
-    // 2. Декодирование и парсинг Base64
+
     try {
         const configJson = atob(configBase64);
-        window.FIREBASE_CONFIG = JSON.parse(configJson);
+        const config = JSON.parse(configJson);
         
-        // 2.1. Строгая проверка декодированного объекта
-        if (!window.FIREBASE_CONFIG.apiKey || !window.FIREBASE_CONFIG.projectId) {
-            throw new Error("Missing critical fields in Firebase config (e.g., apiKey, projectId).");
-        }
+        // 2. Инициализация Firebase
+        app = firebase.initializeApp(config);
+        window.db = firebase.firestore();
+        window.auth = firebase.auth();
         
-    } catch (e) {
-        console.error("Failed to decode or parse Firebase config:", e);
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось декодировать или проанализировать конфигурацию Firebase. Ошибка: ${e.message}`);
-        return false;
-    }
-    
-    // 3. Инициализация Firebase
-    try {
-        app = firebase.initializeApp(window.FIREBASE_CONFIG);
-        window.db = firebase.firestore(app);
-        window.auth = firebase.auth(app);
+        // Установка времени ожидания для операций
+        window.db.settings({
+            ignoreUndefinedProperties: true
+        });
+
         console.log("Firebase initialized successfully.");
         return true;
-    } catch (e) {
-        console.error("Firebase initialization failed:", e);
-        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось инициализировать Firebase: ${e.message}. Проверьте правильность конфигурации.`);
+        
+    } catch (error) {
+        console.error("Firebase initialization failed:", error);
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Ошибка инициализации Firebase: ${error.message}`);
         return false;
     }
 };
 
 // ----------------------------------------------------------------------
-// АУТЕНТИФИКАЦИЯ
+// АУТЕНТИФИКАЦИЯ (CUSTOM TOKEN)
 // ----------------------------------------------------------------------
 
 window.checkAdminStatus = async function() {
-    // В index.html нет этих элементов, используем ?.
-    const telegramAuthInfo = document.getElementById('telegramAuthInfo');
-    const saveButton = document.getElementById('saveButton'); 
+    if (!window.auth) {
+        console.error("Firebase Auth not initialized.");
+        return false;
+    }
+    
     const debugAdminStatus = document.getElementById('debugAdminStatus');
+    const saveButton = document.getElementById('saveButton');
+    const telegramAuthInfo = document.getElementById('telegramAuthInfo');
 
     if (!token) {
         console.warn("Custom token not found in URL.");
         saveButton?.setAttribute('disabled', 'true');
-        telegramAuthInfo.textContent = '❌ Требуется токен аутентификации.';
-        return false; 
+        debugAdminStatus?.textContent = "ОТКАЗ (Нет токена)";
+        telegramAuthInfo.textContent = '❌ Необходим токен аутентификации.';
+        return false;
     }
     
     try {
+        // 2. Аутентификация с помощью Custom Token (v8 Syntax)
         const userCredential = await window.auth.signInWithCustomToken(token);
+        
+        // 3. Получение Claims (проверка флага админа из токена)
         const idTokenResult = await userCredential.user.getIdTokenResult();
         
+        // Перезаписываем isAdmin на основе Claims
         if (idTokenResult.claims && idTokenResult.claims.admin) {
              const tokenAdmin = idTokenResult.claims.admin;
-             // Проверка isAdmin из токена Firebase
+             // ПРИСВАИВАНИЕ (строки 117-120): Используем ОДИН знак "="
              window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
         }
         
@@ -124,7 +121,7 @@ window.checkAdminStatus = async function() {
              
              // Для плавной анимации (stagger)
              const adminButton = document.getElementById('adminButton');
-             if (adminButton.classList.contains('stagger-item')) {
+             if (adminButton?.classList.contains('stagger-item')) {
                  // Временно удаляем opacity=0, чтобы сработала CSS анимация stagger-item
                  adminButton.style.opacity = 0; 
                  setTimeout(() => {
@@ -145,4 +142,21 @@ window.checkAdminStatus = async function() {
         
         return false;
     }
-};
+}
+
+// ----------------------------------------------------------------------
+// ВЫХОД ИЗ СИСТЕМЫ
+// ----------------------------------------------------------------------
+
+window.signOut = async function() {
+    try {
+        await window.auth.signOut();
+        window.isAdmin = false;
+        console.log("User signed out.");
+        // Перезагрузка страницы, чтобы вернуться к стартовому экрану
+        window.location.reload(); 
+    } catch (error) {
+        console.error("Error signing out:", error);
+        window.showAlert('ОШИБКА ВЫХОДА', `Не удалось выйти из системы: ${error.message}`);
+    }
+}
