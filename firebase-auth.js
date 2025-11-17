@@ -97,6 +97,7 @@ window.checkAdminStatus = async function() {
     const saveButton = document.getElementById('saveButton');
     const debugAdminStatus = document.getElementById('debugAdminStatus'); 
     
+    // Проверка, что необходимые объекты существуют
     if (!window.auth || !token) {
         if (telegramAuthInfo) telegramAuthInfo.textContent = '❌ Критическая ошибка: Auth/Token отсутствует.';
         return false;
