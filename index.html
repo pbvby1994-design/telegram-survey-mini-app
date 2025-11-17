@@ -22,6 +22,7 @@
             font-family: 'Jost', sans-serif;
             background-color: #f4f4f5; /* bg-zinc-100 */
         }
+        /* Стиль для плавной загрузки карточки */
         .card {
             background-color: white;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
@@ -33,6 +34,7 @@
             opacity: 1;
             transform: translateY(0);
         }
+        /* Анимация пульса для перехода */
         .animate-pulse-once {
             animation: pulse-once 0.5s ease-out forwards;
         }
@@ -41,11 +43,11 @@
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
+        /* Стиль модального окна */
         .modal {
             background-color: rgba(0, 0, 0, 0.5);
         }
-        
-        /* НОВАЯ АНИМАЦИЯ: Плавное появление снизу */
+        /* Анимация плавного появления снизу (stagger) */
         @keyframes fadeInUp {
             from {
                 opacity: 0;
@@ -56,7 +58,6 @@
                 transform: translateY(0);
             }
         }
-        
         .stagger-item {
             opacity: 0;
             animation: fadeInUp 0.6s ease-out forwards;
@@ -147,10 +148,10 @@
                     await window.checkAdminStatus(); 
                 } else {
                      // Это сообщение появится, если в URL нет параметра 'firebase_config'
-                     document.getElementById('telegramAuthInfo').textContent = '❌ Не удалось загрузить конфигурацию Firebase.';
+                     document.getElementById('telegramAuthInfo').textContent = '❌ Не удалось считать конфигурацию Firebase из URL.';
                 }
             } else {
-                 // Это сообщение должно исчезнуть после исправления!
+                 // Это сообщение должно исчезнуть после исправления синтаксиса в firebase-auth.js
                  document.getElementById('telegramAuthInfo').textContent = '❌ Скрипт firebase-auth.js не загружен.';
             }
             
