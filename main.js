@@ -1,12 +1,15 @@
-// main.js (ИСПРАВЛЕННАЯ ФИНАЛЬНАЯ ВЕРСИЯ)
+// main.js (ФИНАЛЬНАЯ ВЕРСИЯ С АНИМАЦИЯМИ, PWA ОФФЛАЙН ЛОГИКОЙ И ИСПРАВЛЕНИЯМИ)
 
 // --- Глобальные переменные ---
 window.mapInstance = null; 
 let dadataCoords = null;    
 
-// --- КОНФИГУРАЦИЯ DADATA (ИЗМЕНЕНИЕ): Ключ берется из глобальной переменной ---
-// УДАЛЕНА строка `const DADATA_API_KEY = window.DADATA_API_KEY;`
-// Эта строка вызывала ошибку в синхронном блоке ниже, когда ключ еще не был установлен.
+// --- КОНФИГУРАЦИЯ DADATA (Из глобальной переменной window.DADATA_API_KEY) ---
+// Ключ Dadata теперь берется из window.DADATA_API_KEY, установленного в firebase-auth.js
+// ИСПРАВЛЕНИЕ: Переменная здесь ссылается на window, чтобы избежать конфликта инициализации
+const DADATA_API_KEY = window.DADATA_API_KEY; 
+
+// Используем FIAS ID для ограничения поиска (дефолтное значение '86' для ХМАО).
 const urlParams = new URLSearchParams(window.location.search);
 const DADATA_LOCATION_FIAS_ID = urlParams.get('dadata_fias_id') || '86'; 
 
@@ -31,7 +34,7 @@ function debounce(func, delay) {
 
 // --- DADATA API ---
 async function fetchSuggestions(query) {
-    // ВАЖНО: Читаем ключ Dadata прямо перед использованием
+    // ВАЖНО: Читаем ключ Dadata из window
     const dadataKey = window.DADATA_API_KEY;
 
     if (!dadataKey) {
@@ -111,11 +114,10 @@ function handleAddressInput(event) {
 }
 
 // ----------------------------------------------------------------------
-// ОТПРАВКА ОТЧЕТА (Остается без изменений)
+// ОТПРАВКА ОТЧЕТА И ОФФЛАЙН-СИНХРОНИЗАЦИЯ
 // ----------------------------------------------------------------------
 
 async function submitReport() {
-    // ... (код submitReport остается прежним)
     const reportData = getReportData();
     if (!reportData) {
         return; 
@@ -196,13 +198,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 2. Инициализация Firebase и аутентификация
     const authSuccess = window.initializeFirebase ? window.initializeFirebase() : false;
     if (authSuccess) {
+        await window.checkAdminStatus();
         
         // 3. Проверка оффлайн-отчетов
         window.updateOfflineIndicator();
         
         // 4. Синхронизация при старте, если есть сеть
         if (navigator.onLine) {
-            // ИСПРАВЛЕНИЕ: Заменяем несуществующую иконку cloud-sync на cloud
+            // ИСПРАВЛЕНИЕ: Заменяем несуществующую иконку cloud-sync на cloud (если не исправлено в HTML)
             const syncIcon = document.querySelector('[data-lucide="cloud-sync"]');
             if (syncIcon) syncIcon.setAttribute('data-lucide', 'cloud'); 
 
@@ -239,7 +242,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Обработчик для Dadata 
     if (addressInput) {
-        // Убрали синхронную проверку DADATA_API_KEY, оставили только логику
         addressInput.addEventListener('input', debounce(handleAddressInput, 300));
         addressInput.addEventListener('focus', handleAddressInput); 
     }
@@ -247,12 +249,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // PWA: Регистрация Service Worker
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            // ИСПОЛЬЗУЕМ ОТНОСИТЕЛЬНЫЙ ПУТЬ `./sw.js` для совместимости с GitHub Pages
+            // ИСПРАВЛЕНИЕ: Используем ОТНОСИТЕЛЬНЫЙ ПУТЬ `./sw.js` для GitHub Pages
             navigator.serviceWorker.register('./sw.js', { scope: './' }) 
                 .then(registration => {
                     console.log('ServiceWorker registration successful with scope: ', registration.scope);
                 })
                 .catch(error => {
+                    // Здесь будет ошибка 404, если файл лежит не в корне или путь неправильный
                     console.error('ServiceWorker registration failed: ', error);
                 });
         });
