@@ -1,4 +1,4 @@
-// firebase-auth.js (ОКОНЧАТЕЛЬНАЯ, БЕЗОПАСНАЯ ВЕРСИЯ С ЕДИНЫМ КОНФИГОМ)
+// firebase-auth.js (ОКОНЧАТЕЛЬНАЯ, ЧИСТАЯ ВЕРСИЯ БЕЗ СИНТАКСИЧЕСКИХ ОШИБОК)
 
 // --- Глобальные переменные ---
 let app = null;
@@ -111,7 +111,7 @@ window.checkAdminStatus = async function() {
         const idTokenResult = await user.getIdTokenResult(true);
         const claims = idTokenResult.claims;
         
-        // Проверка claims для роли администратора
+        // Проверка claims для роли администратора (СИНТАКСИЧЕСКИ ПРАВИЛЬНО)
         const tokenAdmin = claims.admin;
         if (typeof tokenAdmin !== 'undefined') {
             // Если claims.admin = true или 'true' (строка), то пользователь - админ
