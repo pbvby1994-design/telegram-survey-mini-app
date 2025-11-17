@@ -1,4 +1,4 @@
-// firebase-auth.js (ОКОНЧАТЕЛЬНАЯ ВЕРСИЯ - СИНТАКСИЧЕСКИ ПРАВИЛЬНАЯ И БЕЗОПАСНАЯ)
+// firebase-auth.js (ОКОНЧАТЕЛЬНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ - СИНТАКСИЧЕСКИ ПРАВИЛЬНАЯ)
 
 // --- Глобальные переменные ---
 let app = null;
@@ -94,7 +94,7 @@ window.initializeFirebase = function() {
 window.checkAdminStatus = async function() {
     const telegramAuthInfo = document.getElementById('telegramAuthInfo');
     const saveButton = document.getElementById('saveButton');
-    const debugAdminStatus = document.getElementById('debugAdminStatus');
+    const debugAdminStatus = document.getElementById('debugAdminStatus'); // Этот элемент может отсутствовать на главной странице
 
     if (!window.auth || !token) {
         telegramAuthInfo.textContent = '❌ Критическая ошибка: Auth/Token отсутствует.';
@@ -116,9 +116,16 @@ window.checkAdminStatus = async function() {
             window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
         }
         
-        // Отображение статуса
-        debugAdminStatus?.textContent = window.isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
-        saveButton?.removeAttribute('disabled');
+        // Отображение статуса (ИСПРАВЛЕНО: заменено debugAdminStatus?.textContent = ... на if)
+        if (debugAdminStatus) { 
+            debugAdminStatus.textContent = window.isAdmin ? 'ДА (Токен)' : 'НЕТ (Токен)';
+        }
+        
+        // Разблокировка кнопки (ИСПРАВЛЕНО: заменено saveButton?.removeAttribute(...) на if)
+        if (saveButton) {
+            saveButton.removeAttribute('disabled');
+        }
+
         telegramAuthInfo.textContent = `✅ Аутентификация успешна. Роль: ${window.isAdmin ? 'Администратор' : 'Агитатор'}`;
         
         // Показ кнопки администратора
@@ -139,7 +146,11 @@ window.checkAdminStatus = async function() {
     } catch (error) {
         console.error("Firebase Custom Token Auth failed:", error);
         
-        debugAdminStatus?.textContent = 'ОШИБКА АУТЕНТИФИКАЦИИ'; 
+        // ИСПРАВЛЕНО: заменено debugAdminStatus?.textContent = ... на if
+        if (debugAdminStatus) { 
+            debugAdminStatus.textContent = 'ОШИБКА АУТЕНТИФИКАЦИИ'; 
+        }
+
         telegramAuthInfo.textContent = '❌ Ошибка аутентификации Firebase.';
         
         window.showAlert('ОШИБКА АУТЕНТИФИКАЦИИ', `Не удалось войти: ${error.message}. Проверьте Custom Token.`);
