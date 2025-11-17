@@ -1,25 +1,41 @@
-// reports.js (ИСПРАВЛЕННАЯ ВЕРСИЯ - СИНТАКСИС GLOBAL)
+// reports.js (ОБНОВЛЕННАЯ ВЕРСИЯ С ЗАГЛУШКАМИ ДЛЯ ГРАФИКОВ)
 
 // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
 let loyaltyChartInstance = null; 
 let actionChartInstance = null; 
 let allReportsData = []; 
-
-// Список НП для фильтров
+// Использование window для доступа из других файлов
 window.SETTLEMENTS = [ 
     'г.п. Лянтор', 'с.п. Русскинская', 'г.п. Федоровский', 'г.п. Барсово', 
     'г.п. Белый Яр', 'с.п. Лямина', 'с.п. Сытомино', 'с.п. Угут', 
     'с.п. Ульт-Ягун', 'с.п. Солнечный', 'с.п. Нижнесортымский', 
     'с.п. Тундрино', 'с.п. Локосово'
 ];
-window.latestReportData = []; // Для хранения последних отчетов текущего пользователя
+window.latestReportData = []; 
 window.activeReportsQuery = null; 
 
 // ----------------------------------------------------------------------------------
-// ФУНКЦИИ ГРАФИКОВ 
+// ФУНКЦИИ ГРАФИКОВ (С ЗАГЛУШКАМИ)
 // ----------------------------------------------------------------------------------
 
+/**
+ * Рендерит график распределения лояльности.
+ * @param {Array<Object>} reportList Список отчетов.
+ */
 function renderLoyaltyChart(reportList) {
+    const noDataBlock = document.getElementById('loyaltyNoData');
+    
+    if (reportList.length === 0) {
+        if (loyaltyChartInstance) {
+            loyaltyChartInstance.destroy();
+            loyaltyChartInstance = null;
+        }
+        noDataBlock?.classList.remove('hidden');
+        return;
+    }
+    
+    noDataBlock?.classList.add('hidden'); // Скрываем заглушку
+    
     if (loyaltyChartInstance) {
         loyaltyChartInstance.destroy();
     }
@@ -29,373 +45,431 @@ function renderLoyaltyChart(reportList) {
     };
     
     reportList.forEach(r => {
-        if (loyaltyCounts.hasOwnProperty(r.loyalty)) {
+        if (r.loyalty in loyaltyCounts) {
             loyaltyCounts[r.loyalty]++;
         }
     });
 
-    const data = {
-        labels: ['Сильная поддержка', 'Умеренная поддержка', 'Нейтрально', 'Против'],
-        datasets: [{
-            data: [loyaltyCounts.strong, loyaltyCounts.moderate, loyaltyCounts.neutral, loyaltyCounts.against],
-            backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'], // Green, Blue, Amber, Red
-        }]
-    };
-
-    loyaltyChartInstance = new Chart(
-        document.getElementById('loyaltyChart'),
-        {
-            type: 'doughnut',
-            data: data,
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    },
-                    title: {
-                        display: false,
-                    }
+    const ctx = document.getElementById('loyaltyChart').getContext('2d');
+    loyaltyChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['1. Ярко выраженная', '2. Умеренная', '3. Нейтральная', '4. Против'],
+            datasets: [{
+                data: [loyaltyCounts.strong, loyaltyCounts.moderate, loyaltyCounts.neutral, loyaltyCounts.against],
+                backgroundColor: ['#10b981', '#f59e0b', '#3b82f6', '#ef4444'],
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: false
                 }
             }
         }
-    );
+    });
 }
 
+/**
+ * Рендерит график проведенных действий.
+ * @param {Array<Object>} reportList Список отчетов.
+ */
 function renderActionChart(reportList) {
-     if (actionChartInstance) {
+    const noDataBlock = document.getElementById('actionNoData');
+
+    if (reportList.length === 0) {
+        if (actionChartInstance) {
+            actionChartInstance.destroy();
+            actionChartInstance = null;
+        }
+        noDataBlock?.classList.remove('hidden');
+        return;
+    }
+    
+    noDataBlock?.classList.add('hidden'); // Скрываем заглушку
+
+    if (actionChartInstance) {
         actionChartInstance.destroy();
     }
 
-    const actionCounts = {
-        call: 0, visit: 0, leaflet: 0, contact: 0
-    };
-    
-    reportList.forEach(r => {
-        if (actionCounts.hasOwnProperty(r.action)) {
-            actionCounts[r.action]++;
-        }
-    });
+    const actionCounts = {};
 
-    const data = {
-        labels: ['Звонок', 'Визит/Обход', 'Раздача листовок', 'Передан контакт'],
-        datasets: [{
-            label: 'Количество действий',
-            data: [actionCounts.call, actionCounts.visit, actionCounts.leaflet, actionCounts.contact],
-            backgroundColor: [
-                '#a855f7', // Purple
-                '#60a5fa', // Light Blue
-                '#f472b6', // Pink
-                '#34d399'  // Teal
-            ],
-        }]
+    reportList.forEach(r => {
+        const actionKey = r.action || 'unknown'; // Обработка случая, если action не определен
+        actionCounts[actionKey] = (actionCounts[actionKey] || 0) + 1;
+    });
+    
+    const labelsMap = {
+        'call': 'Телефонный звонок',
+        'face-to-face': 'Обход/Личная встреча',
+        'mail': 'Раздача материалов',
+        'other': 'Другое',
+        'unknown': 'Не указано'
     };
     
-    actionChartInstance = new Chart(
-        document.getElementById('actionChart'),
-        {
-            type: 'bar',
-            data: data,
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
+    const labels = Object.keys(actionCounts).map(key => labelsMap[key] || key);
+    const data = Object.values(actionCounts);
+    
+    const ctx = document.getElementById('actionChart').getContext('2d');
+    actionChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Количество действий',
+                data: data,
+                backgroundColor: ['#4f46e5', '#3b82f6', '#10b981', '#f59e0b', '#6b7280'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
                 },
-                plugins: {
-                    legend: {
-                        display: false,
-                    }
+                title: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
                 }
             }
         }
-    );
-}
-
-/**
- * Рендеринг данных в таблице для вкладки "Сырые данные"
- */
-function renderRawData(reportList) {
-    const tableBody = document.getElementById('reportsTableBody');
-    const dataCount = document.getElementById('dataCount');
-    tableBody.innerHTML = '';
-    
-    if (reportList.length === 0) {
-         tableBody.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-sm text-gray-500 text-center">Нет данных для отображения.</td></tr>';
-         dataCount.textContent = 'Всего отчетов: 0';
-         return;
-    }
-    
-    reportList.sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
-    
-    reportList.forEach(r => {
-        const row = document.createElement('tr');
-        row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150';
-        
-        const timestamp = r.timestamp ? new Date(r.timestamp.seconds * 1000).toLocaleString('ru-RU') : 'Нет даты';
-
-        row.innerHTML = `
-            <td class="px-3 py-2 whitespace-nowrap text-sm">${timestamp}</td>
-            <td class="px-3 py-2 whitespace-nowrap text-sm">${r.username || r.user_id}</td>
-            <td class="px-3 py-2 text-sm">${r.settlement}, ${r.address}</td>
-            <td class="px-3 py-2 whitespace-nowrap text-sm">${r.loyalty}</td>
-            <td class="px-3 py-2 whitespace-nowrap text-sm">${r.action}</td>
-            <td class="px-3 py-2 text-sm max-w-[200px] truncate">${r.comment}</td>
-        `;
-        tableBody.appendChild(row);
     });
-    
-    dataCount.textContent = `Всего отчетов: ${reportList.length}`;
 }
 
 /**
- * Рендеринг данных на карте (Только для Админа)
+ * Глобальная функция для рендеринга всех графиков.
+ * Вызывается при переключении на вкладку статистики или при изменении фильтра.
+ * @param {Array<Object>} data Список отчетов.
  */
-function renderMap(reportList) {
-    if (!window.mapInstance) return; // Карта не инициализирована
-    
-    // Очистка предыдущих меток
-    window.mapInstance.geoObjects.removeAll();
+window.renderAllCharts = function(data) {
+    renderLoyaltyChart(data);
+    renderActionChart(data);
+};
 
-    const objectManager = new ymaps.ObjectManager();
-    window.mapInstance.geoObjects.add(objectManager);
-    
-    const features = reportList
-        .filter(r => r.latitude && r.longitude) // Только отчеты с координатами
-        .map(r => {
-            let color = '#3b82f6'; // Blue
-            if (r.loyalty === 'strong') color = '#10b981'; // Green
-            else if (r.loyalty === 'against') color = '#ef4444'; // Red
+// ----------------------------------------------------------------------------------
+// ЗАГРУЗКА, ФИЛЬТРАЦИЯ И ОТОБРАЖЕНИЕ ОТЧЕТОВ
+// ----------------------------------------------------------------------------------
 
-            return {
-                type: 'Feature',
-                id: r.id,
-                geometry: {
-                    type: 'Point',
-                    coordinates: [r.latitude, r.longitude]
-                },
-                properties: {
-                    balloonContentHeader: `Отчет: ${r.settlement}, ${r.address}`,
-                    balloonContentBody: `
-                        <p><strong>Лояльность:</strong> ${r.loyalty}</p>
-                        <p><strong>Действие:</strong> ${r.action}</p>
-                        <p><strong>Агитатор:</strong> ${r.username || r.user_id}</p>
-                        <p><strong>Комментарий:</strong> ${r.comment}</p>
-                        <p><strong>Дата:</strong> ${new Date(r.timestamp.seconds * 1000).toLocaleString('ru-RU')}</p>
-                    `,
-                    iconCaption: r.settlement,
-                },
-                options: {
-                    preset: 'islands#circleIcon',
-                    iconColor: color
-                }
-            };
-        });
+/**
+ * Форматирует отчет для отображения в списке "Мои отчеты".
+ * @param {Object} report Отчет из Firestore.
+ * @param {string} reportId ID документа.
+ * @returns {string} HTML-строка.
+ */
+function formatMyReport(report, reportId) {
+    const loyaltyColors = {
+        strong: 'bg-green-100 text-green-800',
+        moderate: 'bg-yellow-100 text-yellow-800',
+        neutral: 'bg-blue-100 text-blue-800',
+        against: 'bg-red-100 text-red-800',
+    };
+    const loyaltyLabels = {
+        strong: 'Ярко выраженная',
+        moderate: 'Умеренная',
+        neutral: 'Нейтральная',
+        against: 'Против',
+    };
 
-    objectManager.add(features);
-    
-    // Автозум и центрирование по всем меткам
-    if (features.length > 0) {
-        window.mapInstance.setBounds(objectManager.getBounds(), {
-            checkZoomRange: true,
-            zoomMargin: 15
-        });
-    }
+    const formattedDate = report.timestamp ? (report.timestamp.toDate ? report.timestamp.toDate().toLocaleString('ru-RU') : new Date(report.timestamp).toLocaleString('ru-RU')) : 'Дата неизвестна';
+    const loyaltyClass = loyaltyColors[report.loyalty] || 'bg-gray-100 text-gray-800';
+    const loyaltyText = loyaltyLabels[report.loyalty] || report.loyalty;
+
+    return `
+        <div class="p-3 border rounded-lg bg-gray-50 hover:shadow-md transition duration-200">
+            <div class="flex justify-between items-start mb-2">
+                <span class="text-xs font-semibold ${loyaltyClass} px-2.5 py-0.5 rounded-full">${loyaltyText}</span>
+                <span class="text-xs text-gray-500">${formattedDate}</span>
+            </div>
+            <p class="font-bold text-gray-800">${report.settlement}, ${report.address}</p>
+            <p class="text-sm text-gray-600 mt-1">Действие: ${report.action || 'Не указано'}</p>
+            ${report.comment ? `<p class="text-xs text-gray-500 mt-1 italic">Комментарий: ${report.comment}</p>` : ''}
+            <p class="text-xs text-gray-400 mt-1">ID: ${reportId}</p>
+        </div>
+    `;
 }
 
 /**
- * Рендеринг последних отчетов для вкладки "Мои Отчеты"
+ * Обновляет список "Мои отчеты".
+ * Вызывается из main.js после успешной отправки.
  */
-function renderMyReports(reportList) {
-    const listContainer = document.getElementById('myReportsList');
-    listContainer.innerHTML = '';
-    
-    if (reportList.length === 0) {
-        listContainer.innerHTML = '<p class="text-gray-400">Вы пока не сохранили ни одного отчета.</p>';
-        return;
-    }
-    
-    reportList
-        .sort((a, b) => b.timestamp.seconds - a.timestamp.seconds) // Сортируем по дате
-        .slice(0, 10) // Берем только последние 10
-        .forEach(r => {
-            const loyaltyColor = r.loyalty === 'strong' ? 'bg-green-100 text-green-800' :
-                                 r.loyalty === 'against' ? 'bg-red-100 text-red-800' :
-                                 'bg-blue-100 text-blue-800';
-                                 
-            const timestamp = r.timestamp ? new Date(r.timestamp.seconds * 1000).toLocaleString('ru-RU') : 'Нет даты';
+window.updateMyReportsView = function() {
+    // Используем уже загруженные данные, отфильтровав только отчеты текущего пользователя
+    if (window.userTelegramId && allReportsData.length > 0) {
+        const myReports = allReportsData
+            .filter(r => String(r.user_id) === String(window.userTelegramId))
+            .sort((a, b) => b.timestamp - a.timestamp); // Сортировка по убыванию даты
             
-            const card = document.createElement('div');
-            card.className = 'p-4 border rounded-lg shadow-sm bg-gray-50 dark:bg-gray-700';
-            card.innerHTML = `
-                <div class="flex justify-between items-start mb-2">
-                    <p class="text-sm font-semibold">${r.settlement}, ${r.address}</p>
-                    <span class="text-xs font-medium px-2 py-0.5 rounded-full ${loyaltyColor}">${r.loyalty}</span>
-                </div>
-                <p class="text-xs text-gray-500 dark:text-gray-400">${timestamp}</p>
-                <p class="text-sm mt-1">Действие: ${r.action}</p>
-                <p class="text-sm mt-1">Комментарий: ${r.comment.length > 80 ? r.comment.substring(0, 80) + '...' : r.comment}</p>
-            `;
-            listContainer.appendChild(card);
-        });
+        const container = document.getElementById('myReportsList');
+        if (container) {
+            if (myReports.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 p-4 border rounded-lg bg-yellow-50">Вы пока не отправили ни одного отчета.</p>';
+            } else {
+                container.innerHTML = myReports.map(r => formatMyReport(r, r.id)).join('');
+            }
+        }
+    } else if (document.getElementById('myReportsList')) {
+         document.getElementById('myReportsList').innerHTML = '<p class="text-gray-500">Загрузка ваших отчетов...</p>';
+    }
 }
 
-// ----------------------------------------------------------------------------------
-// ОСНОВНЫЕ ФУНКЦИИ ЗАГРУЗКИ
-// ----------------------------------------------------------------------------------
 
 /**
- * ЗАГЛУШКА. Функция для загрузки всех отчетов из Firestore.
- * @param {string|null} settlement - Фильтр по населенному пункту.
- * @param {boolean} isMapUpdate - Флаг, указывающий, что требуется обновление карты (для админа).
+ * Загружает все отчеты из Firestore.
+ * @param {'all' | 'my'} mode Режим загрузки: все (для админа) или только свои (для агитатора).
  */
-window.fetchReports = async function(settlement = null, isMapUpdate = false) {
-    if (!window.db || !window.userTelegramId) {
-        console.error("Firestore или ID пользователя не инициализированы.");
+window.loadReports = async function(mode) {
+    if (!window.db) {
+        console.error("Firestore DB not initialized.");
         return;
     }
-    
-    // Текущий активный раздел для рендеринга
-    const currentSection = document.querySelector('.section:not(.hidden)')?.id;
 
     try {
-        let reportsRef = window.db.collection('reports');
-        let query;
+        let query = window.db.collection('reports').orderBy('timestamp', 'desc');
         
-        if (window.isAdmin) {
-            // Администратор: фильтруем по НП, если указан
-            query = settlement ? reportsRef.where('settlement', '==', settlement) : reportsRef;
-        } else {
-            // Агитатор: фильтруем только по своему ID
-            query = reportsRef.where('user_id', '==', window.userTelegramId);
+        // В режиме "Мои отчеты" добавляем фильтр по ID пользователя
+        if (mode === 'my' && window.userTelegramId) {
+            query = query.where('user_id', '==', window.userTelegramId);
         }
 
         const snapshot = await query.get();
-        const reportList = [];
-        
+        allReportsData = [];
+
         snapshot.forEach(doc => {
-            reportList.push({
+            const data = doc.data();
+            allReportsData.push({
                 id: doc.id,
-                ...doc.data()
+                ...data,
+                // Обеспечиваем, что timestamp всегда объект Date для сортировки/отображения
+                timestamp: data.timestamp && data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp),
             });
         });
         
-        // Сохраняем все данные для экспорта/анализа (если Админ)
+        window.latestReportData = [...allReportsData]; // Копия данных для фильтрации
+
+        // 1. Обновляем "Мои Отчеты" (если это агитатор)
+        if (mode === 'my') {
+            window.updateMyReportsView();
+        }
+        
+        // 2. Обновляем статистику и карту (если это админ)
         if (window.isAdmin) {
-             allReportsData = reportList; 
-        } else {
-             window.latestReportData = reportList;
+             window.renderAllCharts(window.latestReportData);
+             window.loadRawDataTable(window.latestReportData);
+
+             // Загружаем данные на карту, если она инициализирована
+             if (window.mapInstance) {
+                window.loadMapData(); 
+             }
         }
-        
-        // Рендеринг данных в соответствии с текущей вкладкой
-        if (currentSection === 'stats') {
-            renderLoyaltyChart(reportList);
-            renderActionChart(reportList);
-        } else if (currentSection === 'raw-data') {
-            renderRawData(reportList);
-        } else if (currentSection === 'map-view' || isMapUpdate) {
-             // Карта рендерится только для Админа
-            renderMap(reportList); 
-        } else if (currentSection === 'my-reports-view' || !window.isAdmin) {
-            // Мои отчеты для Агитатора или принудительная загрузка после сохранения
-            renderMyReports(reportList);
-        }
-        
+
     } catch (error) {
-        console.error("Ошибка при загрузке отчетов:", error);
-        window.showAlert('Ошибка Загрузки', 'Не удалось загрузить отчеты из базы данных.');
+        console.error("Error loading reports:", error);
+        window.showAlert('Ошибка Загрузки', `Не удалось загрузить отчеты: ${error.message}.`);
     }
 }
 
 
+// ----------------------------------------------------------------------------------
+// ФИЛЬТРЫ И КАРТА
+// ----------------------------------------------------------------------------------
+
 /**
- * ЗАГЛУШКА. Функция для инициализации админ-панели (заполнение фильтров и т.д.)
+ * Фильтрует данные отчетов для графиков.
+ * @param {string} settlement Название населенного пункта или 'all'.
  */
-window.loadDashboard = function() {
-    // 1. Заполняем фильтры населенных пунктов на всех вкладках админа
-    const filters = [
-        document.getElementById('settlementFilter'),
-        document.getElementById('settlementStatsFilter'),
-        document.getElementById('settlementRawDataFilter')
-    ];
-    
-    filters.forEach(filter => {
-        if (filter) {
-             // Очищаем, кроме первого элемента "Все НП"
-            filter.querySelectorAll('option:not(:first-child)').forEach(o => o.remove()); 
-            
-            window.SETTLEMENTS.forEach(settlement => {
-                const option = document.createElement('option');
-                option.value = settlement;
-                option.textContent = settlement;
-                filter.appendChild(option);
-            });
-        }
+window.filterStatsData = function(settlement) {
+    let filteredData = allReportsData;
+    if (settlement !== 'all') {
+        filteredData = allReportsData.filter(r => r.settlement === settlement);
+    }
+    window.latestReportData = filteredData;
+    window.renderAllCharts(filteredData);
+    window.loadRawDataTable(filteredData);
+}
+
+/**
+ * Фильтрует данные для карты.
+ * @param {string} settlement Название населенного пункта или 'all'.
+ */
+window.filterMapData = function(settlement) {
+    if (!window.mapInstance) return;
+
+    // Очищаем карту
+    window.mapInstance.geoObjects.removeAll();
+
+    let filteredData = allReportsData;
+    if (settlement !== 'all') {
+        filteredData = allReportsData.filter(r => r.settlement === settlement);
+    }
+
+    // Создаем коллекцию для меток
+    const placemarkCollection = new ymaps.GeoObjectCollection(null, {
+        preset: 'islands#violetDotIconWithCaption', // Стандартная метка
+        // clusterize: true // Можно включить кластеризацию
     });
 
-    // 2. Первоначальная загрузка данных при запуске, если находимся не на карте
-    const currentSection = document.querySelector('.section:not(.hidden)')?.id;
-    if (currentSection && currentSection !== 'map-view') {
-        window.fetchReports(null); 
+    filteredData.forEach(report => {
+        if (report.latitude && report.longitude) {
+            const loyaltyLabels = {
+                strong: 'Ярко выраженная', moderate: 'Умеренная', neutral: 'Нейтральная', against: 'Против',
+            };
+            const loyaltyColors = {
+                strong: 'islands#greenDotIcon', moderate: 'islands#yellowDotIcon', 
+                neutral: 'islands#blueDotIcon', against: 'islands#redDotIcon',
+            };
+            
+            const contentBody = `
+                <div style="font-family: 'Jost', sans-serif; max-width: 250px;">
+                    <h4 style="font-weight: 700; margin-bottom: 5px;">${report.settlement}, ${report.address}</h4>
+                    <p style="margin-bottom: 3px;">Лояльность: <strong>${loyaltyLabels[report.loyalty] || report.loyalty}</strong></p>
+                    <p style="margin-bottom: 3px;">Действие: ${report.action || '—'}</p>
+                    ${report.comment ? `<p style="font-size: 0.9em; color: #555;">${report.comment.substring(0, 100)}...</p>` : ''}
+                    <p style="font-size: 0.8em; color: #999; margin-top: 5px;">Агитатор: ${report.username}</p>
+                </div>
+            `;
+
+            placemarkCollection.add(new ymaps.Placemark([report.latitude, report.longitude], {
+                balloonContentHeader: `${report.settlement}, ${report.address}`,
+                balloonContentBody: contentBody,
+                hintContent: `${report.settlement}: ${loyaltyLabels[report.loyalty] || report.loyalty}`
+            }, {
+                preset: loyaltyColors[report.loyalty] || 'islands#grayDotIcon'
+            }));
+        }
+    });
+    
+    window.mapInstance.geoObjects.add(placemarkCollection);
+
+    // Центрирование карты по меткам, если они есть
+    if (placemarkCollection.getLength() > 0) {
+        window.mapInstance.setBounds(placemarkCollection.getBounds(), {
+            checkZoomRange: true,
+            // Добавляем отступ, чтобы метки не прилипали к краям
+            zoomMargin: 30 
+        });
+    } else {
+        // Если меток нет, сброс к центру ХМАО
+        window.mapInstance.setCenter([61.25, 73.4], 7);
     }
 }
 
+
 /**
- * Экспорт всех отчетов в CSV (доступно только для Админа).
+ * Загружает данные на карту (первичная загрузка)
  */
-window.exportToCsv = function() {
-    if (allReportsData.length === 0) {
-         window.showAlert('Ошибка экспорта', 'Нет данных для экспорта. Сначала загрузите данные.');
-         return;
+window.loadMapData = function() {
+    if (window.mapInstance && allReportsData.length > 0) {
+        // Вызываем фильтр для загрузки всех данных
+        filterMapData('all'); 
     }
+}
+
+// ----------------------------------------------------------------------------------
+// ТАБЛИЦА СЫРЫХ ДАННЫХ
+// ----------------------------------------------------------------------------------
+
+/**
+ * Загружает данные отчетов в таблицу.
+ * @param {Array<Object>} reportList Отфильтрованный список отчетов.
+ */
+window.loadRawDataTable = function(reportList) {
+    const tableBody = document.getElementById('reportsTableBody');
+    if (!tableBody) return;
+
+    if (reportList.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="8" class="px-3 py-4 whitespace-nowrap text-sm text-gray-500">Нет данных для отображения.</td></tr>';
+        return;
+    }
+
+    const rows = reportList.map(r => {
+        const formattedDate = r.timestamp ? r.timestamp.toLocaleString('ru-RU') : '—';
+        return `
+            <tr class="hover:bg-gray-50">
+                <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-500">${r.id.substring(0, 5)}...</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${formattedDate}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${r.username || r.user_id}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${r.settlement}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${r.address}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${r.loyalty}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${r.action}</td>
+                <td class="px-3 py-2 text-sm text-gray-900 truncate max-w-xs">${r.comment || '—'}</td>
+            </tr>
+        `;
+    }).join('');
+
+    tableBody.innerHTML = rows;
+}
+
+// ----------------------------------------------------------------------------------
+// CSV ЭКСПОРТ
+// ----------------------------------------------------------------------------------
+
+/**
+ * Экспортирует текущие отфильтрованные данные в CSV.
+ */
+window.exportReportsToCsv = function() {
+    if (window.latestReportData.length === 0) {
+        window.showAlert('Ошибка экспорта', 'Нет данных для экспорта.');
+        return;
+    }
+
+    const headers = ['ID', 'Время', 'Пользователь (ник)', 'ID пользователя', 'Населенный пункт', 'Адрес', 'Лояльность', 'Действие', 'Комментарий', 'Широта', 'Долгота'];
     
-    // Заголовки для CSV
-    const headers = [
-        'ID', 'Дата', 'Username', 'User ID', 'НП', 'Адрес', 'Лояльность', 'Действие', 'Комментарий', 'Latitude', 'Longitude'
-    ];
-    
-    // Форматирование данных
-    const rows = allReportsData.map(r => [
+    // Подготовка строк
+    const rows = window.latestReportData.map(r => [
         r.id,
-        r.timestamp ? new Date(r.timestamp.seconds * 1000).toISOString() : '',
-        r.username || r.user_id,
+        // Преобразуем timestamp в ISO строку
+        r.timestamp instanceof Date ? r.timestamp.toISOString() : (r.timestamp && r.timestamp.toDate ? r.timestamp.toDate().toISOString() : r.timestamp),
+        r.username,
         r.user_id,
         r.settlement,
         r.address,
         r.loyalty,
         r.action,
-        // Оборачиваем комментарий в кавычки и экранируем внутренние кавычки
-        String(r.comment).replace(/"/g, '""'), 
+        // Экранирование двойными кавычками для комментариев
+        String(r.comment || '').replace(/"/g, '""'), 
         r.latitude || '',
         r.longitude || ''
     ]);
 
     let csvContent = headers.map(h => `"${h}"`).join(';') + '\n';
     rows.forEach(row => {
-        // Каждую ячейку оборачиваем в кавычки для безопасности
+        // Экранируем каждую ячейку двойными кавычками
         csvContent += row.map(cell => `"${cell}"`).join(';') + '\n';
     });
 
-    // BOM для корректного отображения кириллицы в Excel
+    // Добавляем BOM для корректного отображения кириллицы в Excel
     const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' }); 
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
     link.setAttribute('download', `reports_export_${new Date().toISOString().slice(0, 10)}.csv`);
-    
-    // Имитация клика для скачивания
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     
-    window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
-    window.showAlert('Успех', 'Данные экспортированы в reports_export.csv');
+    window.showAlert('Экспорт', 'Данные успешно экспортированы в CSV.');
 }
 
-// Заполнение списка НП для фильтров (вызывается в loadDashboard)
+
+// Заполняем фильтр карты при загрузке (если он есть)
 const settlementFilter = document.getElementById('settlementFilter');
 if (settlementFilter) {
-    // Вся логика заполнения перенесена в window.loadDashboard
+    window.SETTLEMENTS.forEach(settlement => {
+        const option = document.createElement('option');
+        option.value = settlement;
+        option.textContent = settlement;
+        settlementFilter.appendChild(option);
+    });
 }
