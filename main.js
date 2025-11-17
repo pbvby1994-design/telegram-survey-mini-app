@@ -113,6 +113,37 @@ function handleAddressInput(event) {
     fetchSuggestions(event.target.value);
 }
 
+// --- ГЕОЛОКАЦИЯ (Добавлена отсутствующая функция) ---
+function requestGeolocation() {
+    if (!navigator.geolocation) {
+        window.showAlert('Ошибка', 'Геолокация не поддерживается вашим устройством.');
+        return;
+    }
+    
+    // Блокируем кнопку, пока идет запрос
+    const geolocationButton = document.getElementById('geolocationButton');
+    if (geolocationButton) geolocationButton.disabled = true;
+
+    navigator.geolocation.getCurrentPosition(
+        pos => {
+            console.log("Geo OK:", pos);
+            // Если нужно, здесь можно обновить поля адреса или сохранить координаты
+            window.showAlert('Успех', `Координаты получены: ${pos.coords.latitude}, ${pos.coords.longitude}`);
+            if (geolocationButton) geolocationButton.disabled = false;
+        },
+        err => {
+            console.error("Geo error:", err);
+            // Ошибка 1: user denied, Ошибка 2: position unavailable, Ошибка 3: timeout
+            let message = 'Не удалось получить координаты.';
+            if (err.code === 1) message = 'Доступ к геолокации запрещен пользователем.';
+            window.showAlert('Ошибка Геолокации', `${message} ${err.message}.`);
+            if (geolocationButton) geolocationButton.disabled = false;
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+}
+
+
 // ----------------------------------------------------------------------
 // ОТПРАВКА ОТЧЕТА И ОФФЛАЙН-СИНХРОНИЗАЦИЯ
 // ----------------------------------------------------------------------
@@ -205,10 +236,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // 4. Синхронизация при старте, если есть сеть
         if (navigator.onLine) {
-            // ИСПРАВЛЕНИЕ: Заменяем несуществующую иконку cloud-sync на cloud (если не исправлено в HTML)
-            const syncIcon = document.querySelector('[data-lucide="cloud-sync"]');
-            if (syncIcon) syncIcon.setAttribute('data-lucide', 'cloud'); 
-
             await window.syncOfflineReports();
         }
         
@@ -249,13 +276,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // PWA: Регистрация Service Worker
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            // ИСПРАВЛЕНИЕ: Используем ОТНОСИТЕЛЬНЫЙ ПУТЬ `./sw.js` для GitHub Pages
-            navigator.serviceWorker.register('./sw.js', { scope: './' }) 
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем АБСОЛЮТНЫЙ ПУТЬ для GitHub Pages/Telegram
+            navigator.serviceWorker.register("/telegram-survey-mini-app/sw.js", { 
+                scope: "/telegram-survey-mini-app/" // Абсолютный scope проекта
+            }) 
                 .then(registration => {
                     console.log('ServiceWorker registration successful with scope: ', registration.scope);
                 })
                 .catch(error => {
-                    // Здесь будет ошибка 404, если файл лежит не в корне или путь неправильный
                     console.error('ServiceWorker registration failed: ', error);
                 });
         });
