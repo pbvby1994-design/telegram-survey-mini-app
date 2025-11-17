@@ -1,4 +1,4 @@
-// firebase-auth.js (ОКОНЧАТЕЛЬНАЯ, ЧИСТАЯ ВЕРСИЯ БЕЗ СИНТАКСИЧЕСКИХ ОШИБОК)
+// firebase-auth.js (ОКОНЧАТЕЛЬНАЯ ВЕРСИЯ - СИНТАКСИЧЕСКИ ПРАВИЛЬНАЯ И БЕЗОПАСНАЯ)
 
 // --- Глобальные переменные ---
 let app = null;
@@ -49,7 +49,6 @@ window.initializeFirebase = function() {
     
     if (!configBase64) {
         console.error("Configuration (config parameter) not found in URL.");
-        // window.showAlert('ОШИБКА', 'Конфигурация приложения не найдена.'); // Убрано, чтобы не перебивать стартовый экран index.html
         return false;
     }
 
@@ -111,10 +110,9 @@ window.checkAdminStatus = async function() {
         const idTokenResult = await user.getIdTokenResult(true);
         const claims = idTokenResult.claims;
         
-        // Проверка claims для роли администратора (СИНТАКСИЧЕСКИ ПРАВИЛЬНО)
+        // Проверка claims для роли администратора
         const tokenAdmin = claims.admin;
         if (typeof tokenAdmin !== 'undefined') {
-            // Если claims.admin = true или 'true' (строка), то пользователь - админ
             window.isAdmin = (tokenAdmin === true || String(tokenAdmin).toLowerCase() === 'true');
         }
         
