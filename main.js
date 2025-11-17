@@ -59,6 +59,11 @@ if (addressInput) {
                         ],
                     })
                 });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const data = await response.json();
                 
                 if (data.suggestions && data.suggestions.length > 0) {
@@ -71,7 +76,7 @@ if (addressInput) {
                 }
             } catch (error) {
                 console.error("Dadata API call failed:", error);
-                suggestionsList?.innerHTML = `<li class="p-2 text-red-500 text-sm" role="alert">Ошибка загрузки адресов.</li>`;
+                suggestionsList?.innerHTML = `<li class="p-2 text-red-500 text-sm" role="alert">Ошибка загрузки адресов. ${error.message}</li>`;
                 suggestionsList?.classList.remove('hidden');
                 addressInput.setAttribute('aria-expanded', 'true'); // ARIA
             }
@@ -311,94 +316,102 @@ async function handleFormSubmit(event) {
 }
 
 
-// --- ИНИЦИАЛИЗАЦИЯ ДАШБОРДА ---
+// --- ИНИЦИАЛИЗАЦИЯ ДАШБОРДА (УСИЛЕННЫЙ TRY-CATCH) ---
 
 window.loadDashboard = async function() {
-    // 1. Заполнение списка населенных пунктов
-    const settlementSelect = document.getElementById('settlement');
-    if (settlementSelect && window.SETTLEMENTS) {
-        window.SETTLEMENTS.forEach(settlement => {
-            const option = document.createElement('option');
-            option.value = settlement;
-            option.textContent = settlement;
-            settlementSelect.appendChild(option);
-        });
-    }
+    try {
+        // 1. Заполнение списка населенных пунктов
+        const settlementSelect = document.getElementById('settlement');
+        if (settlementSelect && window.SETTLEMENTS) {
+            window.SETTLEMENTS.forEach(settlement => {
+                const option = document.createElement('option');
+                option.value = settlement;
+                option.textContent = settlement;
+                settlementSelect.appendChild(option);
+            });
+        }
 
-    // 2. Получение роли
-    const isAuth = await window.authenticateWithCustomToken();
-    const urlParams = new URLSearchParams(window.location.search);
-    const initialView = urlParams.get('view') || 'form-view';
-    const urlRole = urlParams.get('role'); // Может быть 'admin' или 'reporter'
+        // 2. Получение роли
+        const isAuth = await window.authenticateWithCustomToken();
+        const urlParams = new URLSearchParams(window.location.search);
+        const initialView = urlParams.get('view') || 'form-view';
+        const urlRole = urlParams.get('role'); // Может быть 'admin' или 'reporter'
 
-    if (isAuth) {
-        // Обновление UI
-        document.getElementById('authUsername').textContent = window.userTelegramUsername || window.userTelegramId;
-        document.getElementById('authId').textContent = window.userTelegramId;
-        
-        // 3. Настройка видимости табов в зависимости от роли
-        if (window.isAdmin) {
-            // Админ видит все
-            document.getElementById('btn-map-view')?.classList.remove('hidden');
-            document.getElementById('btn-stats')?.classList.remove('hidden');
-            document.getElementById('btn-raw-data')?.classList.remove('hidden');
-            document.getElementById('exportCsvButton')?.classList.remove('hidden');
-            document.getElementById('btn-my-reports-view')?.classList.add('hidden');
+        if (isAuth) {
+            // Обновление UI
+            document.getElementById('authUsername').textContent = window.userTelegramUsername || window.userTelegramId;
+            document.getElementById('authId').textContent = window.userTelegramId;
             
-            // Заполнение фильтра статистики
-            const settlementStatsFilter = document.getElementById('settlementStatsFilter');
-            if (settlementStatsFilter) {
-                window.SETTLEMENTS.forEach(settlement => {
-                    const option = document.createElement('option');
-                    option.value = settlement;
-                    option.textContent = settlement;
-                    settlementStatsFilter.appendChild(option);
-                });
+            // 3. Настройка видимости табов в зависимости от роли
+            if (window.isAdmin) {
+                // Админ видит все
+                document.getElementById('btn-map-view')?.classList.remove('hidden');
+                document.getElementById('btn-stats')?.classList.remove('hidden');
+                document.getElementById('btn-raw-data')?.classList.remove('hidden');
+                document.getElementById('exportCsvButton')?.classList.remove('hidden');
+                document.getElementById('btn-my-reports-view')?.classList.add('hidden');
+                
+                // Заполнение фильтра статистики
+                const settlementStatsFilter = document.getElementById('settlementStatsFilter');
+                if (settlementStatsFilter) {
+                    window.SETTLEMENTS.forEach(settlement => {
+                        const option = document.createElement('option');
+                        option.value = settlement;
+                        option.textContent = settlement;
+                        settlementStatsFilter.appendChild(option);
+                    });
+                }
+
+            } else {
+                // Агитатор видит только Форму и Мои Отчеты
+                document.getElementById('btn-map-view')?.classList.add('hidden');
+                document.getElementById('btn-stats')?.classList.add('hidden');
+                document.getElementById('btn-raw-data')?.classList.add('hidden');
+                document.getElementById('exportCsvButton')?.classList.add('hidden');
+                document.getElementById('btn-my-reports-view')?.classList.remove('hidden');
             }
 
+            // 4. Выбор начального раздела
+            let startSection = initialView;
+            
+            if (window.isAdmin && startSection === 'form-view') {
+                 startSection = 'map-view';
+            }
+            
+            if (!window.isAdmin && (startSection === 'map-view' || startSection === 'stats' || startSection === 'raw-data')) {
+                 startSection = 'form-view';
+            }
+
+            // 5. [НОВОЕ] Добавляем прослушиватели событий для автоматической синхронизации
+            window.addEventListener('online', syncOfflineReports);
+            // Добавляем обработчик отправки формы
+            document.getElementById('reportForm')?.addEventListener('submit', handleFormSubmit);
+
+            // 6. Загрузка данных (для админов и агитаторов)
+            if (window.loadReports) {
+                 await window.loadReports(window.isAdmin ? 'all' : 'my');
+                 
+                 // 7. Сразу пытаемся синхронизировать оффлайн-отчеты при первой загрузке
+                 await syncOfflineReports(); 
+            }
+
+            // 8. Отображение раздела
+            window.showSection(startSection);
+            document.getElementById('saveButton')?.removeAttribute('disabled');
+            
         } else {
-            // Агитатор видит только Форму и Мои Отчеты
-            document.getElementById('btn-map-view')?.classList.add('hidden');
-            document.getElementById('btn-stats')?.classList.add('hidden');
-            document.getElementById('btn-raw-data')?.classList.add('hidden');
-            document.getElementById('exportCsvButton')?.classList.add('hidden');
-            document.getElementById('btn-my-reports-view')?.classList.remove('hidden');
+             window.showSection('form-view');
+             document.getElementById('saveButton')?.setAttribute('disabled', 'true');
+             window.showAlert('Доступ ограничен', 'Не удалось пройти аутентификацию. Используйте бота для входа.');
+             document.getElementById('authUsername').textContent = 'Не авторизован';
+             document.getElementById('authId').textContent = '—';
         }
-
-        // 4. Выбор начального раздела
-        let startSection = initialView;
-        
-        if (window.isAdmin && startSection === 'form-view') {
-             startSection = 'map-view';
-        }
-        
-        if (!window.isAdmin && (startSection === 'map-view' || startSection === 'stats' || startSection === 'raw-data')) {
-             startSection = 'form-view';
-        }
-
-        // 5. [НОВОЕ] Добавляем прослушиватели событий для автоматической синхронизации
-        window.addEventListener('online', syncOfflineReports);
-        // Добавляем обработчик отправки формы
-        document.getElementById('reportForm')?.addEventListener('submit', handleFormSubmit);
-
-        // 6. Загрузка данных (для админов и агитаторов)
-        if (window.loadReports) {
-             await window.loadReports(window.isAdmin ? 'all' : 'my');
-             
-             // 7. Сразу пытаемся синхронизировать оффлайн-отчеты при первой загрузке
-             await syncOfflineReports(); 
-        }
-
-        // 8. Отображение раздела
-        window.showSection(startSection);
-        document.getElementById('saveButton')?.removeAttribute('disabled');
-        
-    } else {
-         window.showSection('form-view');
-         document.getElementById('saveButton')?.setAttribute('disabled', 'true');
-         window.showAlert('Доступ ограничен', 'Не удалось пройти аутентификацию. Используйте бота для входа.');
-         document.getElementById('authUsername').textContent = 'Не авторизован';
-         document.getElementById('authId').textContent = '—';
+    } catch (e) {
+        console.error("Критическая ошибка при загрузке панели:", e);
+        window.showAlert('КРИТИЧЕСКАЯ ОШИБКА', `Не удалось загрузить панель из-за внутренней ошибки: ${e.message}.`);
+        document.getElementById('saveButton')?.setAttribute('disabled', 'true');
+        // Показываем дефолтный раздел, если все сломалось
+        window.showSection('form-view'); 
     }
 }
 
@@ -434,6 +447,7 @@ async function syncOfflineReports() {
             console.log(`Отчет (IDB Key: ${key}) успешно синхронизирован и удален из локального хранилища.`);
             
         } catch (error) {
+            // Если не удалось отправить, прекращаем попытки, чтобы не спамить
             console.warn(`Сбой синхронизации отчета (IDB Key: ${key}):`, error.message);
             break; 
         }
