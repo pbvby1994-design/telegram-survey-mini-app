@@ -1,4 +1,4 @@
-// firebase-auth.js (ЦЕЛЕВАЯ, БЕЗОПАСНАЯ ВЕРСИЯ С ЕДИНЫМ КОНФИГОМ)
+// firebase-auth.js (ОКОНЧАТЕЛЬНАЯ ВЕРСИЯ - СИНТАКСИЧЕСКИ ПРАВИЛЬНАЯ И БЕЗОПАСНАЯ)
 
 // --- Глобальные переменные ---
 let app = null;
@@ -104,11 +104,10 @@ window.initializeFirebase = function() {
 };
 
 // ----------------------------------------------------------------------
-// АУТЕНТИФИКАЦИЯ (без изменений, т.к. она синтаксически верна)
+// АУТЕНТИФИКАЦИЯ
 // ----------------------------------------------------------------------
 
 window.checkAdminStatus = async function() {
-    // ... (весь код функции checkAdminStatus остается без изменений)
     const telegramAuthInfo = document.getElementById('telegramAuthInfo');
     const saveButton = document.getElementById('saveButton'); 
     const debugAdminStatus = document.getElementById('debugAdminStatus');
@@ -161,4 +160,4 @@ window.checkAdminStatus = async function() {
         
         return false;
     }
-
+};
